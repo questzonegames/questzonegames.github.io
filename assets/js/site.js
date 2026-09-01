@@ -9,28 +9,36 @@
     function resize() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      const count = Math.floor((canvas.width * canvas.height) / 3600);
+      // sparse — a quiet, professional night sky rather than a busy field
+      const count = Math.floor((canvas.width * canvas.height) / 9000);
       stars = Array.from({ length: count }, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        r: Math.random() * 1.3 + 0.3,
+        r: Math.random() * 1.1 + 0.25,
         phase: Math.random() * Math.PI * 2,
-        speed: Math.random() * 0.02 + 0.01
+        speed: Math.random() * 0.015 + 0.006,
+        blue: Math.random() < 0.3
       }));
     }
     window.addEventListener('resize', resize);
     resize();
 
     function draw(t) {
-      ctx.fillStyle = '#04060f';
+      ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       for (const s of stars) {
         const tw = 0.5 + 0.5 * Math.sin(t * 0.001 * s.speed * 50 + s.phase);
-        ctx.globalAlpha = 0.2 + tw * 0.7;
-        ctx.fillStyle = '#dfe8ff';
+        ctx.globalAlpha = 0.08 + tw * 0.4;
+        ctx.fillStyle = s.blue ? '#7fb3ff' : '#e8ecff';
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fill();
+        if (s.blue) {
+          ctx.globalAlpha *= 0.35;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r * 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1;
       requestAnimationFrame(draw);
