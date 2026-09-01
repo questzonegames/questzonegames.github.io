@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile Preview — Quest Zone</title>
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  main.profile { padding: 26px 0 40px; position: relative; z-index: 1; }
+
+  .preview-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.35);
+    color: var(--blue-light);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  .profile-head {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .avatar {
+    width: 84px; height: 84px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Orbitron', sans-serif; font-size: 30px; font-weight: 900;
+    color: #fff; flex-shrink: 0;
+    box-shadow: 0 0 20px rgba(59,130,246,0.4);
+  }
+
+  .profile-info h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px; margin: 0 0 4px;
+  }
+  .profile-info .handle { color: var(--text-faint); font-size: 12.5px; margin-bottom: 10px; }
+  .profile-info .edit-btn { font-size: 11.5px; }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .stat-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 24px;
+    color: var(--green);
+    text-shadow: 0 0 8px rgba(57,255,143,0.5);
+  }
+  .stat-card .lbl { font-size: 10.5px; letter-spacing: 0.1em; color: var(--text-faint); text-transform: uppercase; margin-top: 4px; }
+
+  .profile-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .profile-tabs button {
+    background: none; border: none; color: var(--text-faint);
+    font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 12.5px;
+    padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .profile-tabs button.active { color: var(--text); border-bottom-color: var(--blue); }
+
+  .games-panel {
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 18px;
+  }
+  .games-panel h3 { font-family: 'Orbitron', sans-serif; font-size: 13px; margin: 0 0 14px; }
+
+  .game-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .game-row:last-child { border-bottom: none; }
+  .game-row .thumb {
+    width: 46px; height: 46px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--green-dark), var(--green));
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    flex-shrink: 0;
+  }
+  .game-row .name { font-weight: 700; font-size: 13.5px; }
+  .game-row .meta { font-size: 11.5px; color: var(--text-faint); }
+  .game-row .score { margin-left: auto; text-align: right; }
+  .game-row .score .n { font-family: 'Orbitron', sans-serif; color: var(--green); font-size: 16px; }
+  .game-row .score .l { font-size: 9.5px; color: var(--text-faint); letter-spacing: 0.08em; }
+
+  .badge-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .badge {
+    aspect-ratio: 1/1; border-radius: 10px;
+    border: 1px dashed var(--border-strong);
+    background: var(--bg-panel-alt);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; opacity: 0.45;
+  }
+
+  @media (max-width: 700px) {
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+    .badge-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html">
+      <span class="rocket">🚀</span>
+      <span class="wordmark"><span class="l1">Quest</span><span class="l2">ZONE</span></span>
+    </a>
+    <div class="site-search">
+      <form action="../index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-ghost">👤 Profile</a>
+      <a href="#" class="btn btn-primary" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-outline" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="profile">
+  <div class="container">
+
+    <div class="preview-banner">
+      ⚠️ <span><strong>Preview mode</strong> — accounts aren't built yet. This is a mock-up of what your profile page will look like once sign-up launches.</span>
+    </div>
+
+    <div class="profile-head">
+      <div class="avatar">G</div>
+      <div class="profile-info">
+        <h1>Guest Player</h1>
+        <div class="handle">@guest — not signed in</div>
+        <a href="#" class="btn btn-outline edit-btn" data-coming-soon="Accounts are coming soon — check back later!">Sign up to save your progress</a>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="val" id="stat-best">0</div><div class="lbl">Best Length</div></div>
+      <div class="stat-card"><div class="val">1</div><div class="lbl">Games Played</div></div>
+      <div class="stat-card"><div class="val">0</div><div class="lbl">Achievements</div></div>
+      <div class="stat-card"><div class="val">—</div><div class="lbl">Rank</div></div>
+    </div>
+
+    <div class="profile-tabs">
+      <button class="active">Overview</button>
+      <button>Stats</button>
+      <button>Settings</button>
+    </div>
+
+    <div class="games-panel">
+      <h3>Recently Played</h3>
+      <div class="game-row">
+        <div class="thumb">🐍</div>
+        <div>
+          <div class="name">Space Snake</div>
+          <div class="meta">Arcade · Quest Zone</div>
+        </div>
+        <div class="score">
+          <div class="n" id="stat-best-2">0</div>
+          <div class="l">BEST LENGTH</div>
+        </div>
+      </div>
+      <div class="game-row" style="opacity:0.4;">
+        <div class="thumb" style="background:var(--bg-panel-alt); color:var(--text-faint);">🎮</div>
+        <div>
+          <div class="name">More games coming soon</div>
+          <div class="meta">Your library will grow as new games launch</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="games-panel">
+      <h3>Achievements</h3>
+      <div class="badge-grid">
+        <div class="badge">🔒</div>
+        <div class="badge">🔒</div>
+        <div class="badge">🔒</div>
+        <div class="badge">🔒</div>
+        <div class="badge">🔒</div>
+        <div class="badge">🔒</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/js/site.js"></script>
+<script>
+  try {
+    var best = parseInt(localStorage.getItem('spaceSnakeBest') || '0', 10) || 0;
+    document.getElementById('stat-best').textContent = best;
+    document.getElementById('stat-best-2').textContent = best;
+  } catch (e) {}
+</script>
+</body>
+</html>
