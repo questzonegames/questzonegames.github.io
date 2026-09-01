@@ -43,6 +43,14 @@ img { max-width: 100%; display: block; }
   padding: 0 18px;
 }
 
+/* background starfield — sits behind everything, so it only ever shows
+   through the open black space around the header/nav panels */
+#site-starfield {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
 /* ---------- header ---------- */
 .site-header {
   position: sticky;
