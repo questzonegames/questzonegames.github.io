@@ -62,37 +62,52 @@
   const ICY = [140, 195, 255];
   const PALE = [200, 220, 245];
 
+  // one star, identical generator whether it lands in the main field or
+  // the header top-up below — same look everywhere, no second system
+  function makeOneStar(w, yPick) {
+    const roll = Math.random();
+    let tier;
+    if (roll < 0.72) tier = 1;
+    else if (roll < 0.95) tier = 2;
+    else tier = 3;
+
+    const colRoll = Math.random();
+    const color = colRoll < 0.5 ? WHITE : (colRoll < 0.8 ? ICY : PALE);
+
+    const cfg = {
+      1: { rMin: 0.28, rMax: 0.55, aMin: 0.2, aMax: 0.42 },
+      2: { rMin: 0.55, rMax: 0.95, aMin: 0.4, aMax: 0.65 },
+      3: { rMin: 0.95, rMax: 1.5, aMin: 0.7, aMax: 0.95 }
+    }[tier];
+
+    return {
+      x: pickX(w),
+      y: yPick(),
+      r: cfg.rMin + Math.random() * (cfg.rMax - cfg.rMin),
+      baseAlpha: cfg.aMin + Math.random() * (cfg.aMax - cfg.aMin),
+      color,
+      tier,
+      twinkleAmp: 0.02 + Math.random() * 0.16, // some barely move, some more
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.12 + Math.random() * 0.4,
+      curBright: 0
+    };
+  }
+
   function makeStars(w, h) {
     const count = Math.floor((w * h) / 1300);
-    return Array.from({ length: count }, () => {
-      const roll = Math.random();
-      let tier;
-      if (roll < 0.72) tier = 1;
-      else if (roll < 0.95) tier = 2;
-      else tier = 3;
+    const main = Array.from({ length: count }, () => makeOneStar(w, () => Math.random() * h));
 
-      const colRoll = Math.random();
-      const color = colRoll < 0.5 ? WHITE : (colRoll < 0.8 ? ICY : PALE);
+    // a thin strip (roughly the header's height) is naturally sparser
+    // than the rest of the page purely because it's a smaller area at
+    // the same per-pixel density — top it up explicitly so it's never
+    // left to chance, using the exact same star generator as everywhere
+    // else (not a second/different effect).
+    const headerBandH = Math.min(110, h);
+    const topUpCount = Math.max(14, Math.floor((w * headerBandH) / 700));
+    const topUp = Array.from({ length: topUpCount }, () => makeOneStar(w, () => Math.random() * headerBandH));
 
-      const cfg = {
-        1: { rMin: 0.28, rMax: 0.55, aMin: 0.2, aMax: 0.42 },
-        2: { rMin: 0.55, rMax: 0.95, aMin: 0.4, aMax: 0.65 },
-        3: { rMin: 0.95, rMax: 1.5, aMin: 0.7, aMax: 0.95 }
-      }[tier];
-
-      return {
-        x: pickX(w),
-        y: Math.random() * h,
-        r: cfg.rMin + Math.random() * (cfg.rMax - cfg.rMin),
-        baseAlpha: cfg.aMin + Math.random() * (cfg.aMax - cfg.aMin),
-        color,
-        tier,
-        twinkleAmp: 0.02 + Math.random() * 0.16, // some barely move, some more
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.12 + Math.random() * 0.4,
-        curBright: 0
-      };
-    });
+    return main.concat(topUp);
   }
 
   function makeNebulae(w, h) {
