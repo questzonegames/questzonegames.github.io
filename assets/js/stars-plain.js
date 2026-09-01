@@ -1,5 +1,5 @@
 // ===== Quest Zone — plain pitch-black background with sparse twinkling
-// stars only (no nebula). Used everywhere except the homepage. =====
+// stars, used by the Space Snake game page. =====
 (function () {
   const canvas = document.getElementById('site-starfield') || document.getElementById('starfield');
   if (!canvas) return;

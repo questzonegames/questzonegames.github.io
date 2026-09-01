@@ -43,28 +43,6 @@ img { max-width: 100%; display: block; }
   padding: 0 18px;
 }
 
-/* ---------- background starfield (shared) ---------- */
-#site-starfield {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-}
-
-/* dedicated outer-margin star rails — pinned exactly to the empty space
-   left and right of the boxed content, at a z-index above everything
-   else on the page, so they can never end up hidden behind anything.
-   They only occupy the true margin, so they never sit over game panels. */
-.star-rail {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  width: max(0px, calc((100vw - 1360px) / 2));
-  z-index: 999;
-  pointer-events: none;
-}
-#star-rail-left { left: 0; }
-#star-rail-right { right: 0; }
-
 /* ---------- header ---------- */
 .site-header {
   position: sticky;

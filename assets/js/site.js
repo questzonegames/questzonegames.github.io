@@ -1,5 +1,4 @@
 // ===== Quest Zone — shared site behaviour =====
-// (background starfield/nebula now lives in assets/js/starfield.js)
 (function () {
   // ---- toast helper ----
   let toastEl = document.getElementById('qz-toast');
