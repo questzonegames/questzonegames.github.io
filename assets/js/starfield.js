@@ -96,17 +96,19 @@
   }
 
   function makeNebulae(w, h) {
-    const count = 2 + Math.round(Math.random()); // sparse: 2-3
-    return Array.from({ length: count }, () => {
-      // bias placement into the outer margins specifically
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const half = CONTENT_WIDTH / 2;
-      const x = w / 2 + side * (half + Math.random() * Math.max(80, w / 2 - half));
+    const count = 3; // sparse but always present
+    // a band near each edge, sized relative to the viewport so it always
+    // lands fully on-canvas (never clamped/clipped at the very edge)
+    const band = Math.max(100, Math.min(w * 0.28, 320));
+    return Array.from({ length: count }, (_, i) => {
+      const side = i % 2 === 0 ? -1 : 1; // alternate left/right, third random
+      const edgeX = side < 0 ? Math.random() * band : w - Math.random() * band;
+      const x = i < 2 ? edgeX : Math.random() * w;
       return {
-        x: Math.max(0, Math.min(w, x)),
-        y: Math.random() * h,
-        r: Math.min(w, h) * (0.16 + Math.random() * 0.12),
-        alpha: 0.035 + Math.random() * 0.03,
+        x,
+        y: h * (0.1 + Math.random() * 0.8),
+        r: Math.min(w, h) * (0.2 + Math.random() * 0.14),
+        alpha: 0.055 + Math.random() * 0.035,
         phase: Math.random() * Math.PI * 2,
         curBright: 0
       };
