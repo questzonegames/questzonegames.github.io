@@ -19,12 +19,12 @@
     canvas.width = Math.max(1, window.innerWidth || 1);
     canvas.height = Math.max(1, window.innerHeight || 1);
 
-    // lots of stars — a proper, clearly-visible scattered field
-    const count = Math.floor((canvas.width * canvas.height) / 1400);
+    // lots of stars — a proper, unmistakably-visible scattered field
+    const count = Math.floor((canvas.width * canvas.height) / 1100);
     stars = Array.from({ length: count }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      r: Math.random() * 1.8 + 1.2,
+      r: Math.random() * 2.4 + 2,
       phase: Math.random() * Math.PI * 2,
       speed: Math.random() * 0.015 + 0.006,
       blue: Math.random() < 0.4
@@ -46,19 +46,20 @@
         // base visibility is high and steady — the twinkle animation
         // itself only nudges it gently, so stars are always unmistakably
         // there, not flickering in and out
-        const alpha = 0.7 + twinkle * 0.2 + hoverBoost * 0.25;
+        const alpha = 0.88 + twinkle * 0.12 + hoverBoost * 0.2;
         const radius = s.r * (1 + hoverBoost * 1.4);
 
-        ctx.globalAlpha = Math.min(1, alpha);
+        // glow halo drawn first, underneath the solid core
         ctx.fillStyle = s.blue ? '#a8d0ff' : '#ffffff';
+        ctx.globalAlpha = Math.min(1, (0.35 + hoverBoost * 0.5) * (s.blue ? 1 : 0.85));
         ctx.beginPath();
-        ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, radius * (3.2 + hoverBoost * 1.8), 0, Math.PI * 2);
         ctx.fill();
 
-        // soft halo — always present, clearly brighter under the cursor
-        ctx.globalAlpha = (0.22 + hoverBoost * 0.45) * (s.blue ? 1 : 0.75);
+        ctx.globalAlpha = Math.min(1, alpha);
+        ctx.fillStyle = s.blue ? '#b8d8ff' : '#ffffff';
         ctx.beginPath();
-        ctx.arc(s.x, s.y, radius * (2.6 + hoverBoost * 1.6), 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
