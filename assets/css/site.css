@@ -178,15 +178,15 @@ img { max-width: 100%; display: block; }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #12327f, 0 10px 20px rgba(20,60,160,0.55); }
 .btn-primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #12327f, 0 2px 6px rgba(20,60,160,0.35); }
 
-.btn-outline, .btn-ghost {
+.btn-outline, .btn-ghost, .btn-metal {
   background: linear-gradient(180deg, #dbe2f2 0%, #9aa5bc 45%, #566079 100%);
   border: 1px solid rgba(255,255,255,0.4);
   color: #0b0d14;
   text-shadow: 0 1px 0 rgba(255,255,255,0.35);
   box-shadow: 0 4px 0 #14161e, 0 8px 16px rgba(0,0,0,0.5);
 }
-.btn-outline:hover, .btn-ghost:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #14161e, 0 10px 20px rgba(59,130,246,0.3); }
-.btn-outline:active, .btn-ghost:active { transform: translateY(3px); box-shadow: 0 1px 0 #14161e, 0 2px 6px rgba(0,0,0,0.4); }
+.btn-outline:hover, .btn-ghost:hover, .btn-metal:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #14161e, 0 10px 20px rgba(180,190,210,0.3); }
+.btn-outline:active, .btn-ghost:active, .btn-metal:active { transform: translateY(3px); box-shadow: 0 1px 0 #14161e, 0 2px 6px rgba(0,0,0,0.4); }
 
 .btn-play {
   background: linear-gradient(180deg, #9dffcb 0%, var(--green) 55%, var(--green-dark) 100%);
@@ -210,35 +210,43 @@ img { max-width: 100%; display: block; }
 
 /* ---------- nav ---------- */
 .site-nav {
-  border-bottom: 1px solid var(--border);
-  background: rgba(6,9,20,0.6);
+  padding: 16px 0 0;
 }
 
 .site-nav ul {
   list-style: none;
   display: flex;
-  gap: 4px;
   margin: 0;
   padding: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
 }
 .site-nav ul::-webkit-scrollbar { display: none; }
 
+.site-nav li {
+  flex: 1 1 0;
+  border-right: 1px solid var(--border);
+}
+.site-nav li:last-child { border-right: none; }
+
 .site-nav a {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 11px 14px;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px 14px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-dim);
   text-decoration: none;
   white-space: nowrap;
-  border-bottom: 2px solid transparent;
 }
-.site-nav a:hover { color: var(--text); border-bottom-color: var(--blue); }
-.site-nav a .ic { font-size: 14px; }
+.site-nav a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.site-nav a .ic { font-size: 14px; filter: grayscale(1) brightness(1.7); }
 
 /* ---------- layout rows ---------- */
 main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
