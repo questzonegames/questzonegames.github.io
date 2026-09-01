@@ -225,11 +225,16 @@
   button::before {
     content: '';
     position: absolute;
-    top: -80%; left: -25%;
-    width: 34%; height: 260%;
-    background: rgba(255,255,255,0.35);
+    top: -80%; left: -40%;
+    width: 30%; height: 260%;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%);
     transform: rotate(22deg);
     pointer-events: none;
+  }
+  button:hover::before { animation: btn-shimmer 0.7s ease; }
+  @keyframes btn-shimmer {
+    from { left: -40%; }
+    to { left: 140%; }
   }
   button:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #0a5c30, 0 10px 22px rgba(20,180,110,0.55); }
   button:active { transform: translateY(3px); box-shadow: 0 1px 0 #0a5c30, 0 2px 6px rgba(20,180,110,0.35); }
