@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guidebook — Quest Zone</title>
+<meta name="description" content="The official Quest Zone Guidebook — everything you need to know about your Profile, Skills, Achievements, Quest Points, and more.">
+<link rel="stylesheet" href="assets/css/site.css">
+<style>
+  main.guidebook { padding: 32px 0 70px; position: relative; z-index: 1; }
+
+  .gb-header-block { text-align: center; margin-bottom: clamp(22px, 3.4vw, 34px); }
+  .gb-header-block .hud-heading { font-size: clamp(26px, 4.4vw, 42px); margin: 0; }
+  .gb-subtitle {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 12.5px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--blue-light);
+    opacity: 0.8;
+    margin: 10px 0 0;
+  }
+
+  /* ---------- search ---------- */
+  .gb-search-shell {
+    position: relative;
+    max-width: 640px;
+    margin: clamp(20px, 3vw, 32px) auto 0;
+  }
+  .gb-search-input {
+    width: 100%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0) 40%), #070910;
+    border: 1px solid rgba(150,160,180,0.32);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 17px 54px 17px 22px;
+    font-family: 'Exo 2', sans-serif;
+    font-size: 15.5px;
+    outline: none;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.6), 0 0 30px rgba(60,140,255,0.1);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .gb-search-input::placeholder { color: var(--text-faint); }
+  .gb-search-input:focus {
+    border-color: var(--blue-light);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.6), 0 0 0 3px rgba(59,130,246,0.18), 0 0 34px rgba(60,140,255,0.2);
+  }
+  .gb-search-icon {
+    position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+    opacity: 0.55; pointer-events: none; font-size: 16px;
+  }
+  .gb-search-results {
+    position: absolute;
+    left: 0; right: 0; top: calc(100% + 8px);
+    background: linear-gradient(180deg, #0d1830 0%, #050a16 100%);
+    border: 1px solid var(--qp-border-dim);
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.6), 0 0 30px rgba(60,140,255,0.15);
+    max-height: 380px;
+    overflow-y: auto;
+    z-index: 30;
+    display: none;
+  }
+  .gb-search-results.show { display: block; }
+  .gb-result-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(110,140,220,0.1);
+    transition: background 0.12s ease;
+  }
+  .gb-result-item:last-child { border-bottom: none; }
+  .gb-result-item:hover, .gb-result-item.active { background: rgba(59,130,246,0.16); }
+  .gb-result-icon { font-size: 19px; flex-shrink: 0; filter: drop-shadow(0 0 6px rgba(120,190,255,0.5)); }
+  .gb-result-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .gb-result-title { font-family: 'Orbitron', sans-serif; font-size: 12.5px; letter-spacing: 0.03em; color: var(--text); }
+  .gb-result-cat { font-size: 10.5px; color: var(--blue-light); opacity: 0.75; text-transform: uppercase; letter-spacing: 0.08em; }
+  .gb-search-empty { padding: 18px 16px; text-align: center; color: var(--text-faint); font-size: 13px; }
+
+  /* ---------- category groups ---------- */
+  .gb-category { margin: clamp(32px, 4.6vw, 52px) 0 0; }
+  .gb-category-title {
+    display: flex; align-items: center; gap: 14px;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 800;
+    font-size: clamp(13px, 1.5vw, 16px);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text);
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--qp-border-dim);
+  }
+  .gb-category-title .ic { font-size: 19px; filter: drop-shadow(0 0 6px rgba(120,190,255,0.5)); }
+  .gb-category-title .dash { flex: 1 1 auto; height: 1px; background: linear-gradient(90deg, var(--qp-border-dim), transparent); }
+
+  .gb-panel-list { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---------- accordion panel ---------- */
+  .gb-panel {
+    position: relative;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame-soft) border-box;
+    overflow: hidden;
+    isolation: isolate;
+    scroll-margin-top: 110px;
+    box-shadow:
+      inset 0 0 0 1.5px var(--gunmetal),
+      inset 0 0 0 3px var(--seam),
+      inset 0 0 0 4px rgba(6,10,20,0.9),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+    transition: box-shadow 0.25s ease, transform 0.15s ease;
+  }
+  .gb-panel::after {
+    content: '';
+    position: absolute; left: 6%; right: 6%; bottom: -2px; height: 2px;
+    background: var(--edge-blue);
+    opacity: 0.5;
+    box-shadow: 0 0 10px 1px rgba(90,180,255,0.4);
+    pointer-events: none; z-index: 3;
+    transition: opacity 0.25s ease;
+  }
+  .gb-panel:hover, .gb-panel.open {
+    box-shadow:
+      inset 0 0 0 1.5px var(--gunmetal),
+      inset 0 0 0 3px rgba(150,215,255,1),
+      inset 0 0 0 4px rgba(6,10,20,0.9),
+      inset 0 0 16px 4px rgba(90,180,255,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      0 8px 20px rgba(0,0,0,0.4),
+      0 0 22px rgba(60,140,255,0.3);
+  }
+  .gb-panel:hover { transform: translateY(-2px); }
+  .gb-panel:hover::after, .gb-panel.open::after { opacity: 1; }
+
+  .gb-panel.highlight { animation: gb-highlight-pulse 1.6s ease; }
+  @keyframes gb-highlight-pulse {
+    0%, 100% {
+      box-shadow:
+        inset 0 0 0 1.5px var(--gunmetal), inset 0 0 0 3px rgba(150,215,255,1),
+        inset 0 0 0 4px rgba(6,10,20,0.9), inset 0 0 16px 4px rgba(90,180,255,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 20px rgba(0,0,0,0.4), 0 0 22px rgba(60,140,255,0.3);
+    }
+    30% {
+      box-shadow:
+        inset 0 0 0 1.5px var(--gunmetal), inset 0 0 0 3px rgba(190,235,255,1),
+        inset 0 0 0 4px rgba(6,10,20,0.9), inset 0 0 34px 10px rgba(120,200,255,0.75),
+        inset 0 1px 0 rgba(255,255,255,0.2), 0 10px 26px rgba(0,0,0,0.45), 0 0 46px rgba(90,180,255,0.6);
+    }
+  }
+
+  .gb-panel-header {
+    display: flex; align-items: center; gap: 16px;
+    width: 100%;
+    background: none; border: none; cursor: pointer;
+    padding: 16px 20px;
+    text-align: left;
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    position: relative;
+    z-index: 3;
+  }
+  .gb-panel-icon { font-size: 23px; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(120,190,255,0.55)); }
+  .gb-panel-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .gb-panel-title { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14.5px; letter-spacing: 0.03em; color: #eef1f7; }
+  .gb-panel-summary { font-size: 12.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gb-panel-chevron { flex-shrink: 0; font-size: 13px; color: var(--blue-light); transition: transform 0.3s ease; }
+  .gb-panel.open .gb-panel-chevron { transform: rotate(180deg); }
+
+  /* CSS-grid expand trick — animates to the content's real height without
+     any JS measuring, and handles every article's different length. */
+  .gb-panel-body-wrap {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.4s cubic-bezier(0.4,0,0.2,1);
+  }
+  .gb-panel.open .gb-panel-body-wrap { grid-template-rows: 1fr; }
+  .gb-panel-body-inner { overflow: hidden; min-height: 0; }
+  .gb-panel-body {
+    padding: 0 20px 22px 59px;
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--text-dim);
+    opacity: 0;
+    transition: opacity 0.3s ease 0.05s;
+  }
+  .gb-panel.open .gb-panel-body { opacity: 1; }
+  .gb-panel-body p { margin: 0 0 10px; }
+  .gb-panel-body ul, .gb-panel-body ol { margin: 0 0 12px; padding-left: 19px; }
+  .gb-panel-body li { margin-bottom: 5px; }
+  .gb-panel-body .gb-example {
+    margin: 10px 0;
+    padding: 10px 14px;
+    border-left: 2px solid var(--blue-light);
+    background: rgba(59,130,246,0.08);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .gb-panel-body .gb-example strong { color: var(--blue-light); }
+
+  .gb-panel-shimmer { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; border-radius: inherit; }
+  .gb-panel-shimmer::after {
+    content: '';
+    position: absolute; top: -140%; left: -45%;
+    width: 22%; height: 380%;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 45%, rgba(190,220,255,0.14) 55%, rgba(255,255,255,0) 100%);
+    transform: rotate(18deg);
+  }
+  .gb-panel:hover .gb-panel-shimmer::after { animation: gb-shimmer 1.3s ease; }
+  @keyframes gb-shimmer { from { left: -45%; } to { left: 145%; } }
+
+  .gb-no-results {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 13.5px;
+    padding: 40px 20px;
+  }
+
+  @media (max-width: 640px) {
+    .gb-panel-body { padding-left: 20px; }
+    .gb-panel-summary { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="index.html">
+      <img src="assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="profile/index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="#" class="btn btn-chrome-blue" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-chrome-dark" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="guidebook">
+  <div class="container">
+
+    <div class="gb-header-block">
+      <h1 class="hud-heading"><span class="dash"></span>Guidebook<span class="dash"></span></h1>
+      <p class="gb-subtitle">Everything you need to know about Quest Zone.</p>
+
+      <div class="gb-search-shell">
+        <input id="gb-search-input" class="gb-search-input" type="text" placeholder="Search the Guidebook — try “coins”, “XP”, or “outfit”…" autocomplete="off">
+        <span class="gb-search-icon">🔍</span>
+        <div id="gb-search-results" class="gb-search-results"></div>
+      </div>
+    </div>
+
+    <div id="gb-categories"><!-- rendered from GUIDEBOOK_DATA --></div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/starfield.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/guidebook-data.js"></script>
+<script>
+(function () {
+  const DATA = window.GUIDEBOOK_DATA;
+  const categoriesEl = document.getElementById('gb-categories');
+  const searchInput = document.getElementById('gb-search-input');
+  const searchResultsEl = document.getElementById('gb-search-results');
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderBlock(block) {
+    if (block.type === 'p') return '<p>' + escapeHtml(block.text) + '</p>';
+    if (block.type === 'ul') return '<ul>' + block.items.map((i) => '<li>' + escapeHtml(i) + '</li>').join('') + '</ul>';
+    if (block.type === 'ol') return '<ol>' + block.items.map((i) => '<li>' + escapeHtml(i) + '</li>').join('') + '</ol>';
+    if (block.type === 'example') return '<div class="gb-example"><strong>Example:</strong> ' + escapeHtml(block.text) + '</div>';
+    return '';
+  }
+
+  function flattenText(entry) {
+    return [
+      entry.title, entry.summary,
+      (entry.keywords || []).join(' '), (entry.synonyms || []).join(' '),
+      (entry.content || []).map((b) => b.type === 'p' || b.type === 'example' ? b.text : (b.items || []).join(' ')).join(' ')
+    ].join(' ').toLowerCase();
+  }
+
+  // ---- render the accordion, grouped by category, in the data's order ----
+  function renderGuidebook() {
+    categoriesEl.innerHTML = DATA.categories.map((cat) => {
+      const entries = DATA.entries.filter((e) => e.category === cat.id);
+      if (!entries.length) return '';
+      return (
+        '<section class="gb-category" data-category="' + cat.id + '">' +
+          '<h2 class="gb-category-title"><span class="ic">' + cat.icon + '</span>' + escapeHtml(cat.title) + '<span class="dash"></span></h2>' +
+          '<div class="gb-panel-list">' +
+            entries.map(renderPanel).join('') +
+          '</div>' +
+        '</section>'
+      );
+    }).join('');
+
+    categoriesEl.querySelectorAll('.gb-panel').forEach((panel) => {
+      const header = panel.querySelector('.gb-panel-header');
+      header.addEventListener('click', () => togglePanel(panel));
+    });
+  }
+
+  function renderPanel(entry) {
+    return (
+      '<article class="gb-panel" id="gb-' + entry.id + '" data-id="' + entry.id + '">' +
+        '<span class="gb-panel-shimmer"></span>' +
+        '<button class="gb-panel-header" aria-expanded="false">' +
+          '<span class="gb-panel-icon">' + entry.icon + '</span>' +
+          '<span class="gb-panel-titles">' +
+            '<span class="gb-panel-title">' + escapeHtml(entry.title) + '</span>' +
+            '<span class="gb-panel-summary">' + escapeHtml(entry.summary) + '</span>' +
+          '</span>' +
+          '<span class="gb-panel-chevron">▼</span>' +
+        '</button>' +
+        '<div class="gb-panel-body-wrap">' +
+          '<div class="gb-panel-body-inner">' +
+            '<div class="gb-panel-body">' + (entry.content || []).map(renderBlock).join('') + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</article>'
+    );
+  }
+
+  function togglePanel(panel, forceOpen) {
+    const shouldOpen = forceOpen !== undefined ? forceOpen : !panel.classList.contains('open');
+    panel.classList.toggle('open', shouldOpen);
+    panel.querySelector('.gb-panel-header').setAttribute('aria-expanded', String(shouldOpen));
+  }
+
+  function openAndScrollTo(id) {
+    const panel = document.getElementById('gb-' + id);
+    if (!panel) return;
+    togglePanel(panel, true);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    panel.classList.remove('highlight');
+    // restart the animation even if it was just played
+    void panel.offsetWidth;
+    panel.classList.add('highlight');
+    panel.addEventListener('animationend', () => panel.classList.remove('highlight'), { once: true });
+  }
+
+  // ---- search: word-overlap scoring across title/summary/category/
+  // keywords/synonyms/body, with substring matching both ways so plurals
+  // and partial words ("level" / "levels") still match. ----
+  function searchGuidebook(query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const qWords = q.split(/\s+/).filter(Boolean);
+    const catTitleById = {};
+    DATA.categories.forEach((c) => { catTitleById[c.id] = c.title.toLowerCase(); });
+
+    const scored = DATA.entries.map((entry) => {
+      const titleL = entry.title.toLowerCase();
+      const summaryL = entry.summary.toLowerCase();
+      const catL = catTitleById[entry.category] || '';
+      const kw = (entry.keywords || []).map((k) => k.toLowerCase());
+      const syn = (entry.synonyms || []).map((k) => k.toLowerCase());
+      const bodyL = flattenText(entry);
+      let score = 0;
+
+      if (titleL.includes(q)) score += 6;
+      if (kw.includes(q) || syn.includes(q)) score += 5;
+
+      qWords.forEach((w) => {
+        if (w.length < 2) return;
+        if (titleL.includes(w)) score += 5;
+        if (kw.some((k) => k.includes(w) || w.includes(k))) score += 4;
+        if (syn.some((k) => k.includes(w) || w.includes(k))) score += 4;
+        if (summaryL.includes(w)) score += 2;
+        if (catL.includes(w)) score += 1;
+        if (bodyL.includes(w)) score += 1;
+      });
+
+      return { entry, score };
+    });
+
+    // A score of 1 usually just means one generic word happened to appear
+    // somewhere in the body text — filter that noise out so results stay
+    // tight and relevant instead of padding out to a long weak tail.
+    return scored.filter((s) => s.score >= 2).sort((a, b) => b.score - a.score).map((s) => s.entry);
+  }
+
+  function renderResults(results, query) {
+    if (!query.trim()) {
+      searchResultsEl.classList.remove('show');
+      searchResultsEl.innerHTML = '';
+      return;
+    }
+    if (!results.length) {
+      searchResultsEl.innerHTML = '<div class="gb-search-empty">No Guidebook articles found for “' + escapeHtml(query) + '”.</div>';
+      searchResultsEl.classList.add('show');
+      return;
+    }
+    searchResultsEl.innerHTML = results.slice(0, 8).map((entry) => {
+      const cat = DATA.categories.find((c) => c.id === entry.category);
+      return (
+        '<div class="gb-result-item" data-id="' + entry.id + '">' +
+          '<span class="gb-result-icon">' + entry.icon + '</span>' +
+          '<span class="gb-result-text">' +
+            '<span class="gb-result-title">' + escapeHtml(entry.title) + '</span>' +
+            '<span class="gb-result-cat">' + escapeHtml(cat ? cat.title : '') + '</span>' +
+          '</span>' +
+        '</div>'
+      );
+    }).join('');
+    searchResultsEl.classList.add('show');
+    searchResultsEl.querySelectorAll('.gb-result-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        openAndScrollTo(item.getAttribute('data-id'));
+        searchResultsEl.classList.remove('show');
+        searchInput.value = '';
+      });
+    });
+  }
+
+  searchInput.addEventListener('input', () => {
+    renderResults(searchGuidebook(searchInput.value), searchInput.value);
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const results = searchGuidebook(searchInput.value);
+      if (results.length) {
+        openAndScrollTo(results[0].id);
+        searchResultsEl.classList.remove('show');
+      }
+      e.preventDefault();
+    } else if (e.key === 'Escape') {
+      searchResultsEl.classList.remove('show');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.gb-search-shell')) searchResultsEl.classList.remove('show');
+  });
+
+  renderGuidebook();
+
+  // open + scroll straight to an article via ?article=id or #id (lets
+  // other pages deep-link into a specific Guidebook entry later)
+  const params = new URLSearchParams(location.search);
+  const directId = params.get('article') || (location.hash ? location.hash.slice(1) : null);
+  if (directId) {
+    // wait a frame so layout has settled before measuring scroll position
+    requestAnimationFrame(() => openAndScrollTo(directId));
+  }
+})();
+</script>
+
+</body>
+</html>
