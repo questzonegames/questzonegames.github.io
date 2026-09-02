@@ -53,6 +53,105 @@
     });
   });
 
+  // ---- homepage game-selection grids (Total Level Games / Arcade Games) ----
+  // Data-driven placeholders — later: real title/image/route/status per
+  // slot, no markup duplication needed to add more.
+  const gamepadIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="11" rx="5"/><line x1="7" y1="10.5" x2="7" y2="14.5"/><line x1="5" y1="12.5" x2="9" y2="12.5"/><circle cx="16" cy="10.5" r="1"/><circle cx="18.5" cy="13" r="1"/></svg>';
+
+  function makeGameCard(opts) {
+    const a = document.createElement('a');
+    a.className = 'game-card';
+    a.href = opts.route || '#';
+    a.setAttribute('aria-label', opts.title);
+    a.innerHTML =
+      '<span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>' +
+      '<span class="icon" aria-hidden="true">' + gamepadIcon + '</span>' +
+      (opts.label ? '<span class="label">' + opts.label + '</span>' : '') +
+      (opts.number ? '<span class="number">' + opts.number + '</span>' : '');
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.qzToast(opts.comingSoon);
+    });
+    return a;
+  }
+
+  const totalLevelGrid = document.getElementById('total-level-grid');
+  if (totalLevelGrid) {
+    const TOTAL_LEVEL_GAMES = Array.from({ length: 24 }, (_, i) => ({
+      id: 'total-level-' + (i + 1),
+      number: String(i + 1).padStart(2, '0'),
+      title: 'Total Level Game ' + String(i + 1).padStart(2, '0'),
+      image: null,
+      route: '#',
+      status: 'coming-soon',
+      category: 'total-level'
+    }));
+    TOTAL_LEVEL_GAMES.forEach((g) => {
+      totalLevelGrid.appendChild(makeGameCard({
+        title: g.title,
+        route: g.route,
+        label: 'Total Level<br>Game',
+        number: g.number,
+        comingSoon: 'This Total Level Game slot is coming soon!'
+      }));
+    });
+  }
+
+  const arcadeGrid = document.getElementById('arcade-grid');
+  if (arcadeGrid) {
+    const ARCADE_GAMES = Array.from({ length: 18 }, (_, i) => ({
+      id: 'arcade-' + (i + 1),
+      title: 'Arcade Game ' + (i + 1),
+      image: null,
+      route: '#',
+      status: 'coming-soon',
+      category: 'arcade'
+    }));
+    ARCADE_GAMES.forEach((g) => {
+      arcadeGrid.appendChild(makeGameCard({
+        title: g.title,
+        route: g.route,
+        comingSoon: 'More Arcade Games are coming soon!'
+      }));
+    });
+  }
+
+  // ---- game-card interaction: same tilt / cursor-light / shimmer /
+  // flare system as the Profile dashboard tiles, so it's genuinely one
+  // shared component family. ----
+  document.querySelectorAll('.game-card').forEach((card) => {
+    const light = document.createElement('span');
+    light.className = 'tile-light';
+    const sweep = document.createElement('span');
+    sweep.className = 'tile-shimmer';
+    const flare = document.createElement('span');
+    flare.className = 'flare';
+    card.appendChild(light);
+    card.appendChild(sweep);
+    card.appendChild(flare);
+
+    if (reduceMotion) return;
+
+    const maxTilt = 3, maxDrift = 6;
+    card.addEventListener('mousemove', (e) => {
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width;
+      const py = (e.clientY - r.top) / r.height;
+      const rotY = (px - 0.5) * maxTilt * 2;
+      const rotX = (0.5 - py) * maxTilt * 2;
+      card.style.transform = `perspective(600px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
+      card.style.setProperty('--mx', (px * 100) + '%');
+      card.style.setProperty('--my', (py * 100) + '%');
+      const dx = -(px * 2 - 1) * maxDrift;
+      const dy = -(py * 2 - 1) * maxDrift;
+      flare.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'perspective(600px) rotateX(0deg) rotateY(0deg) scale(1)';
+      flare.style.transform = 'translate(-50%, -50%)';
+    });
+  });
+
   // ---- header search ----
   const searchForm = document.getElementById('site-search-form');
   const searchNote = document.getElementById('search-note');
