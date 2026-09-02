@@ -396,7 +396,7 @@
 <script>
 (function () {
   // ================= Config =================
-  const GRID = 20;
+  const GRID = 50;
   const MIN_SNAKE_LENGTH = 3;           // matches the starting snake length
   const BASE_TICK_MS = 130;             // starting move interval
   const MIN_TICK_MS = 60;               // fastest the *base* speed can reach
@@ -458,7 +458,7 @@
       lifetime: PICKUP_LIFETIME_MS,
       draw: drawLightningPickup,
       onCollect() {
-        addTimedEffect({ id: 'speed-boost', label: 'SPEED BOOST', icon: '⚡', duration: 5000, speedMultiplier: 2 });
+        addTimedEffect({ id: 'speed-boost', label: 'SPEED BOOST', icon: '⚡', duration: 5000, speedMultiplier: 1.5 });
       }
     },
     skull: {
@@ -467,6 +467,7 @@
       draw: drawSkullPickup,
       onCollect() {
         if (snake.length > MIN_SNAKE_LENGTH) snake.pop();
+        triggerDamageFlash();
       }
     }
   };
@@ -484,6 +485,9 @@
   let pickup;          // { type, x, y, spawnedAt } | null — at most one active special pickup
   let nextPickupAt;     // timestamp: earliest a new pickup may spawn
   let activeEffects;    // [{ id, label, icon, duration, speedMultiplier, startedAt }]
+  let damageFlash;      // { startedAt, duration } | null — brief red hit-flash on the whole snake
+  let speedParticles;   // [{ x, y, vx, vy, age, life, size }] — whoosh trail while speed-boosted
+  let particleSpawnAcc; // ms accumulator gating particle spawn rate
   let rafId = null;
   let lastFrameAt = 0;
   let tickAccumulator = 0;
@@ -512,7 +516,8 @@
     cancelAnimationFrame(rafId);
     rafId = null;
 
-    snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    const cx = Math.floor(GRID / 2), cy = Math.floor(GRID / 2);
+    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
     dir = { x: 1, y: 0 };
     nextDir = { x: 1, y: 0 };
     score = 0;
@@ -522,6 +527,9 @@
     frame = 0;
     pickup = null;
     activeEffects = [];
+    damageFlash = null;
+    speedParticles = [];
+    particleSpawnAcc = 0;
     tickAccumulator = 0;
     lastFrameAt = nowMs();
 
@@ -585,6 +593,74 @@
     return m;
   }
 
+  // ---- damage flash (skull hit) ----
+  const DAMAGE_FLASH_DURATION = 480; // ms
+
+  function triggerDamageFlash() {
+    damageFlash = { startedAt: nowMs(), duration: DAMAGE_FLASH_DURATION };
+  }
+
+  // Snappy hit-flash easing: fast punch in, slower fade out — reads as an
+  // impact rather than a linear cross-fade.
+  function damageFlashIntensity(now) {
+    if (!damageFlash) return 0;
+    const t = (now - damageFlash.startedAt) / damageFlash.duration;
+    if (t >= 1) { damageFlash = null; return 0; }
+    return t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85;
+  }
+
+  // ---- speed-boost whoosh particles ----
+  const PARTICLE_SPAWN_INTERVAL_MS = 26;
+  const PARTICLE_LIFE_MS = 420;
+  const MAX_SPEED_PARTICLES = 90;
+
+  function spawnSpeedParticle() {
+    if (speedParticles.length >= MAX_SPEED_PARTICLES) return;
+    // pick a point along a random body segment (front-weighted) so the
+    // trail reads as coming off the snake's scales, not just the head.
+    const idx = Math.floor(Math.pow(Math.random(), 1.6) * snake.length);
+    const seg = snake[Math.min(idx, snake.length - 1)];
+    const cx = seg.x * CELL + CELL / 2;
+    const cy = seg.y * CELL + CELL / 2;
+    const jitter = CELL * 0.4;
+    // Drift is deliberately gentle — over its ~350-500ms life a particle
+    // should trail only 1-3 cells behind, hugging the body, not shoot
+    // across the board.
+    const speed = CELL * (0.004 + Math.random() * 0.005); // px/ms, trails backward
+    const spread = (Math.random() - 0.5) * 0.7;
+    const bx = -dir.x, by = -dir.y;
+    const vx = (bx * Math.cos(spread) - by * Math.sin(spread)) * speed;
+    const vy = (bx * Math.sin(spread) + by * Math.cos(spread)) * speed;
+    speedParticles.push({
+      x: cx + (Math.random() - 0.5) * jitter,
+      y: cy + (Math.random() - 0.5) * jitter,
+      vx, vy,
+      age: 0,
+      life: PARTICLE_LIFE_MS * (0.7 + Math.random() * 0.5),
+      size: CELL * (0.05 + Math.random() * 0.05)
+    });
+  }
+
+  function updateSpeedParticles(dt, now, boosted) {
+    if (boosted) {
+      particleSpawnAcc += dt;
+      while (particleSpawnAcc >= PARTICLE_SPAWN_INTERVAL_MS) {
+        spawnSpeedParticle();
+        spawnSpeedParticle();
+        particleSpawnAcc -= PARTICLE_SPAWN_INTERVAL_MS;
+      }
+    } else {
+      particleSpawnAcc = 0;
+    }
+    if (!speedParticles.length) return;
+    speedParticles = speedParticles.filter((p) => {
+      p.age += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      return p.age < p.life;
+    });
+  }
+
   // ================= Lifecycle =================
   function start() {
     reset();
@@ -617,6 +693,7 @@
         trySpawnPickup(now);
         updatePickupLifetime(now);
         updateActiveEffects(now);
+        updateSpeedParticles(dt, now, currentSpeedMultiplier() > 1);
       }
     }
 
@@ -842,10 +919,42 @@
     ctx.restore();
   }
 
+  // Speed-boost whoosh trail: short fading streaks drifting backward off
+  // the snake's scales while the lightning effect is active.
+  function drawSpeedParticles() {
+    if (!speedParticles.length) return;
+    ctx.save();
+    for (const p of speedParticles) {
+      const t = p.age / p.life; // 0..1
+      const alpha = Math.max(0, 1 - t) * 0.75;
+      if (alpha <= 0.01) continue;
+      const len = p.size * 7 * (1 - t * 0.3);
+      const ang = Math.atan2(p.vy, p.vx);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(ang);
+      const grad = ctx.createLinearGradient(-len, 0, 0, 0);
+      grad.addColorStop(0, 'rgba(150,225,255,0)');
+      grad.addColorStop(1, `rgba(200,240,255,${alpha.toFixed(3)})`);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = Math.max(1, p.size * (1 - t * 0.4));
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-len, 0);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   // Snake mascot: rounded segments, green/teal body with a yellow
   // underside, transparent helmet + expressive eyes on the head. Every
   // segment (including the helmet/glow) stays sized within its own cell.
-  function drawSnake() {
+  function drawSnake(now) {
+    const boosted = currentSpeedMultiplier() > 1;
+    const flashT = damageFlashIntensity(now);
+
     for (let i = snake.length - 1; i >= 0; i--) {
       const seg = snake[i];
       const x = seg.x * CELL, y = seg.y * CELL;
@@ -873,6 +982,32 @@
       ctx.strokeStyle = 'rgba(0,0,0,0.25)';
       ctx.lineWidth = Math.max(1, CELL * 0.02);
       ctx.stroke();
+
+      // speed-boost energy rim — a pulsing cyan glow along every segment
+      // while the lightning effect is active.
+      if (boosted) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(120,220,255,0.9)';
+        ctx.shadowBlur = CELL * (0.22 + 0.05 * Math.sin(now * 0.02 - i * 0.8));
+        ctx.strokeStyle = 'rgba(170,235,255,0.6)';
+        ctx.lineWidth = Math.max(1, CELL * 0.035);
+        roundedRect(x + pad, y + pad, w, w, r);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // hit-flash — a red tint confined to exactly this segment's silhouette
+      // (source-atop only paints where this segment's own pixels already
+      // are), so the whole snake visibly flashes red without bleeding
+      // outside its cells.
+      if (flashT > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.fillStyle = `rgba(255,40,40,${(0.8 * flashT).toFixed(3)})`;
+        roundedRect(x + pad, y + pad, w, w, r);
+        ctx.fill();
+        ctx.restore();
+      }
 
       if (isHead) {
         const cx = x + CELL / 2, cy = y + CELL / 2;
@@ -930,7 +1065,8 @@
     drawGrid();
     if (debris) drawDebris();
     if (pickup) PICKUP_TYPES[pickup.type].draw(pickup, now);
-    drawSnake();
+    drawSpeedParticles();
+    drawSnake(now);
   }
 
   // ================= Controls =================
