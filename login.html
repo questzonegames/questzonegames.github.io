@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log In — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="assets/css/site.css">
+<style>
+  main.auth { padding: 60px 0 80px; position: relative; z-index: 1; display: flex; justify-content: center; }
+  .auth-frame {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 36px clamp(22px, 5vw, 40px) 32px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .auth-frame::after {
+    content: '';
+    position: absolute; left: 8%; right: 8%; bottom: -3px; height: 2px;
+    background: var(--edge-blue);
+    box-shadow: 0 0 14px 2px rgba(90,180,255,0.5);
+    pointer-events: none;
+  }
+  .auth-heading {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin: 0 0 26px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(20px, 4vw, 26px); letter-spacing: 0.1em; text-align: center;
+    background: linear-gradient(180deg, #fff 0%, #cfd9ee 40%, #93a3c4 60%, #eef3fc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,170,255,0.6), 0 2px 1px rgba(0,0,0,0.6);
+  }
+  .auth-heading .dash {
+    flex: 1 1 40px; max-width: 60px; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--blue-light), transparent);
+    opacity: 0.9;
+  }
+  .auth-field { margin-bottom: 16px; }
+  .auth-field label {
+    display: block; margin-bottom: 6px;
+    font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .auth-field input {
+    width: 100%; padding: 11px 13px; border-radius: 8px;
+    border: 1px solid rgba(120,160,220,0.32);
+    background: rgba(4,8,16,0.65);
+    color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  .auth-field input:focus {
+    outline: none; border-color: var(--blue-light);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.18);
+  }
+  .auth-field .hint { margin-top: 5px; font-size: 11px; color: var(--text-dim); }
+  .auth-submit {
+    width: 100%; margin-top: 8px; padding: 12px; font-size: 14px;
+    text-align: center; cursor: pointer;
+  }
+  .auth-submit:disabled { opacity: 0.55; cursor: default; }
+  .auth-message {
+    margin: 0 0 16px; padding: 10px 13px; border-radius: 8px;
+    font-size: 12.5px; line-height: 1.5; display: none;
+  }
+  .auth-message.show { display: block; }
+  .auth-message.error {
+    background: rgba(240,70,70,0.12); border: 1px solid rgba(240,90,90,0.4); color: #ffb4b4;
+  }
+  .auth-message.success {
+    background: rgba(60,200,120,0.12); border: 1px solid rgba(80,210,140,0.4); color: #a8f0c6;
+  }
+  .auth-switch {
+    margin-top: 20px; text-align: center; font-size: 12.5px; color: var(--text-dim);
+  }
+  .auth-switch a { color: var(--blue-light); text-decoration: none; }
+  .auth-switch a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="index.html">
+      <img src="assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="profile/index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="signup.html" class="btn btn-chrome-blue">Signup</a>
+      <a href="login.html" class="btn btn-chrome-dark">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="auth">
+  <div class="container" style="display:flex; justify-content:center;">
+    <div class="auth-frame bezel-lg">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <h1 class="auth-heading"><span class="dash"></span>Log In<span class="dash"></span></h1>
+
+      <div class="auth-message" id="auth-message"></div>
+
+      <form id="login-form" novalidate>
+        <div class="auth-field">
+          <label for="li-identifier">Username or Email</label>
+          <input type="text" id="li-identifier" name="identifier" autocomplete="username" required>
+        </div>
+        <div class="auth-field">
+          <label for="li-password">Password</label>
+          <input type="password" id="li-password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-chrome-blue auth-submit" id="li-submit">Log In</button>
+      </form>
+
+      <div class="auth-switch">Need an account? <a href="signup.html">Sign up</a></div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="assets/js/qz-config.js"></script>
+<script src="assets/js/qz-auth.js"></script>
+<script src="assets/js/starfield.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+  (function () {
+    const form = document.getElementById('login-form');
+    const submitBtn = document.getElementById('li-submit');
+    const msg = document.getElementById('auth-message');
+
+    function showMessage(text, kind) {
+      msg.textContent = text;
+      msg.className = 'auth-message show ' + kind;
+    }
+
+    // already logged in? just go to the profile instead of showing the form
+    (async () => {
+      if (window.QZAuth && window.QZAuth.client) {
+        const session = await window.QZAuth.getSession();
+        if (session) location.href = 'profile/index.html';
+      }
+    })();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!window.QZAuth || !window.QZAuth.configured) {
+        showMessage('Accounts aren’t configured on this deployment yet.', 'error');
+        return;
+      }
+      const identifier = document.getElementById('li-identifier').value;
+      const password = document.getElementById('li-password').value;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Logging in…';
+      try {
+        await window.QZAuth.signIn(identifier, password);
+        showMessage('Logged in! Redirecting…', 'success');
+        location.href = 'profile/index.html';
+      } catch (err) {
+        showMessage(err && err.message ? err.message : 'Could not log in.', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Log In';
+      }
+    });
+  })();
+</script>
+</body>
+</html>

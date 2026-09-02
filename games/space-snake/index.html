@@ -403,6 +403,10 @@
   <div class="hint">ARROW KEYS OR WASD TO STEER · SPACE TO PAUSE</div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../../assets/js/qz-config.js"></script>
+<script src="../../assets/js/qz-auth.js"></script>
+<script src="../../assets/js/qz-xp.js"></script>
 <script src="../../assets/js/stars-plain.js"></script>
 <script>
 (function () {
@@ -760,6 +764,36 @@
     finalScoreText.textContent = 'Your snake grew to ' + snake.length + ' segments.';
     gameoverOverlay.classList.remove('hidden');
     updateEffectsHud(nowMs());
+    awardSpaceSnakeXp(score);
+  }
+
+  // Signed-in players permanently bank XP for this game — guests can
+  // still play, they just don't have anywhere to persist it. 10 XP per
+  // segment grown is Space Snake's own rate; award_xp() on the server is
+  // what actually adds it, caps the total, and recalculates the level
+  // (see supabase/schema.sql) — this call can't set XP to an arbitrary
+  // number, only ever "add 10 * this run's score" to whatever the
+  // player's account already had.
+  async function awardSpaceSnakeXp(finalScore) {
+    if (!window.QZAuth || !window.QZAuth.client || finalScore <= 0) return;
+    try {
+      const session = await window.QZAuth.getSession();
+      if (!session) return;
+      const xpToAdd = finalScore * 10;
+      const { data, error } = await window.QZAuth.client.rpc('award_xp', {
+        p_game_key: 'space-snake',
+        p_xp_to_add: xpToAdd
+      });
+      if (error) { console.warn('Space Snake: could not save XP', error); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && window.QZXp) {
+        const lvl = window.QZXp.displayLevel(row.xp);
+        finalScoreText.textContent += ' +' + xpToAdd.toLocaleString() + ' XP (Level ' +
+          lvl.base + (lvl.isVirtual ? ' · Virtual ' + lvl.virtual : '') + ')';
+      }
+    } catch (err) {
+      console.warn('Space Snake: could not save XP', err);
+    }
   }
 
   // ================= Active-effects HUD =================

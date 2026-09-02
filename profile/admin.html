@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  main.admin { padding: 26px 0 60px; position: relative; z-index: 1; }
+
+  .admin-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 30px clamp(16px, 3vw, 36px) 36px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .admin-frame::after {
+    content: '';
+    position: absolute; left: 8%; right: 8%; bottom: -3px; height: 2px;
+    background: var(--edge-blue);
+    box-shadow: 0 0 14px 2px rgba(90,180,255,0.5);
+    pointer-events: none;
+  }
+  .admin-heading {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    margin: 0 0 clamp(18px, 2.6vw, 28px);
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(20px, 3vw, 30px); letter-spacing: 0.12em; text-align: center;
+    background: linear-gradient(180deg, #fff 0%, #cfd9ee 40%, #93a3c4 60%, #eef3fc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,170,255,0.6), 0 2px 1px rgba(0,0,0,0.6);
+  }
+  .admin-heading .dash {
+    flex: 1 1 60px; max-width: 90px; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--blue-light), transparent);
+    opacity: 0.9;
+  }
+
+  .admin-state {
+    max-width: 520px; margin: 30px auto; text-align: center;
+    color: var(--text-dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .admin-state .icon { font-size: 34px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
+
+  .admin-table-wrap {
+    overflow-x: auto;
+    border-radius: 11px;
+    border: 1.5px solid rgba(120,160,220,0.25);
+  }
+  table.admin-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 760px; }
+  table.admin-table th, table.admin-table td {
+    padding: 10px 14px; text-align: left; white-space: nowrap;
+    border-bottom: 1px solid rgba(120,160,220,0.15);
+  }
+  table.admin-table th {
+    font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-dim);
+    background: rgba(10,16,30,0.7);
+  }
+  table.admin-table tbody tr:hover { background: rgba(59,130,246,0.06); }
+  table.admin-table td.mono { font-variant-numeric: tabular-nums; }
+  .admin-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 5px;
+    font-family: 'Orbitron', sans-serif; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .admin-tag.admin { background: rgba(59,130,246,0.22); color: var(--blue-light); border: 1px solid rgba(90,150,255,0.4); }
+  .admin-tag.player { background: rgba(140,160,190,0.12); color: var(--text-dim); border: 1px solid rgba(140,160,190,0.25); }
+
+  .admin-summary { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .admin-stat {
+    padding: 10px 16px; border-radius: 9px;
+    border: 1.5px solid rgba(120,160,220,0.25);
+    background: linear-gradient(165deg, rgba(20,32,56,0.7) 0%, rgba(8,14,26,0.7) 100%);
+  }
+  .admin-stat .n { font-family: 'Orbitron', sans-serif; font-size: 20px; color: #fff; }
+  .admin-stat .l { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html">
+      <img src="../assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="../index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="../signup.html" class="btn btn-chrome-blue" data-coming-soon="">Signup</a>
+      <a href="../login.html" class="btn btn-chrome-dark" data-coming-soon="">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="admin">
+  <div class="container">
+    <div class="admin-frame bezel-lg">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <h1 class="admin-heading"><span class="dash"></span>Admin<span class="dash"></span></h1>
+
+      <div id="admin-state" class="admin-state">Checking access…</div>
+      <div id="admin-content" hidden>
+        <div class="admin-summary" id="admin-summary"></div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Joined</th>
+                <th>Total XP</th>
+                <th>Games w/ XP</th>
+                <th>Inventory</th>
+                <th>User ID</th>
+              </tr>
+            </thead>
+            <tbody id="admin-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-xp.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+  // This page's ONLY real protection is Row Level Security: the queries
+  // below ask Postgres for every row in profiles/game_progress/
+  // inventory_items, and the database itself hands back nothing but the
+  // caller's own row unless their profile is flagged is_admin (see
+  // supabase/schema.sql — is_admin() + the "_select_own_or_admin"
+  // policies). The is_admin check in this script only decides whether to
+  // *render* the table; a non-admin who deletes this whole script via dev
+  // tools and calls the same query by hand still only gets their own row
+  // back, because the database enforces it, not this page.
+  (function () {
+    const stateEl = document.getElementById('admin-state');
+    const contentEl = document.getElementById('admin-content');
+    const summaryEl = document.getElementById('admin-summary');
+    const rowsEl = document.getElementById('admin-rows');
+
+    function setState(html) { stateEl.innerHTML = html; stateEl.hidden = false; contentEl.hidden = true; }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    async function init() {
+      if (!window.QZAuth || !window.QZAuth.configured) {
+        setState('<div class="icon">⚠️</div>Accounts aren’t configured on this deployment yet.');
+        return;
+      }
+
+      const session = await window.QZAuth.getSession();
+      if (!session) {
+        setState('<div class="icon">🔒</div>You need to be logged in to view this page.<br><br>' +
+          '<a class="btn btn-chrome-blue" href="../login.html">Log In</a>');
+        return;
+      }
+
+      const profile = await window.QZAuth.getProfile();
+      if (!profile || !profile.is_admin) {
+        setState('<div class="icon">🚫</div>This page is only available to Quest Zone administrators.');
+        return;
+      }
+
+      setState('Loading account data…');
+
+      const client = window.QZAuth.client;
+      const [profilesRes, progressRes, inventoryRes] = await Promise.all([
+        client.from('profiles').select('*').order('created_at', { ascending: true }),
+        client.from('game_progress').select('*'),
+        client.from('inventory_items').select('user_id')
+      ]);
+
+      if (profilesRes.error) {
+        setState('<div class="icon">⚠️</div>Could not load accounts: ' + escapeHtml(profilesRes.error.message));
+        return;
+      }
+
+      const profiles = profilesRes.data || [];
+      const progress = progressRes.data || [];
+      const inventory = inventoryRes.data || [];
+
+      const progressByUser = {};
+      progress.forEach((row) => {
+        (progressByUser[row.user_id] = progressByUser[row.user_id] || []).push(row);
+      });
+      const inventoryCountByUser = {};
+      inventory.forEach((row) => {
+        inventoryCountByUser[row.user_id] = (inventoryCountByUser[row.user_id] || 0) + 1;
+      });
+
+      summaryEl.innerHTML =
+        '<div class="admin-stat"><div class="n">' + profiles.length + '</div><div class="l">Accounts</div></div>' +
+        '<div class="admin-stat"><div class="n">' + profiles.filter((p) => p.is_admin).length + '</div><div class="l">Admins</div></div>' +
+        '<div class="admin-stat"><div class="n">' + progress.length + '</div><div class="l">Game/XP Rows</div></div>' +
+        '<div class="admin-stat"><div class="n">' + inventory.length + '</div><div class="l">Items Owned (all accounts)</div></div>';
+
+      rowsEl.innerHTML = profiles.map((p) => {
+        const rows = progressByUser[p.id] || [];
+        const totalXp = rows.reduce((sum, r) => sum + Number(r.xp || 0), 0);
+        const joined = p.created_at ? new Date(p.created_at).toLocaleDateString() : '—';
+        return (
+          '<tr>' +
+          '<td>' + escapeHtml(p.username) + '</td>' +
+          '<td><span class="admin-tag ' + (p.is_admin ? 'admin">Admin' : 'player">Player') + '</span></td>' +
+          '<td>' + joined + '</td>' +
+          '<td class="mono">' + totalXp.toLocaleString() + '</td>' +
+          '<td class="mono">' + rows.length + '</td>' +
+          '<td class="mono">' + (inventoryCountByUser[p.id] || 0) + '</td>' +
+          '<td class="mono" style="color:var(--text-dim);font-size:11px;">' + escapeHtml(p.id) + '</td>' +
+          '</tr>'
+        );
+      }).join('') || '<tr><td colspan="7" style="color:var(--text-dim);">No accounts yet.</td></tr>';
+
+      stateEl.hidden = true;
+      contentEl.hidden = false;
+    }
+
+    init();
+  })();
+</script>
+</body>
+</html>
