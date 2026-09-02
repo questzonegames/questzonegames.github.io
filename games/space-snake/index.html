@@ -18,6 +18,8 @@
     --helmet-glass: #7fd8ff;
     --text-main: #e8ecff;
     --accent: #6ea8ff;
+    --lightning: #ffe066;
+    --skull: #ff5e7a;
   }
 
   * { box-sizing: border-box; }
@@ -159,16 +161,78 @@
     opacity: 0.6;
   }
 
+  /* ---- active timed-effect status pill (shown above the board) ---- */
+  .effects-hud {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 8px 18px;
+    min-width: 230px;
+    justify-content: center;
+    border-radius: 9px;
+    border: 1px solid rgba(110,168,255,0.28);
+    background: linear-gradient(180deg, rgba(22,32,58,0.6), rgba(8,12,24,0.6));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 16px rgba(60,140,255,0.14);
+    transition: opacity 0.25s ease, box-shadow 0.25s ease;
+  }
+  .effects-hud.empty {
+    opacity: 0.4;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 8px rgba(60,140,255,0.06);
+  }
+  .effects-hud .ae-icon {
+    font-size: 17px;
+    line-height: 1;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+  .effects-hud .ae-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-start;
+  }
+  .effects-hud .ae-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 8.5px;
+    letter-spacing: 0.2em;
+    opacity: 0.55;
+  }
+  .effects-hud .ae-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--lightning);
+    text-shadow: 0 0 8px rgba(255,224,102,0.5);
+  }
+  .effects-hud.empty .ae-name {
+    color: var(--text-main);
+    text-shadow: none;
+    opacity: 0.6;
+  }
+  .effects-hud .ae-timer {
+    font-family: 'Orbitron', sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--accent);
+    opacity: 0.9;
+    min-width: 2.6em;
+    text-align: right;
+  }
+
   #board-frame {
     position: relative;
     border-radius: 10px;
     padding: 4px;
     background: linear-gradient(135deg, rgba(110,168,255,0.35), rgba(57,255,143,0.15));
     box-shadow: 0 0 40px rgba(80,120,255,0.25), 0 0 80px rgba(0,0,0,0.6);
+    width: min(88vw, 680px);
   }
 
-  canvas {
+  canvas#game {
     display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
     border-radius: 7px;
     background: transparent;
   }
@@ -293,12 +357,21 @@
     <div class="stat"><span id="best">0</span><span>BEST</span></div>
   </div>
 
+  <div class="effects-hud empty" id="effects-hud">
+    <span class="ae-icon" id="ae-icon">—</span>
+    <div class="ae-text">
+      <span class="ae-label">ACTIVE EFFECT</span>
+      <span class="ae-name" id="ae-name">NO ACTIVE EFFECTS</span>
+    </div>
+    <span class="ae-timer" id="ae-timer"></span>
+  </div>
+
   <div id="board-frame">
-    <canvas id="game" width="400" height="400"></canvas>
+    <canvas id="game" width="680" height="680"></canvas>
 
     <div id="start-overlay" class="overlay">
       <h2>READY TO LAUNCH?</h2>
-      <p>Guide your snake through the drifting grid and devour asteroids. Each one you eat adds a segment. Don't hit yourself or the edge of the field.</p>
+      <p>Guide your snake through the drifting grid and devour space debris. Each one you eat adds a segment. Watch for lightning boosts and skull hazards — and don't hit yourself.</p>
       <button id="start-btn">START</button>
     </div>
 
@@ -322,12 +395,20 @@
 <script src="../../assets/js/stars-plain.js"></script>
 <script>
 (function () {
-  // ---------- Game setup ----------
+  // ================= Config =================
+  const GRID = 20;
+  const MIN_SNAKE_LENGTH = 3;           // matches the starting snake length
+  const BASE_TICK_MS = 130;             // starting move interval
+  const MIN_TICK_MS = 60;               // fastest the *base* speed can reach
+  const TICK_STEP = 2;                  // base speed-up per debris eaten (existing progressive difficulty)
+  const PICKUP_LIFETIME_MS = 7000;      // every special pickup lives for exactly 7s
+  const PICKUP_WARNING_AT_MS = 4000;    // starts flashing at 4s (3s warning window)
+  const PICKUP_MIN_GAP_MS = 7000;       // random spawn gap so pickups feel occasional
+  const PICKUP_MAX_GAP_MS = 15000;
+
+  // ================= DOM =================
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-  const GRID = 20;
-  const CELL = canvas.width / GRID;
-
   const scoreEl = document.getElementById('score');
   const bestEl = document.getElementById('best');
   const startOverlay = document.getElementById('start-overlay');
@@ -335,89 +416,246 @@
   const finalScoreText = document.getElementById('final-score-text');
   const startBtn = document.getElementById('start-btn');
   const retryBtn = document.getElementById('retry-btn');
+  const effectsHud = document.getElementById('effects-hud');
+  const aeIcon = document.getElementById('ae-icon');
+  const aeName = document.getElementById('ae-name');
+  const aeTimer = document.getElementById('ae-timer');
 
   let best = 0;
   try { best = parseInt(localStorage.getItem('spaceSnakeBest') || '0', 10); } catch (e) { best = 0; }
   bestEl.textContent = best;
 
-  // local grid twinkle (subtle stars behind the grid, separate layer of small dots so grid feels "in space")
-  let gridStars = Array.from({ length: 40 }, () => ({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
+  // ================= Responsive, crisp canvas =================
+  // CELL is always derived from the canvas's current CSS display size, so
+  // the board can be scaled up/down by CSS (min()/aspect-ratio) while the
+  // backing pixel buffer is set to size*devicePixelRatio for a sharp,
+  // non-blurry render at any zoom/DPI.
+  let CELL = 1;
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const size = Math.max(1, Math.round(canvas.getBoundingClientRect().width));
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    CELL = size / GRID;
+    draw(nowMs());
+  }
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resizeCanvas, 80);
+  });
+
+  function nowMs() { return performance.now(); }
+
+  // ================= Pickup type registry =================
+  // Extensible: adding a new special pickup later only means adding a new
+  // entry here (icon/lifetime/draw/onCollect) — nothing else in the game
+  // loop needs to change.
+  const PICKUP_TYPES = {
+    lightning: {
+      type: 'lightning',
+      lifetime: PICKUP_LIFETIME_MS,
+      draw: drawLightningPickup,
+      onCollect() {
+        addTimedEffect({ id: 'speed-boost', label: 'SPEED BOOST', icon: '⚡', duration: 5000, speedMultiplier: 2 });
+      }
+    },
+    skull: {
+      type: 'skull',
+      lifetime: PICKUP_LIFETIME_MS,
+      draw: drawSkullPickup,
+      onCollect() {
+        if (snake.length > MIN_SNAKE_LENGTH) snake.pop();
+      }
+    }
+  };
+  const PICKUP_KEYS = Object.keys(PICKUP_TYPES);
+
+  // ================= Background twinkle (behind the grid) =================
+  const gridStars = Array.from({ length: 40 }, () => ({
+    x: Math.random(), y: Math.random(),
     r: Math.random() * 1.2 + 0.3,
     phase: Math.random() * Math.PI * 2
   }));
 
-  let snake, dir, nextDir, asteroid, score, tickMs, timer, running, paused, frame;
+  // ================= Game state =================
+  let snake, dir, nextDir, debris, score, baseTickMs, running, paused, frame;
+  let pickup;          // { type, x, y, spawnedAt } | null — at most one active special pickup
+  let nextPickupAt;     // timestamp: earliest a new pickup may spawn
+  let activeEffects;    // [{ id, label, icon, duration, speedMultiplier, startedAt }]
+  let rafId = null;
+  let lastFrameAt = 0;
+  let tickAccumulator = 0;
+
+  function cellKey(p) { return p.x + ',' + p.y; }
+
+  function occupiedCells() {
+    const set = new Set(snake.map(cellKey));
+    if (debris) set.add(cellKey(debris));
+    if (pickup) set.add(cellKey(pickup));
+    return set;
+  }
+
+  function randomFreeCell(avoidSet) {
+    let pos, guard = 0;
+    do {
+      pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+      guard++;
+    } while (avoidSet.has(cellKey(pos)) && guard < 1000);
+    return pos;
+  }
 
   function reset() {
-    snake = [
-      { x: 10, y: 10 },
-      { x: 9, y: 10 },
-      { x: 8, y: 10 }
-    ];
+    // full, clean state reset — no leftover timers/effects/pickups can
+    // survive into a new run.
+    cancelAnimationFrame(rafId);
+    rafId = null;
+
+    snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
     dir = { x: 1, y: 0 };
     nextDir = { x: 1, y: 0 };
     score = 0;
-    tickMs = 130;
+    baseTickMs = BASE_TICK_MS;
     running = false;
     paused = false;
     frame = 0;
-    placeAsteroid();
+    pickup = null;
+    activeEffects = [];
+    tickAccumulator = 0;
+    lastFrameAt = nowMs();
+
+    scheduleNextPickup();
+    placeDebris();
     scoreEl.textContent = score;
-    draw();
+    updateEffectsHud(nowMs());
+    draw(nowMs());
   }
 
-  function placeAsteroid() {
-    let pos;
-    do {
-      pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
-    } while (snake.some(s => s.x === pos.x && s.y === pos.y));
-    asteroid = pos;
+  function placeDebris() {
+    debris = randomFreeCell(occupiedCells());
   }
 
+  function scheduleNextPickup() {
+    nextPickupAt = nowMs() + PICKUP_MIN_GAP_MS + Math.random() * (PICKUP_MAX_GAP_MS - PICKUP_MIN_GAP_MS);
+  }
+
+  function trySpawnPickup(now) {
+    if (pickup || now < nextPickupAt) return;
+    const key = PICKUP_KEYS[Math.floor(Math.random() * PICKUP_KEYS.length)];
+    const pos = randomFreeCell(occupiedCells());
+    pickup = { type: key, x: pos.x, y: pos.y, spawnedAt: now };
+  }
+
+  function updatePickupLifetime(now) {
+    if (!pickup) return;
+    if (now - pickup.spawnedAt >= PICKUP_TYPES[pickup.type].lifetime) {
+      pickup = null;
+      scheduleNextPickup();
+    }
+  }
+
+  // 0-4s: fully visible. 4-7s: flashes, accelerating toward expiry.
+  function isPickupVisible(now, p) {
+    const elapsed = now - p.spawnedAt;
+    if (elapsed < PICKUP_WARNING_AT_MS) return true;
+    const warnSpan = PICKUP_LIFETIME_MS - PICKUP_WARNING_AT_MS;
+    const warnT = Math.min(elapsed - PICKUP_WARNING_AT_MS, warnSpan); // 0..warnSpan, resets at the start of the warning phase
+    const progress = warnT / warnSpan; // 0..1
+    const period = 460 - progress * 380; // slow flash -> rapid flash
+    // phase off warnT (small, resets at 0) rather than the full elapsed
+    // time — dividing a large, ever-growing elapsed by a shrinking period
+    // makes the toggle rate blow up non-linearly near expiry instead of
+    // accelerating smoothly.
+    return Math.floor(warnT / period) % 2 === 0;
+  }
+
+  function addTimedEffect(effect) {
+    activeEffects = activeEffects.filter((e) => e.id !== effect.id); // refresh, don't stack
+    activeEffects.push(Object.assign({ startedAt: nowMs() }, effect));
+  }
+
+  function updateActiveEffects(now) {
+    activeEffects = activeEffects.filter((e) => now - e.startedAt < e.duration);
+  }
+
+  function currentSpeedMultiplier() {
+    let m = 1;
+    for (const e of activeEffects) if (e.speedMultiplier) m *= e.speedMultiplier;
+    return m;
+  }
+
+  // ================= Lifecycle =================
   function start() {
     reset();
     running = true;
     startOverlay.classList.add('hidden');
     gameoverOverlay.classList.add('hidden');
-    loop();
+    lastFrameAt = nowMs();
+    rafId = requestAnimationFrame(gameLoop);
   }
 
-  function loop() {
+  // Single game loop (rAF + accumulator) — no competing setInterval/setTimeout
+  // timers, so speed changes and effect timers all stay in sync.
+  function gameLoop(now) {
     if (!running) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (!paused) {
+    rafId = requestAnimationFrame(gameLoop);
+
+    const dt = Math.min(now - lastFrameAt, 250); // clamp a stall (e.g. backgrounded tab)
+    lastFrameAt = now;
+
+    if (!paused) {
+      tickAccumulator += dt;
+      const tickMs = baseTickMs / currentSpeedMultiplier();
+      let iterations = 0;
+      while (tickAccumulator >= tickMs && running && iterations < 8) {
         step();
-        draw();
+        tickAccumulator -= tickMs;
+        iterations++;
       }
-      loop();
-    }, tickMs);
+      if (running) {
+        trySpawnPickup(now);
+        updatePickupLifetime(now);
+        updateActiveEffects(now);
+      }
+    }
+
+    updateEffectsHud(now);
+    draw(now);
   }
 
   function step() {
     dir = nextDir;
-    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    let head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-    // wall collision
-    if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
-      return gameOver();
-    }
-    // self collision
-    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    // screen wrap — no walls, computed at the grid-coordinate level
+    head.x = (head.x + GRID) % GRID;
+    head.y = (head.y + GRID) % GRID;
+
+    const willGrow = head.x === debris.x && head.y === debris.y;
+    // the tail cell vacates this tick unless we're growing, so it's safe
+    // to move into (classic Snake self-collision, not a false-positive
+    // death on your own departing tail).
+    const body = willGrow ? snake : snake.slice(0, -1);
+    if (body.some((s) => s.x === head.x && s.y === head.y)) {
       return gameOver();
     }
 
     snake.unshift(head);
 
-    if (head.x === asteroid.x && head.y === asteroid.y) {
+    if (willGrow) {
       score++;
       scoreEl.textContent = score;
-      placeAsteroid();
-      tickMs = Math.max(60, tickMs - 2);
+      placeDebris();
+      baseTickMs = Math.max(MIN_TICK_MS, baseTickMs - TICK_STEP);
     } else {
       snake.pop();
+    }
+
+    if (pickup && head.x === pickup.x && head.y === pickup.y) {
+      PICKUP_TYPES[pickup.type].onCollect();
+      pickup = null;
+      scheduleNextPickup();
     }
 
     frame++;
@@ -425,7 +663,7 @@
 
   function gameOver() {
     running = false;
-    clearTimeout(timer);
+    cancelAnimationFrame(rafId);
     if (score > best) {
       best = score;
       bestEl.textContent = best;
@@ -433,8 +671,27 @@
     }
     finalScoreText.textContent = 'Your snake grew to ' + snake.length + ' segments.';
     gameoverOverlay.classList.remove('hidden');
+    updateEffectsHud(nowMs());
   }
 
+  // ================= Active-effects HUD =================
+  function updateEffectsHud(now) {
+    if (!activeEffects.length) {
+      effectsHud.classList.add('empty');
+      aeIcon.textContent = '—';
+      aeName.textContent = 'NO ACTIVE EFFECTS';
+      aeTimer.textContent = '';
+      return;
+    }
+    effectsHud.classList.remove('empty');
+    const e = activeEffects[activeEffects.length - 1];
+    const remaining = Math.max(0, (e.duration - (now - e.startedAt)) / 1000);
+    aeIcon.textContent = e.icon;
+    aeName.textContent = e.label;
+    aeTimer.textContent = remaining.toFixed(1) + 's';
+  }
+
+  // ================= Rendering =================
   function roundedRect(x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -445,88 +702,240 @@
     ctx.closePath();
   }
 
-  function draw() {
-    // deep space behind grid
-    ctx.fillStyle = '#04050c';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // subtle stars floating behind grid
+  function drawStars() {
+    const size = CELL * GRID;
+    ctx.save();
     for (const s of gridStars) {
       const tw = 0.4 + 0.6 * Math.sin(frame * 0.05 + s.phase);
       ctx.globalAlpha = 0.2 + tw * 0.5;
       ctx.fillStyle = '#cfe0ff';
       ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.arc(s.x * size, s.y * size, s.r, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
-    // grid lines (floating grid look)
+  function drawGrid() {
+    const size = CELL * GRID;
     ctx.strokeStyle = 'rgba(110,140,220,0.18)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID; i++) {
       ctx.beginPath();
       ctx.moveTo(i * CELL, 0);
-      ctx.lineTo(i * CELL, canvas.height);
+      ctx.lineTo(i * CELL, size);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(0, i * CELL);
-      ctx.lineTo(canvas.width, i * CELL);
+      ctx.lineTo(size, i * CELL);
       ctx.stroke();
     }
+  }
 
-    // asteroid
-    const ax = asteroid.x * CELL + CELL / 2;
-    const ay = asteroid.y * CELL + CELL / 2;
-    const ar = CELL * 0.36;
-    const grad = ctx.createRadialGradient(ax - ar * 0.3, ay - ar * 0.3, ar * 0.1, ax, ay, ar);
-    grad.addColorStop(0, '#d9a878');
-    grad.addColorStop(1, '#6e4c30');
+  // Space debris: a tumbling metallic fragment (not generic "food").
+  function drawDebris() {
+    const cx = debris.x * CELL + CELL / 2;
+    const cy = debris.y * CELL + CELL / 2;
+    const r = CELL * 0.34;
+    const points = 7;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((frame * 0.015) % (Math.PI * 2));
+    ctx.beginPath();
+    for (let i = 0; i < points; i++) {
+      const a = (i / points) * Math.PI * 2;
+      const rr = r * (0.72 + 0.28 * Math.sin(i * 2.3 + 1.7));
+      const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(-r, -r, r, r);
+    grad.addColorStop(0, '#e4eaf6');
+    grad.addColorStop(0.45, '#96a2ba');
+    grad.addColorStop(0.55, '#4c5670');
+    grad.addColorStop(1, '#1c2030');
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(ax, ay, ar, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.strokeStyle = 'rgba(140,190,255,0.55)';
+    ctx.lineWidth = Math.max(1, CELL * 0.03);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.beginPath();
-    ctx.arc(ax - ar * 0.25, ay + ar * 0.2, ar * 0.22, 0, Math.PI * 2);
+    ctx.arc(-r * 0.25, -r * 0.3, r * 0.14, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  }
+
+  function drawLightningPickup(p, now) {
+    if (!isPickupVisible(now, p)) return;
+    const cx = p.x * CELL + CELL / 2;
+    const cy = p.y * CELL + CELL / 2;
+    const s = CELL * 0.36;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.shadowColor = 'rgba(255,224,102,0.85)';
+    ctx.shadowBlur = CELL * 0.2;
     ctx.beginPath();
-    ctx.arc(ax + ar * 0.3, ay - ar * 0.1, ar * 0.14, 0, Math.PI * 2);
+    ctx.moveTo(-s * 0.1, -s);
+    ctx.lineTo(s * 0.42, -s * 0.12);
+    ctx.lineTo(s * 0.02, -s * 0.05);
+    ctx.lineTo(s * 0.32, s * 0.12);
+    ctx.lineTo(-s * 0.12, s);
+    ctx.lineTo(s * 0.08, s * 0.02);
+    ctx.lineTo(-s * 0.34, s * 0.08);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, -s, 0, s);
+    grad.addColorStop(0, '#fff6c8');
+    grad.addColorStop(0.5, '#ffe066');
+    grad.addColorStop(1, '#ffb020');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = Math.max(1, CELL * 0.025);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawSkullPickup(p, now) {
+    if (!isPickupVisible(now, p)) return;
+    const cx = p.x * CELL + CELL / 2;
+    const cy = p.y * CELL + CELL / 2;
+    const r = CELL * 0.3;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.shadowColor = 'rgba(255,94,122,0.8)';
+    ctx.shadowBlur = CELL * 0.16;
+
+    // crossbones (behind the skull)
+    ctx.strokeStyle = '#d8dee8';
+    ctx.lineWidth = Math.max(1.5, r * 0.16);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.8, r * 0.6); ctx.lineTo(r * 0.8, -r * 0.2);
+    ctx.moveTo(-r * 0.8, -r * 0.2); ctx.lineTo(r * 0.8, r * 0.6);
+    ctx.stroke();
+
+    // skull
+    ctx.fillStyle = '#eef2fb';
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.12, r * 0.66, Math.PI, 0);
+    ctx.lineTo(r * 0.56, r * 0.22);
+    ctx.quadraticCurveTo(r * 0.45, r * 0.52, 0, r * 0.46);
+    ctx.quadraticCurveTo(-r * 0.45, r * 0.52, -r * 0.56, r * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // eye sockets
+    ctx.fillStyle = '#1a0d14';
+    ctx.beginPath(); ctx.arc(-r * 0.26, -r * 0.08, r * 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.26, -r * 0.08, r * 0.15, 0, Math.PI * 2); ctx.fill();
+
+    // nose
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.06);
+    ctx.lineTo(-r * 0.07, r * 0.2);
+    ctx.lineTo(r * 0.07, r * 0.2);
+    ctx.closePath();
     ctx.fill();
 
-    // snake
+    ctx.restore();
+  }
+
+  // Snake mascot: rounded segments, green/teal body with a yellow
+  // underside, transparent helmet + expressive eyes on the head. Every
+  // segment (including the helmet/glow) stays sized within its own cell.
+  function drawSnake() {
     for (let i = snake.length - 1; i >= 0; i--) {
       const seg = snake[i];
-      const x = seg.x * CELL;
-      const y = seg.y * CELL;
+      const x = seg.x * CELL, y = seg.y * CELL;
       const isHead = i === 0;
-      const shade = isHead ? '#39ff8f' : (i % 2 === 0 ? '#12a85a' : '#0f8a4a');
-      ctx.fillStyle = shade;
-      roundedRect(x + 1.5, y + 1.5, CELL - 3, CELL - 3, 5);
-      ctx.fill();
+      const pad = CELL * 0.09;
+      const w = CELL - pad * 2;
+      const r = w * 0.42;
+
+      const grad = ctx.createLinearGradient(x, y + pad, x, y + CELL - pad);
       if (isHead) {
-        ctx.shadowColor = 'rgba(57,255,143,0.8)';
-        ctx.shadowBlur = 10;
+        grad.addColorStop(0, '#6dffb8');
+        grad.addColorStop(0.58, '#1fbd6e');
+        grad.addColorStop(0.6, '#f4ff8c');
+        grad.addColorStop(1, '#c8dd3e');
+      } else {
+        const alt = i % 2 === 0;
+        grad.addColorStop(0, alt ? '#39ff8f' : '#2be07f');
+        grad.addColorStop(0.6, alt ? '#0f8a4a' : '#0c7a40');
+        grad.addColorStop(0.62, alt ? '#e4f56a' : '#d8ec5c');
+        grad.addColorStop(1, alt ? '#a9c23c' : '#9fb838');
+      }
+      ctx.fillStyle = grad;
+      roundedRect(x + pad, y + pad, w, w, r);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = Math.max(1, CELL * 0.02);
+      ctx.stroke();
+
+      if (isHead) {
+        const cx = x + CELL / 2, cy = y + CELL / 2;
+        const helmetR = w * 0.47;
+
+        // subtle blue glow — kept modest so it reads as a highlight, not
+        // a shape bleeding into neighboring cells
+        ctx.save();
+        ctx.shadowColor = 'rgba(110,190,255,0.55)';
+        ctx.shadowBlur = CELL * 0.14;
+        ctx.fillStyle = 'rgba(255,255,255,0.001)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, helmetR, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
-        // eyes
+        ctx.restore();
+
+        // bubble/fishbowl helmet
+        const hg = ctx.createRadialGradient(cx - helmetR * 0.32, cy - helmetR * 0.38, helmetR * 0.08, cx, cy, helmetR);
+        hg.addColorStop(0, 'rgba(255,255,255,0.88)');
+        hg.addColorStop(0.35, 'rgba(150,225,255,0.42)');
+        hg.addColorStop(1, 'rgba(70,150,200,0.16)');
+        ctx.fillStyle = hg;
+        ctx.beginPath();
+        ctx.arc(cx, cy, helmetR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(210,240,255,0.85)';
+        ctx.lineWidth = Math.max(1, CELL * 0.045);
+        ctx.stroke();
+
+        // direction-aware eyes, visible through the glass
         ctx.fillStyle = '#04120a';
-        const ex = x + CELL / 2 + dir.x * CELL * 0.15;
-        const ey = y + CELL / 2 + dir.y * CELL * 0.15;
+        const ex = cx + dir.x * CELL * 0.12;
+        const ey = cy + dir.y * CELL * 0.12;
         const perp = { x: -dir.y, y: dir.x };
+        const eyeR = CELL * 0.065;
+        ctx.beginPath(); ctx.arc(ex + perp.x * CELL * 0.16, ey + perp.y * CELL * 0.16, eyeR, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ex - perp.x * CELL * 0.16, ey - perp.y * CELL * 0.16, eyeR, 0, Math.PI * 2); ctx.fill();
+
+        // glass glint
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
         ctx.beginPath();
-        ctx.arc(ex + perp.x * CELL * 0.18, ey + perp.y * CELL * 0.18, CELL * 0.07, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(ex - perp.x * CELL * 0.18, ey - perp.y * CELL * 0.18, CELL * 0.07, 0, Math.PI * 2);
+        ctx.arc(cx - helmetR * 0.35, cy - helmetR * 0.4, helmetR * 0.16, 0, Math.PI * 2);
         ctx.fill();
       }
     }
   }
 
-  // ---------- Controls ----------
+  function draw(now) {
+    if (!snake) return; // not yet initialized (e.g. the very first resizeCanvas() call before reset())
+    const size = CELL * GRID;
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = '#04050c';
+    ctx.fillRect(0, 0, size, size);
+    drawStars();
+    drawGrid();
+    if (debris) drawDebris();
+    if (pickup) PICKUP_TYPES[pickup.type].draw(pickup, now);
+    drawSnake();
+  }
+
+  // ================= Controls =================
   function setDir(x, y) {
-    if (dir.x === -x && dir.y === -y) return; // no reversing
+    if (dir.x === -x && dir.y === -y) return; // no instant 180 reversal
     nextDir = { x, y };
   }
 
@@ -551,7 +960,9 @@
   startBtn.addEventListener('click', start);
   retryBtn.addEventListener('click', start);
 
+  resizeCanvas();
   reset();
+  window.addEventListener('load', resizeCanvas);
 })();
 </script>
 
