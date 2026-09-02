@@ -20,6 +20,12 @@
   --metal-hi: #aab6d6;
   --metal-mid: #454e63;
   --metal-low: #12151f;
+
+  /* sci-fi dashboard panels (profile + its sub-pages) */
+  --qp-fill: linear-gradient(165deg, #0d1830 0%, #081222 55%, #050a16 100%);
+  --qp-border: rgba(110,175,255,0.55);
+  --qp-border-dim: rgba(90,140,220,0.28);
+  --qp-glow: rgba(60,140,255,0.35);
 }
 
 * { box-sizing: border-box; }
@@ -651,4 +657,24 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   font-size: 13px;
   color: var(--text-dim);
 }
+
+/* ---------- placeholder sub-page panel (profile/skills/inventory/etc.) ---------- */
+.placeholder-panel {
+  max-width: 640px;
+  margin: 40px auto;
+  text-align: center;
+  background: var(--qp-fill);
+  border: 1px solid var(--qp-border);
+  border-radius: 16px;
+  padding: 44px 30px;
+  position: relative;
+  z-index: 1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 0 40px rgba(40,100,220,0.15);
+}
+.placeholder-panel .icon { font-size: 40px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
+.placeholder-panel h1 {
+  font-family: 'Orbitron', sans-serif; font-size: 24px; letter-spacing: 0.08em;
+  margin: 0 0 12px; text-shadow: 0 0 16px rgba(120,170,255,0.5);
+}
+.placeholder-panel p { color: var(--text-dim); font-size: 13.5px; line-height: 1.6; margin: 0 0 22px; }
 #search-note.show { display: block; }
