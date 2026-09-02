@@ -77,7 +77,7 @@ img { max-width: 100%; display: block; }
 }
 
 .logo img {
-  height: 62px;
+  height: 78px;
   width: auto;
   display: block;
   filter: drop-shadow(0 0 14px rgba(90,150,255,0.4));
@@ -177,14 +177,25 @@ img { max-width: 100%; display: block; }
 /* extruded "keycap" depth: a solid shadow ledge under the button that
    compresses on click, like a physical arcade button */
 .btn-primary {
-  background: linear-gradient(180deg, #9cc9ff 0%, #3b82f6 55%, #1b4fc4 100%);
-  border: 1px solid rgba(220,235,255,0.5);
+  background: linear-gradient(180deg, #bcdcff 0%, #3b82f6 42%, #1a4fc4 78%, #123a91 100%);
+  border: 1px solid rgba(200,212,230,0.6);
   color: #fff;
   text-shadow: 0 1px 1px rgba(0,20,60,0.45);
-  box-shadow: 0 4px 0 #12327f, 0 8px 16px rgba(20,60,160,0.4);
+  box-shadow: 0 4px 0 #0f2c73, 0 8px 16px rgba(20,60,160,0.4);
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #12327f, 0 10px 20px rgba(20,60,160,0.55); }
-.btn-primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #12327f, 0 2px 6px rgba(20,60,160,0.35); }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #0f2c73, 0 10px 22px rgba(59,130,246,0.6); }
+.btn-primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #0f2c73, 0 2px 6px rgba(20,60,160,0.35); }
+
+/* Login — dark charcoal metallic, visually related to the nav bar */
+.btn-charcoal {
+  background: linear-gradient(180deg, #4a4e57 0%, #2b2d33 45%, #1a1b1f 100%);
+  border: 1px solid rgba(190,196,210,0.35);
+  color: #f2f3f6;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+  box-shadow: 0 4px 0 #0a0a0c, 0 8px 16px rgba(0,0,0,0.5);
+}
+.btn-charcoal:hover { transform: translateY(-1px); box-shadow: 0 5px 0 #0a0a0c, 0 10px 20px rgba(0,0,0,0.6); }
+.btn-charcoal:active { transform: translateY(3px); box-shadow: 0 1px 0 #0a0a0c, 0 2px 6px rgba(0,0,0,0.5); }
 
 .btn-outline, .btn-ghost, .btn-metal {
   background: linear-gradient(180deg, #dbe2f2 0%, #9aa5bc 45%, #566079 100%);
@@ -228,9 +239,16 @@ img { max-width: 100%; display: block; }
   display: flex;
   margin: 0;
   padding: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
+  /* dark charcoal metallic strip: gradient body, silver outer border,
+     a soft top highlight and inner shadow for a beveled/glossy edge */
+  background: linear-gradient(180deg, #34363c 0%, #232428 8%, #1c1d21 50%, #131418 100%);
+  border: 1px solid rgba(190,196,210,0.3);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 -1px 0 rgba(0,0,0,0.5),
+    inset 0 6px 10px -6px rgba(0,0,0,0.5),
+    0 3px 8px rgba(0,0,0,0.4);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -239,7 +257,7 @@ img { max-width: 100%; display: block; }
 
 .site-nav li {
   flex: 1 1 0;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid rgba(255,255,255,0.08);
 }
 .site-nav li:last-child { border-right: none; }
 
@@ -247,16 +265,16 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 13px 14px;
-  font-size: 12.5px;
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-dim);
+  color: #c7cbd4;
   text-decoration: none;
   white-space: nowrap;
 }
-.site-nav a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
-.site-nav a .ic { font-size: 14px; filter: grayscale(1) brightness(1.7); }
+.site-nav a:hover { color: #fff; background: rgba(255,255,255,0.05); }
+.site-nav a .ic { font-size: 13px; filter: grayscale(1) brightness(2.1) contrast(0.9); }
 
 /* ---------- layout rows ---------- */
 main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
