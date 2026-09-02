@@ -48,7 +48,7 @@ img { max-width: 100%; display: block; }
 #site-starfield {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
 }
 
@@ -218,6 +218,8 @@ img { max-width: 100%; display: block; }
 
 /* ---------- nav ---------- */
 .site-nav {
+  position: relative;
+  z-index: 1;
   padding: 16px 0 0;
 }
 
