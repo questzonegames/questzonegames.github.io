@@ -1,446 +1,205 @@
-// ===== Quest Zone — 3D Avatar Viewer =====
+// ===== Quest Zone — Profile avatar viewer =====
 //
-// Renders the low-poly Quest Zone avatar into a container element,
-// auto-rotating slowly and draggable for manual inspection. Built with
-// primitive geometry (no external 3D model file) styled after the four
-// reference renders (front/back/left/right) — a plain-white tee, grey
-// joggers, light skin, short black hair, bare feet.
+// A sprite-based pseudo-3D viewer: it crossfades between four real
+// renders of the player's avatar (front / left / back / right) as the
+// angle turns, rather than rendering an approximated 3D model. This is a
+// deliberate choice — the four supplied images ARE the avatar's source of
+// truth, so showing them directly (with a smooth dissolve between
+// neighbours) always looks exactly like the avatar, at every angle,
+// instead of risking a crude geometric stand-in.
 //
-// The rig is a real Object3D hierarchy with named joints AND named
-// equipment anchors (head/necklace/body/legs/boots/gloves/back/
-// mainHand/offHand/accessory) so a future cosmetics system has real
-// attachment points to hang meshes from — see setAvatarEquipment() at
-// the bottom, which is intentionally a stub for now.
+//   window.QZAvatarViewer.mount(container) -> { destroy, setAvatarEquipment }
 //
-// Public API: window.QZAvatarViewer.mount(containerEl, fallbackImgEl)
+// container is the element the avatar fills (e.g. #avatar-3d) — it should
+// be position:relative/absolute with a defined size; this module only
+// ever touches elements it creates inside that container.
+(function () {
+  const ROTATION_PERIOD_S = 9;       // one full auto-rotation, ~9s
+  const RESUME_DELAY_MS = 2600;      // pause length after a manual drag
+  const DEG_PER_MS_AUTO = 360 / (ROTATION_PERIOD_S * 1000);
+  const DRAG_DEG_PER_PX = 0.5;       // manual-drag sensitivity
+  const MOMENTUM_DECAY_PER_MS = 0.994; // multiplicative decay per ms (minimal)
+  const MAX_MOMENTUM_DEG_PER_MS = DEG_PER_MS_AUTO * 14; // capped, brief coast
+  const HOLD = 0.35;                 // fraction of each 90° segment spent fully on one frame
 
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-
-const ROTATION_PERIOD_S = 9;          // one full 360° turn every ~9s
-const RESUME_DELAY_MS = 2600;         // pause after release before auto-spin resumes
-const DRAG_SENSITIVITY = 0.010;       // radians per pixel of drag
-const MOMENTUM_DECAY_PER_MS = 0.006;  // how fast leftover drag speed bleeds off
-const MAX_MOMENTUM_SPEED = 2.2;       // rad/s cap so a fast flick can't spin wildly
-
-// ---------------- character build ----------------
-
-const COLORS = {
-  skin: 0xe3a97c,
-  skinShade: 0xcf9268,
-  shirt: 0xf0f2f6,
-  shirtShade: 0xd7dbe2,
-  joggers: 0x6f737b,
-  joggersCuff: 0x4c4f56,
-  hair: 0x201b1a,
-};
-
-function mat(color) {
-  return new THREE.MeshLambertMaterial({ color, flatShading: true });
-}
-
-// A short cylinder segment, its own group pivoting at the TOP (the
-// joint), with the mesh hanging downward from that pivot — this is
-// what lets e.g. the forearm rotate naturally from the elbow, and lets
-// a hand/anchor sit exactly at the segment's bottom end.
-function limbSegment(radiusTop, radiusBottom, length, color, radialSegments = 6) {
-  const group = new THREE.Group();
-  const geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, radialSegments);
-  const mesh = new THREE.Mesh(geo, mat(color));
-  mesh.position.y = -length / 2;
-  group.add(mesh);
-  const end = new THREE.Group();
-  end.position.y = -length;
-  group.add(end);
-  return { group, end };
-}
-
-function buildCharacter() {
-  const root = new THREE.Group();
-  const anchors = {}; // future equipment attachment points
-  const parts = {};
-
-  // ---- pelvis / hips (joggers waistband) ----
-  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.16, 0.26), mat(COLORS.joggers));
-  pelvis.position.y = 0.97;
-  root.add(pelvis);
-  parts.pelvis = pelvis;
-
-  // ---- legs ----
-  function buildLeg(sign) {
-    const hip = new THREE.Group();
-    hip.position.set(sign * 0.13, 0.95, 0);
-    root.add(hip);
-
-    const upper = limbSegment(0.115, 0.10, 0.44, COLORS.joggers);
-    hip.add(upper.group);
-
-    const lower = limbSegment(0.095, 0.075, 0.42, COLORS.joggers);
-    upper.end.add(lower.group);
-
-    // ankle cuff accent
-    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.075, 0.05, 6), mat(COLORS.joggersCuff));
-    cuff.position.y = -0.40;
-    lower.group.add(cuff);
-
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.24), mat(COLORS.skin));
-    foot.position.set(0, -0.455, 0.06);
-    lower.group.add(foot);
-
-    const bootsAnchor = new THREE.Group();
-    bootsAnchor.position.set(0, -0.42, 0);
-    lower.group.add(bootsAnchor);
-
-    return { hip, upper, lower, foot, bootsAnchor };
-  }
-  const leftLeg = buildLeg(-1);
-  const rightLeg = buildLeg(1);
-  parts.leftUpperLeg = leftLeg.upper.group;
-  parts.leftLowerLeg = leftLeg.lower.group;
-  parts.leftFoot = leftLeg.foot;
-  parts.rightUpperLeg = rightLeg.upper.group;
-  parts.rightLowerLeg = rightLeg.lower.group;
-  parts.rightFoot = rightLeg.foot;
-  // "legs" equipment covers both upper legs; "boots" anchors at both ankles
-  anchors.legs = pelvis;
-  anchors.boots = [leftLeg.bootsAnchor, rightLeg.bootsAnchor];
-
-  // ---- torso (shirt) ----
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.40, 0.28), mat(COLORS.shirt));
-  torso.position.y = 1.23;
-  root.add(torso);
-  parts.torso = torso;
-  anchors.body = torso;
-
-  const backAnchor = new THREE.Group();
-  backAnchor.position.set(0, 1.28, -0.15);
-  root.add(backAnchor);
-  anchors.back = backAnchor;
-
-  const accessoryAnchor = new THREE.Group();
-  accessoryAnchor.position.set(0, 1.0, 0.14);
-  root.add(accessoryAnchor);
-  anchors.accessory = accessoryAnchor;
-
-  // ---- neck + head ----
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.075, 0.08, 6), mat(COLORS.skin));
-  neck.position.y = 1.47;
-  root.add(neck);
-
-  const necklaceAnchor = new THREE.Group();
-  necklaceAnchor.position.set(0, 1.44, 0.09);
-  root.add(necklaceAnchor);
-  anchors.necklace = necklaceAnchor;
-
-  const head = new THREE.Group();
-  head.position.y = 1.51;
-  root.add(head);
-  parts.head = head;
-  anchors.head = head;
-
-  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.32, 0.30), mat(COLORS.skin));
-  skull.position.y = 0.16;
-  head.add(skull);
-
-  // simple faceted jaw taper for a less boxy silhouette
-  const jaw = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, 0.10, 6), mat(COLORS.skinShade));
-  jaw.rotation.x = Math.PI;
-  jaw.position.set(0, 0.015, 0.01);
-  head.add(jaw);
-
-  // spiky low-poly hair — small angled boxes fanned across the crown
-  const hairGroup = new THREE.Group();
-  hairGroup.position.y = 0.16;
-  head.add(hairGroup);
-  parts.hair = hairGroup;
-  const spikes = [
-    { p: [0, 0.16, 0.02], r: [0.1, 0, 0.05], s: [0.14, 0.16, 0.16] },
-    { p: [-0.09, 0.15, 0.0], r: [0.05, 0, -0.35], s: [0.12, 0.15, 0.14] },
-    { p: [0.09, 0.15, 0.0], r: [0.05, 0, 0.35], s: [0.12, 0.15, 0.14] },
-    { p: [0, 0.14, -0.11], r: [-0.4, 0, 0], s: [0.16, 0.14, 0.14] },
-    { p: [-0.1, 0.1, -0.06], r: [-0.1, 0, -0.5], s: [0.1, 0.12, 0.12] },
-    { p: [0.1, 0.1, -0.06], r: [-0.1, 0, 0.5], s: [0.1, 0.12, 0.12] },
+  // angle order going around the character, 90° apart
+  const FRAMES = [
+    { key: 'front', angle: 0,   src: '../assets/img/avatar/avatar-front.png' },
+    { key: 'left',  angle: 90,  src: '../assets/img/avatar/avatar-left.png' },
+    { key: 'back',  angle: 180, src: '../assets/img/avatar/avatar-back.png' },
+    { key: 'right', angle: 270, src: '../assets/img/avatar/avatar-right.png' }
   ];
-  const hairMat = mat(COLORS.hair);
-  for (const s of spikes) {
-    const spike = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), hairMat);
-    spike.scale.set(...s.s);
-    spike.position.set(...s.p);
-    spike.rotation.set(...s.r);
-    hairGroup.add(spike);
-  }
-  // side hair coverage so the head doesn't look bald from the side/back
-  const backHair = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.22, 0.14), hairMat);
-  backHair.position.set(0, 0.08, -0.1);
-  hairGroup.add(backHair);
 
-  // ---- arms ----
-  function buildArm(sign) {
-    const shoulder = new THREE.Group();
-    shoulder.position.set(sign * 0.32, 1.40, 0);
-    root.add(shoulder);
-
-    // slight outward rest angle so arms don't clip the torso
-    shoulder.rotation.z = sign * -0.06;
-
-    const upper = limbSegment(0.075, 0.07, 0.32, COLORS.shirt); // short sleeve = shirt-colored
-    shoulder.add(upper.group);
-
-    const forearm = limbSegment(0.062, 0.052, 0.30, COLORS.skin);
-    upper.end.add(forearm.group);
-
-    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.05), mat(COLORS.skin));
-    hand.position.y = -0.045;
-    forearm.end.add(hand);
-
-    const handAnchor = new THREE.Group();
-    forearm.end.add(handAnchor);
-
-    return { shoulder, upper, forearm, hand, handAnchor };
-  }
-  const leftArm = buildArm(-1);
-  const rightArm = buildArm(1);
-  parts.leftUpperArm = leftArm.upper.group;
-  parts.leftForearm = leftArm.forearm.group;
-  parts.leftHand = leftArm.hand;
-  parts.rightUpperArm = rightArm.upper.group;
-  parts.rightForearm = rightArm.forearm.group;
-  parts.rightHand = rightArm.hand;
-  // right hand = main hand, left hand = off hand (mirror later if needed)
-  anchors.mainHand = rightArm.handAnchor;
-  anchors.offHand = leftArm.handAnchor;
-  anchors.gloves = [leftArm.hand, rightArm.hand];
-
-  return { root, anchors, parts };
-}
-
-// ---------------- viewer (scene / camera / renderer / interaction) ----------------
-
-function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    alpha: true,
-    antialias: true,
-    powerPreference: 'low-power',
-  });
-  renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
-  return renderer;
-}
-
-function buildScene() {
-  const scene = new THREE.Scene();
-
-  const key = new THREE.DirectionalLight(0xffffff, 1.5);
-  key.position.set(1.2, 2.4, 2.0);
-  scene.add(key);
-
-  const fill = new THREE.AmbientLight(0x8fa5c8, 0.55);
-  scene.add(fill);
-
-  const rim = new THREE.DirectionalLight(0x6ea8ff, 0.7);
-  rim.position.set(-1.2, 1.6, -2.0);
-  scene.add(rim);
-
-  return scene;
-}
-
-function reduceMotion() {
-  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-function mount(container, fallbackImg) {
-  const canvas = document.createElement('canvas');
-  canvas.className = 'avatar-3d-canvas';
-  container.appendChild(canvas);
-
-  let renderer;
-  try {
-    const testCtx = canvas.getContext('webgl2') || canvas.getContext('webgl');
-    if (!testCtx) throw new Error('WebGL unavailable');
-    renderer = createRenderer(canvas);
-  } catch (err) {
-    console.warn('[avatar-viewer] WebGL unavailable, showing static fallback image.', err);
-    canvas.remove();
-    if (fallbackImg) fallbackImg.hidden = false;
-    return null;
+  function reduceMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  const scene = buildScene();
-  const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 20);
-  // Framed with real headroom/footroom: the ~1.91-unit-tall character
-  // occupies roughly 78% of the visible vertical frame, not edge-to-edge.
-  camera.position.set(0, 1.15, 4.9);
-  camera.lookAt(0, 0.95, 0);
-
-  const { root: rig, anchors, parts } = buildCharacter();
-  scene.add(rig);
-
-  // ---- sizing (responsive, crisp, never distorted) ----
-  function resize() {
-    const w = Math.max(1, container.clientWidth);
-    const h = Math.max(1, container.clientHeight);
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  }
-  const resizeObserver = new ResizeObserver(resize);
-  resizeObserver.observe(container);
-  resize();
-
-  // ---- rotation state ----
-  let currentAngle = 0;
-  let autoSpin = !reduceMotion();
-  let isDragging = false;
-  let lastPointerX = 0;
-  let dragSpeed = 0;       // rad/s, for the brief post-release momentum
-  let momentumSpeed = 0;
-  let resumeTimer = null;
-  let lastFrameTime = performance.now();
-  let running = true;
-  let rafId = null;
-
-  function clearResumeTimer() {
-    if (resumeTimer) {
-      clearTimeout(resumeTimer);
-      resumeTimer = null;
-    }
+  function smoothstep(t) {
+    return t * t * (3 - 2 * t);
   }
 
-  function scheduleResume() {
-    clearResumeTimer();
-    if (reduceMotion()) return; // stays manual-only under reduced motion
-    resumeTimer = setTimeout(() => {
-      autoSpin = true;
-      resumeTimer = null;
-    }, RESUME_DELAY_MS);
-  }
+  function mount(container) {
+    if (!container) return null;
 
-  // ---- pointer interaction (mouse + touch via Pointer Events) ----
-  function onPointerDown(e) {
-    isDragging = true;
-    autoSpin = false;
-    momentumSpeed = 0;
-    dragSpeed = 0;
-    clearResumeTimer();
-    lastPointerX = e.clientX;
-    container.classList.add('dragging');
-    try { container.setPointerCapture(e.pointerId); } catch (_) {}
-  }
+    container.classList.add('avatar-3d');
+    const imgs = FRAMES.map((f) => {
+      const img = document.createElement('img');
+      img.className = 'avatar-sprite';
+      img.src = f.src;
+      img.alt = '';
+      img.setAttribute('aria-hidden', 'true');
+      img.decoding = 'async';
+      img.draggable = false;
+      img.style.opacity = '0';
+      img.addEventListener('error', () => {
+        img.dataset.broken = 'true';
+        img.style.opacity = '0';
+      });
+      container.appendChild(img);
+      return img;
+    });
+    imgs[0].style.opacity = '1'; // show the front frame immediately, before the first tick
 
-  function onPointerMove(e) {
-    if (!isDragging) return;
-    const dx = e.clientX - lastPointerX;
-    lastPointerX = e.clientX;
-    const dt = Math.max(1, e.timeStamp - (onPointerMove._lastT || e.timeStamp));
-    onPointerMove._lastT = e.timeStamp;
-    const dAngle = dx * DRAG_SENSITIVITY;
-    currentAngle += dAngle;
-    dragSpeed = dAngle / (dt / 1000); // rad/s, for momentum on release
-  }
+    let angle = 0;           // current facing angle, degrees, 0-360
+    const autoDeg = DEG_PER_MS_AUTO;
+    let momentum = 0;        // degrees/ms carried over after a drag release
+    let dragging = false;
+    let resumeAt = 0;        // performance.now() timestamp; auto-rotation resumes after this
+    let lastPointerX = 0;
+    let lastMoveT = 0;
+    let velocitySample = 0;  // degrees/ms, measured during the drag
+    let rafId = null;
+    let lastTick = null;
+    let destroyed = false;
 
-  function endDrag() {
-    if (!isDragging) return;
-    isDragging = false;
-    container.classList.remove('dragging');
-    momentumSpeed = Math.max(-MAX_MOMENTUM_SPEED, Math.min(MAX_MOMENTUM_SPEED, dragSpeed));
-    scheduleResume();
-  }
+    function render() {
+      angle = ((angle % 360) + 360) % 360;
+      const seg = Math.floor(angle / 90) % 4;
+      const t = (angle - seg * 90) / 90;
 
-  function onPointerUp(e) {
-    try { container.releasePointerCapture(e.pointerId); } catch (_) {}
-    endDrag();
-  }
+      let bOpacity;
+      if (t < HOLD) bOpacity = 0;
+      else if (t > 1 - HOLD) bOpacity = 1;
+      else bOpacity = smoothstep((t - HOLD) / (1 - 2 * HOLD));
 
-  container.addEventListener('pointerdown', onPointerDown);
-  container.addEventListener('pointermove', onPointerMove);
-  container.addEventListener('pointerup', onPointerUp);
-  container.addEventListener('pointercancel', onPointerUp);
-  // a pointer released outside the element (capture missed, e.g. some
-  // touch edge cases) should still end the drag rather than leave it stuck
-  window.addEventListener('pointerup', onPointerUp);
-  window.addEventListener('blur', endDrag);
-
-  // ---- render loop ----
-  function tick(now) {
-    if (!running) return;
-    rafId = requestAnimationFrame(tick);
-
-    const dt = Math.min(now - lastFrameTime, 100) / 1000;
-    lastFrameTime = now;
-
-    if (!isDragging) {
-      if (momentumSpeed !== 0) {
-        currentAngle += momentumSpeed * dt;
-        const decay = MOMENTUM_DECAY_PER_MS * (dt * 1000);
-        if (momentumSpeed > 0) momentumSpeed = Math.max(0, momentumSpeed - decay);
-        else momentumSpeed = Math.min(0, momentumSpeed + decay);
-      }
-      if (autoSpin) {
-        currentAngle += (Math.PI * 2 / ROTATION_PERIOD_S) * dt;
-      }
+      imgs.forEach((img, i) => {
+        if (i === seg) img.style.opacity = img.dataset.broken ? '0' : String(1 - bOpacity);
+        else if (i === (seg + 1) % 4) img.style.opacity = img.dataset.broken ? '0' : String(bOpacity);
+        else img.style.opacity = '0';
+      });
     }
 
-    rig.rotation.y = currentAngle;
-    renderer.render(scene, camera);
-  }
+    function tick(now) {
+      if (destroyed) return;
+      if (lastTick === null) lastTick = now;
+      const dt = Math.min(now - lastTick, 50); // clamp huge gaps (tab was hidden, etc.)
+      lastTick = now;
 
-  function start() {
-    if (rafId) return;
-    lastFrameTime = performance.now();
-    running = true;
-    rafId = requestAnimationFrame(tick);
-  }
-  function stop() {
-    running = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-
-  function onVisibilityChange() {
-    if (document.hidden) stop();
-    else start();
-  }
-  document.addEventListener('visibilitychange', onVisibilityChange);
-
-  start();
-
-  function destroy() {
-    stop();
-    resizeObserver.disconnect();
-    clearResumeTimer();
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    container.removeEventListener('pointerdown', onPointerDown);
-    container.removeEventListener('pointermove', onPointerMove);
-    container.removeEventListener('pointerup', onPointerUp);
-    container.removeEventListener('pointercancel', onPointerUp);
-    window.removeEventListener('pointerup', onPointerUp);
-    window.removeEventListener('blur', endDrag);
-    renderer.dispose();
-    canvas.remove();
-  }
-
-  // Reserved for a future cosmetics/equipment system — validates and
-  // stores the requested equipment against the rig's named anchors.
-  // Actually loading/attaching meshes per slot is intentionally not
-  // implemented yet.
-  const equipmentState = {};
-  function setAvatarEquipment(equipment) {
-    if (!equipment || typeof equipment !== 'object') return;
-    for (const slot of Object.keys(equipment)) {
-      if (!(slot in anchors)) {
-        console.warn('[avatar-viewer] Unknown equipment slot: ' + slot);
-        continue;
+      if (dragging) {
+        // angle already updated live by pointermove
+      } else if (momentum !== 0) {
+        angle += momentum * dt;
+        const decay = Math.pow(MOMENTUM_DECAY_PER_MS, dt);
+        momentum *= decay;
+        if (Math.abs(momentum) < DEG_PER_MS_AUTO * 0.5) momentum = 0;
+      } else if (!reduceMotion() && now >= resumeAt) {
+        angle += autoDeg * dt;
       }
-      equipmentState[slot] = equipment[slot];
-      // TODO: once item meshes exist, load/attach them to anchors[slot]
-      // here and detach whatever previously occupied that slot.
+
+      render();
+      rafId = requestAnimationFrame(tick);
     }
+
+    function start() {
+      if (rafId !== null) return;
+      lastTick = null;
+      rafId = requestAnimationFrame(tick);
+    }
+    function stop() {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+
+    // ---- pointer drag: mouse + touch via the Pointer Events API ----
+    function onPointerDown(e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      dragging = true;
+      momentum = 0;
+      lastPointerX = e.clientX;
+      lastMoveT = performance.now();
+      velocitySample = 0;
+      container.classList.add('dragging');
+      try { container.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    function onPointerMove(e) {
+      if (!dragging) return;
+      const now = performance.now();
+      const dx = e.clientX - lastPointerX;
+      lastPointerX = e.clientX;
+      angle -= dx * DRAG_DEG_PER_PX;
+      const dt = Math.max(now - lastMoveT, 1);
+      lastMoveT = now;
+      velocitySample = (-dx * DRAG_DEG_PER_PX) / dt;
+    }
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      container.classList.remove('dragging');
+      let v = velocitySample;
+      if (v > MAX_MOMENTUM_DEG_PER_MS) v = MAX_MOMENTUM_DEG_PER_MS;
+      if (v < -MAX_MOMENTUM_DEG_PER_MS) v = -MAX_MOMENTUM_DEG_PER_MS;
+      momentum = v;
+      resumeAt = performance.now() + RESUME_DELAY_MS;
+    }
+    function onPointerUp(e) {
+      try { container.releasePointerCapture(e.pointerId); } catch (_) {}
+      endDrag();
+    }
+
+    container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('pointermove', onPointerMove);
+    container.addEventListener('pointerup', onPointerUp);
+    container.addEventListener('pointercancel', onPointerUp);
+    // in case the pointer is released outside the element entirely
+    window.addEventListener('pointerup', onPointerUp);
+
+    function onVisibilityChange() {
+      if (document.hidden) stop();
+      else start();
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    if (!document.hidden) start();
+    render();
+
+    // ---- equipment-slot readiness (not implemented yet) ----
+    // Future cosmetics would layer additional per-angle sprite sets (one
+    // image per FRAMES entry per equipped item) on top of the base avatar
+    // here, keyed by slot, and cross-fade them in lock-step with the base
+    // render() above. Accepting the call now — without acting on it — lets
+    // calling code integrate against the final shape early.
+    function setAvatarEquipment(_slots) {
+      // slots: { head, necklace, body, legs, boots, gloves, back, mainHand, offHand, accessory }
+      // no-op until per-slot sprite art exists
+    }
+
+    function destroy() {
+      destroyed = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      container.removeEventListener('pointerdown', onPointerDown);
+      container.removeEventListener('pointermove', onPointerMove);
+      container.removeEventListener('pointerup', onPointerUp);
+      container.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('pointerup', onPointerUp);
+      imgs.forEach((img) => img.remove());
+      container.classList.remove('dragging');
+    }
+
+    window.addEventListener('pagehide', destroy, { once: true });
+
+    return { destroy, setAvatarEquipment };
   }
 
-  window.addEventListener('pagehide', destroy, { once: true });
-
-  return { rig, anchors, parts, setAvatarEquipment, destroy };
-}
-
-window.QZAvatarViewer = { mount };
+  window.QZAvatarViewer = { mount };
+})();

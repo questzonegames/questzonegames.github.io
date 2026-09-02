@@ -196,7 +196,7 @@
     border-radius: 50%;
     border: 1px solid rgba(110,175,255,0.35);
   }
-  /* ---- 3D avatar viewer ---- */
+  /* ---- avatar viewer: crossfades between 4 real renders as it turns ---- */
   .avatar-3d {
     position: absolute;
     inset: 0;
@@ -205,16 +205,17 @@
     touch-action: none; /* only this element blocks page-scroll gestures */
   }
   .avatar-3d.dragging { cursor: grabbing; }
-  .avatar-3d-canvas { display: block; width: 100%; height: 100%; }
-  .avatar-fallback {
+  .avatar-sprite {
     position: absolute;
     inset: 0;
-    z-index: 2;
     width: 100%;
     height: 100%;
     object-fit: contain;
-    padding: 6% 20% 4%;
+    padding: 4% 10% 2%;
     filter: drop-shadow(0 0 18px rgba(90,150,255,0.35));
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
   }
   .avatar-name {
     margin-top: 12px;
@@ -503,7 +504,6 @@
             <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
             <div class="avatar-platform"></div>
             <div class="avatar-3d" id="avatar-3d" role="img" aria-label="Your Quest Zone avatar — drag to rotate"></div>
-            <img class="avatar-fallback" id="avatar-fallback" src="../assets/img/avatar/avatar-front.png" alt="Your Quest Zone avatar" hidden>
           </div>
           <div class="avatar-name" id="profile-username">Username</div>
         </div>
@@ -586,24 +586,23 @@
 <script src="../assets/js/achievement-inspection.js"></script>
 <script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script type="module">
-  // Mount the 3D avatar into the existing avatar-stage box. Kept as its
-  // own tiny module (rather than folding into avatar-viewer.js) so the
-  // viewer module stays a reusable, page-agnostic component — this part
-  // is just "this page's one call to it." Module scripts run in document
-  // order, so avatar-viewer.js (loaded just above) has already set
-  // window.QZAvatarViewer by the time this runs.
+  // Mount the avatar viewer into the existing avatar-stage box. Kept as
+  // its own tiny module (rather than folding into avatar-viewer.js) so
+  // the viewer module stays a reusable, page-agnostic component — this
+  // part is just "this page's one call to it." Module scripts run in
+  // document order, so avatar-viewer.js (loaded just above) has already
+  // set window.QZAvatarViewer by the time this runs.
   const container = document.getElementById('avatar-3d');
-  const fallback = document.getElementById('avatar-fallback');
   if (container && window.QZAvatarViewer) {
-    window.qzAvatar = window.QZAvatarViewer.mount(container, fallback);
+    window.qzAvatar = window.QZAvatarViewer.mount(container);
   }
 
   // A bfcache-restored page (browser back/forward) skips re-running this
   // script, but the previous load's `pagehide` already tore the viewer
   // down — re-mount so the avatar doesn't come back broken/blank.
   window.addEventListener('pageshow', (e) => {
-    if (e.persisted && container && window.QZAvatarViewer && !container.querySelector('canvas')) {
-      window.qzAvatar = window.QZAvatarViewer.mount(container, fallback);
+    if (e.persisted && container && window.QZAvatarViewer && !container.querySelector('img')) {
+      window.qzAvatar = window.QZAvatarViewer.mount(container);
     }
   });
 </script>
