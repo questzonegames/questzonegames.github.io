@@ -63,8 +63,12 @@
   const PALE = [200, 220, 245];
 
   // one star, identical generator whether it lands in the main field or
-  // the header top-up below — same look everywhere, no second system
-  function makeOneStar(w, yPick) {
+  // the header top-up below — same look everywhere, no second system.
+  // `boost` (0-1) scales size/brightness up for the header safety-net
+  // band, so those specific stars can't get lost to screenshot/chat
+  // image compression the way a 0.3px dot easily can.
+  function makeOneStar(w, yPick, boost) {
+    boost = boost || 0;
     const roll = Math.random();
     let tier;
     if (roll < 0.72) tier = 1;
@@ -83,8 +87,8 @@
     return {
       x: pickX(w),
       y: yPick(),
-      r: cfg.rMin + Math.random() * (cfg.rMax - cfg.rMin),
-      baseAlpha: cfg.aMin + Math.random() * (cfg.aMax - cfg.aMin),
+      r: (cfg.rMin + Math.random() * (cfg.rMax - cfg.rMin)) * (1 + boost * 0.9),
+      baseAlpha: Math.min(1, (cfg.aMin + Math.random() * (cfg.aMax - cfg.aMin)) * (1 + boost * 0.6) + boost * 0.15),
       color,
       tier,
       twinkleAmp: 0.02 + Math.random() * 0.16, // some barely move, some more
@@ -96,16 +100,16 @@
 
   function makeStars(w, h) {
     const count = Math.floor((w * h) / 1300);
-    const main = Array.from({ length: count }, () => makeOneStar(w, () => Math.random() * h));
+    const main = Array.from({ length: count }, () => makeOneStar(w, () => Math.random() * h, 0));
 
     // a thin strip (roughly the header's height) is naturally sparser
     // than the rest of the page purely because it's a smaller area at
-    // the same per-pixel density — top it up explicitly so it's never
-    // left to chance, using the exact same star generator as everywhere
-    // else (not a second/different effect).
+    // the same per-pixel density — top it up explicitly, and boosted in
+    // size/brightness so it survives screenshot compression, so it's
+    // never left to chance or to how small a raw star renders.
     const headerBandH = Math.min(110, h);
     const topUpCount = Math.max(14, Math.floor((w * headerBandH) / 700));
-    const topUp = Array.from({ length: topUpCount }, () => makeOneStar(w, () => Math.random() * headerBandH));
+    const topUp = Array.from({ length: topUpCount }, () => makeOneStar(w, () => Math.random() * headerBandH, 1));
 
     return main.concat(topUp);
   }
