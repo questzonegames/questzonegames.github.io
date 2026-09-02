@@ -80,13 +80,16 @@
     });
     imgs[0].style.opacity = '1'; // show the front frame immediately, before the first tick
 
-    // Equipped-item indicator: until real per-direction equipment art
-    // exists, equipped items show as a small chip strip along the bottom
-    // of the avatar box rather than pretending to be attached to the
-    // character (see setAvatarEquipment below for why).
+    // Equipped-item indicator: for slots whose item has real per-direction
+    // art (item.views), that art is layered on top of the base avatar as
+    // its own 4-image set and cross-faded in lock-step with it (see
+    // equipLayers/setAvatarEquipment below). For anything without art yet,
+    // fall back to a small icon chip along the bottom of the box instead
+    // of pretending to be attached to a character with no equipment art.
     const loadout = document.createElement('div');
     loadout.className = 'avatar-loadout';
     container.appendChild(loadout);
+    const equipLayers = {}; // slotKey -> [img0, img1, img2, img3], aligned with FRAMES
 
     // ---- single state machine: 'holding' | 'transitioning' | 'dragging' ----
     let phase = 'holding';
@@ -112,6 +115,17 @@
         if (i === seg) img.style.opacity = img.dataset.broken ? '0' : String(1 - bOpacity);
         else if (i === (seg + 1) % 4) img.style.opacity = img.dataset.broken ? '0' : String(bOpacity);
         else img.style.opacity = '0';
+      });
+
+      // equipped-item art rides the exact same seg/opacity math as the
+      // base avatar, so it turns in lock-step and is never one frame off
+      Object.keys(equipLayers).forEach((slotKey) => {
+        const limgs = equipLayers[slotKey];
+        limgs.forEach((img, i) => {
+          if (i === seg) img.style.opacity = String(1 - bOpacity);
+          else if (i === (seg + 1) % 4) img.style.opacity = String(bOpacity);
+          else img.style.opacity = '0';
+        });
       });
     }
 
@@ -223,21 +237,47 @@
     function prev() { step(-1, performance.now()); }
 
     // ---- equipment display ----
-    // The real end state (once per-item art exists) is per-angle sprite
-    // sets layered on top of the base avatar here, keyed by slot, cross-
-    // fading in lock-step with the base render() above — FRAMES-shaped
-    // art per item, attached at the right depth for front/right/back/left
-    // so gear turns with the character instead of floating in place.
-    // Until that art exists, show equipped items as small icon chips
-    // along the bottom of the box instead: still real, immediate feedback
-    // wired to the same equippedItems state, just not pretending to be
-    // pixel-attached to a character with no equipment art yet.
-    const SLOT_ORDER = ['head', 'necklace', 'body', 'mainHand', 'offHand', 'gloves', 'legs', 'boots', 'back', 'accessory'];
+    // A slot with real art (item.views: {front,right,back,left}) gets its
+    // own 4-image layer stacked on top of the base avatar, at the right
+    // depth for that slot (head art after the body, for instance) so it
+    // reads as worn rather than pasted on. Everything without art yet
+    // falls back to an icon chip — still real, immediate feedback wired
+    // to the same equippedItems state, just not pretending to be pixel-
+    // attached to a character with no art for that slot.
+    const SLOT_ORDER = ['back', 'body', 'legs', 'boots', 'necklace', 'head', 'gloves', 'mainHand', 'offHand', 'accessory'];
+    function clearEquipLayer(slotKey) {
+      const limgs = equipLayers[slotKey];
+      if (!limgs) return;
+      limgs.forEach((img) => img.remove());
+      delete equipLayers[slotKey];
+    }
+    function setEquipLayer(slotKey, views) {
+      clearEquipLayer(slotKey);
+      const limgs = FRAMES.map((f) => {
+        const img = document.createElement('img');
+        img.className = 'avatar-equip-layer avatar-equip-' + slotKey;
+        img.src = views[f.key];
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        img.decoding = 'async';
+        img.draggable = false;
+        img.style.opacity = '0';
+        img.addEventListener('error', () => { img.style.opacity = '0'; img.dataset.broken = 'true'; });
+        container.appendChild(img);
+        return img;
+      });
+      equipLayers[slotKey] = limgs;
+    }
     function setAvatarEquipment(slots) {
       const items = slots || {};
       loadout.innerHTML = '';
       SLOT_ORDER.forEach((slotKey) => {
         const item = items[slotKey];
+        if (item && item.views) {
+          setEquipLayer(slotKey, item.views);
+          return;
+        }
+        clearEquipLayer(slotKey);
         if (!item) return;
         const chip = document.createElement('span');
         chip.className = 'avatar-loadout-chip';
@@ -245,6 +285,7 @@
         chip.title = item.name || '';
         loadout.appendChild(chip);
       });
+      render(); // reflect the change immediately, don't wait for the next tick
     }
 
     function destroy() {
@@ -257,6 +298,7 @@
       container.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('pointerup', onPointerUp);
       imgs.forEach((img) => img.remove());
+      Object.keys(equipLayers).forEach(clearEquipLayer);
       loadout.remove();
       container.classList.remove('dragging');
     }

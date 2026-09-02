@@ -33,6 +33,25 @@
     accessory: ['ring', 'badge', 'trinket', 'charm']
   };
 
+  // simple, muted, monochrome placeholders for each empty equipment
+  // slot — readable at a glance as "this slot holds this item type"
+  // without looking like an actual equipped item
+  const SLOT_SILHOUETTE = {
+    head: '<path d="M12 3C8 3 5 6 5 10v3h14v-3c0-4-3-7-7-7z"/><rect x="4" y="13.3" width="16" height="2.4" rx="1"/>',
+    necklace: '<path d="M6 4c0 5 3 8.5 6 8.5S18 9 18 4" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="15.3" r="2.6"/>',
+    body: '<path d="M9 3l3 2.2L15 3l3 3-2 2v12H8V8L6 6z"/>',
+    legs: '<path d="M7.2 3h9.6l-.6 8-1 10h-3l-.9-9h-.6l-.9 9h-3l-1-10z"/>',
+    boots: '<path d="M9.5 3h5v8.5l4.2 2.8v3.2c0 .8-.7 1.5-1.5 1.5H9c-.8 0-1.5-.7-1.5-1.5V4.5C7.5 3.7 8.2 3 9.5 3z"/>',
+    gloves: '<path d="M8.4 3.3h2.6V9h.9V4h2.6v5h.9V4.7h2.6V10l2.6 2.6v5.9c0 1.4-1.1 2.5-2.5 2.5h-6C10.6 21 9.5 19.9 9.5 18.5v-6.8L8.4 10.6z"/>',
+    back: '<path d="M12 2.5l7.5 4.3-2.2 14.2H6.7L4.5 6.8z"/>',
+    mainHand: '<rect x="11" y="2" width="2" height="12.5" rx="0.6"/><rect x="7" y="13.6" width="10" height="2.1" rx="0.6"/><rect x="10.3" y="16.1" width="3.4" height="6" rx="0.9"/>',
+    offHand: '<path d="M12 2.3l7.2 3v6.2c0 5.1-3 8.9-7.2 11.2-4.2-2.3-7.2-6.1-7.2-11.2V5.3z"/>',
+    accessory: '<circle cx="12" cy="14.5" r="6" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M9.3 8.2L12 3.6l2.7 4.6z"/>'
+  };
+  function silhouetteSVG(slotKey) {
+    return '<svg class="worn-slot-empty-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' + (SLOT_SILHOUETTE[slotKey] || '') + '</svg>';
+  }
+
   const itemsById = {};
   ITEMS.forEach((it) => { itemsById[it.id] = it; });
 
@@ -43,11 +62,21 @@
   let avatar = null;
 
   function loadEquipped() {
+    let stored = null;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) stored = JSON.parse(raw);
     } catch (_) {}
-    return Object.assign({}, window.QZ_DEFAULT_EQUIPPED || {});
+    const base = Object.assign({}, window.QZ_DEFAULT_EQUIPPED || {});
+    if (!stored) return base;
+    // drop any stored id that no longer exists in the current catalog
+    // (e.g. an older demo item id from before a data reset) instead of
+    // leaving a dangling reference that renders nothing
+    Object.keys(base).forEach((slotKey) => {
+      const id = stored[slotKey];
+      base[slotKey] = id && itemsById[id] ? id : null;
+    });
+    return base;
   }
   function saveEquipped() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(equipped)); } catch (_) {}
@@ -134,7 +163,7 @@
     examineEl = document.createElement('div');
     examineEl.className = 'qz-examine';
     examineEl.innerHTML =
-      '<div class="qz-examine-icon">' + item.icon + '</div>' +
+      '<div class="qz-examine-icon">' + (item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon) + '</div>' +
       '<div class="qz-examine-name">' + item.name + '</div>' +
       '<div class="qz-examine-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</div>' +
       (isEquipped(item.id) ? '<div class="qz-examine-tag">Equipped</div>' : '');
@@ -158,12 +187,16 @@
     SLOTS.forEach((slotDef) => {
       const item = equippedItemFor(slotDef.key);
       const tile = document.createElement('div');
-      tile.className = 'worn-slot' + (item ? ' filled' : '') + (slotDef.key === 'head' || slotDef.key === 'accessory' ? ' worn-slot-solo' : '');
+      tile.className = 'worn-slot' + (item ? ' filled' : '');
       tile.dataset.slot = slotDef.key;
 
       const iconEl = document.createElement('div');
       iconEl.className = 'worn-slot-icon';
-      iconEl.textContent = item ? item.icon : '';
+      if (item) {
+        iconEl.innerHTML = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+      } else {
+        iconEl.innerHTML = silhouetteSVG(slotDef.key);
+      }
       tile.appendChild(iconEl);
 
       const labelEl = document.createElement('div');
@@ -223,32 +256,42 @@
     });
   }
 
+  // total page count for the pagination UI. Kept at a minimum of 5 while
+  // the demo catalog is tiny, matching the "Page 1-5 ..." control the
+  // eventual, much larger real inventory will actually need — the extra
+  // pages just render as empty cells rather than being hidden entirely.
+  function totalPageCount(items) {
+    return Math.max(5, Math.ceil(items.length / PAGE_SIZE));
+  }
+
   function renderGrid() {
     const root = document.getElementById('inventory-grid');
     if (!root) return;
     const items = filteredItems();
-    const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+    const totalPages = totalPageCount(items);
     if (currentPage > totalPages) currentPage = totalPages;
     if (currentPage < 1) currentPage = 1;
-    const pageItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = items.slice(start, start + PAGE_SIZE);
 
     root.innerHTML = '';
-    if (pageItems.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'inv-empty';
-      empty.textContent = 'No items match.';
-      root.appendChild(empty);
-      return;
-    }
+    for (let i = 0; i < PAGE_SIZE; i++) {
+      const item = pageItems[i];
+      if (!item) {
+        const empty = document.createElement('div');
+        empty.className = 'inv-card inv-card-empty';
+        root.appendChild(empty);
+        continue;
+      }
 
-    pageItems.forEach((item) => {
       const equippedNow = isEquipped(item.id);
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'inv-card' + (equippedNow ? ' equipped' : '');
       card.title = item.name + '\n' + (SLOT_LABEL[item.slot] || item.slot);
+      const thumb = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
       card.innerHTML =
-        '<span class="inv-card-icon">' + item.icon + '</span>' +
+        '<span class="inv-card-icon">' + thumb + '</span>' +
         '<span class="inv-card-name">' + item.name + '</span>' +
         '<span class="inv-card-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</span>' +
         (equippedNow ? '<span class="inv-card-tag">Equipped</span>' : '');
@@ -276,32 +319,30 @@
       });
 
       root.appendChild(card);
-    });
+    }
   }
 
   function renderPagination() {
     const root = document.getElementById('inventory-pagination');
     if (!root) return;
     const items = filteredItems();
-    const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+    const totalPages = totalPageCount(items);
     root.innerHTML = '';
 
     const shown = Math.min(5, totalPages);
     for (let p = 1; p <= shown; p++) {
       root.appendChild(pageButton(p, totalPages));
     }
-    if (totalPages > 5) {
-      const more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'inv-page inv-page-more';
-      more.textContent = '…';
-      more.setAttribute('aria-label', 'Jump to page');
-      more.addEventListener('click', () => openPageJump(totalPages));
-      root.appendChild(more);
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'inv-page inv-page-more';
+    more.textContent = '…';
+    more.setAttribute('aria-label', 'Jump to page');
+    more.addEventListener('click', () => openPageJump(totalPages));
+    root.appendChild(more);
 
-      if (currentPage > shown) {
-        root.appendChild(pageButton(currentPage, totalPages));
-      }
+    if (currentPage > shown) {
+      root.appendChild(pageButton(currentPage, totalPages));
     }
   }
 
