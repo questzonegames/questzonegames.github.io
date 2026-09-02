@@ -181,21 +181,6 @@
     pointer-events: none;
   }
   .avatar-stage .star { position: absolute; border-radius: 50%; background: #cfe0ff; opacity: 0.7; }
-  .avatar-platform {
-    position: absolute;
-    bottom: 10%;
-    width: 62%;
-    aspect-ratio: 5 / 1;
-    border-radius: 50%;
-    border: 1px solid rgba(140,200,255,0.65);
-    box-shadow: 0 0 28px 6px rgba(60,140,255,0.45);
-  }
-  .avatar-platform::before {
-    content: '';
-    position: absolute; inset: 22%;
-    border-radius: 50%;
-    border: 1px solid rgba(110,175,255,0.35);
-  }
   /* ---- avatar viewer: crossfades between 4 real renders as it turns ---- */
   .avatar-3d {
     position: absolute;
@@ -211,12 +196,50 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
-    padding: 4% 10% 2%;
+    padding: 10% 12% 5%;
     filter: drop-shadow(0 0 18px rgba(90,150,255,0.35));
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
   }
+  /* ---- left/right pose-rotation arrows ---- */
+  .avatar-arrow {
+    position: absolute;
+    top: 50%;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    background-image:
+      linear-gradient(180deg, rgba(9,13,24,0.82) 0%, rgba(4,6,12,0.88) 100%),
+      linear-gradient(135deg, #e9eefa 0%, #8ea3c9 16%, #3a4258 38%, #1a1d28 50%, #6f9fdc 62%, #263049 78%, #cdd7ea 100%);
+    background-clip: padding-box, border-box;
+    background-origin: padding-box, border-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      0 2px 8px rgba(0,0,0,0.55),
+      0 0 10px rgba(70,130,255,0.2);
+    color: #cfe0ff;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, color 0.2s ease;
+  }
+  .avatar-arrow svg { width: 16px; height: 16px; }
+  .avatar-arrow-left { left: 6px; transform: translateY(-50%); }
+  .avatar-arrow-right { right: 6px; transform: translateY(-50%); }
+  .avatar-arrow:hover {
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.22),
+      0 2px 10px rgba(0,0,0,0.6),
+      0 0 18px rgba(100,160,255,0.55);
+    transform: translateY(-50%) scale(1.08);
+  }
+  .avatar-arrow:active { transform: translateY(-50%) scale(0.94); }
+  .avatar-arrow:focus-visible { outline: 2px solid #6fb2ff; outline-offset: 2px; }
   .avatar-name {
     margin-top: 12px;
     font-family: 'Orbitron', sans-serif;
@@ -502,8 +525,13 @@
         <div class="avatar-panel">
           <div class="avatar-stage bezel-sm" id="avatar-stage">
             <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
-            <div class="avatar-platform"></div>
             <div class="avatar-3d" id="avatar-3d" role="img" aria-label="Your Quest Zone avatar — drag to rotate"></div>
+            <button type="button" class="avatar-arrow avatar-arrow-left" id="avatar-arrow-left" aria-label="Rotate avatar left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+            </button>
+            <button type="button" class="avatar-arrow avatar-arrow-right" id="avatar-arrow-right" aria-label="Rotate avatar right">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
           </div>
           <div class="avatar-name" id="profile-username">Username</div>
         </div>
@@ -605,6 +633,13 @@
       window.qzAvatar = window.QZAvatarViewer.mount(container);
     }
   });
+
+  // Left/right pose-rotation arrows. Looked up lazily (not captured once)
+  // so a bfcache remount's fresh window.qzAvatar is always the one used.
+  const arrowLeft = document.getElementById('avatar-arrow-left');
+  const arrowRight = document.getElementById('avatar-arrow-right');
+  if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
+  if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
 </script>
 <script>
   // Scatter a few faint static stars inside the avatar stage for depth.
