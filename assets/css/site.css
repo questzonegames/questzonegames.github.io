@@ -66,8 +66,7 @@ img { max-width: 100%; display: block; }
 
 /* ---------- header ---------- */
 .site-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 50;
   background: transparent;
   border-bottom: 1px solid var(--border);
