@@ -336,7 +336,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 0.18s ease;
+    transition: transform 0.18s ease, opacity 0.3s ease, filter 0.3s ease;
   }
   .pin-slot img {
     width: 100%;
@@ -366,6 +366,10 @@
   .pin-slot.pin-slot-locked img { filter: grayscale(0.85) brightness(0.55) saturate(0.35); }
   .pin-slot.pin-slot-locked:hover img { filter: grayscale(0.75) brightness(0.6) saturate(0.4) drop-shadow(0 0 4px rgba(110,130,160,0.3)); }
   .pin-slot.pin-slot-locked:hover::after { opacity: 0; }
+
+  /* while one pin is being inspected (achievement pop-out open), its
+     siblings dim to make the detached icon read clearly */
+  .pin-slot.pin-dimmed { opacity: 0.32; filter: saturate(0.55); }
 
   /* premium custom tooltip — replaces the default browser title tooltip */
   .pin-tooltip {
@@ -565,6 +569,7 @@
 
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
+<script src="../assets/js/achievement-inspection.js"></script>
 <script>
   // Scatter a few faint static stars inside the avatar stage for depth.
   // Placeholder data below stands in for real account fields until
@@ -588,17 +593,17 @@
   // ---- pinned achievements: 7-slot showcase ----
   // Data-driven so a future account system can just swap this array for
   // whatever the player actually has pinned — nothing else on the page
-  // needs to change. Each slot: { id, name, tier, icon, link }. `link` is
-  // optional and reserved for a future per-achievement details page.
+  // needs to change. Shape matches window.QZAchievementInspection's
+  // expected achievement object (see assets/js/achievement-inspection.js).
   (function () {
     const PINNED_ACHIEVEMENTS_DATA = [
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Locked',   icon: '../assets/img/achievements/jack-of-all-trades-locked.png',   link: null },
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Bronze',   icon: '../assets/img/achievements/jack-of-all-trades-bronze.png',   link: null },
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Silver',   icon: '../assets/img/achievements/jack-of-all-trades-silver.png',   link: null },
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Gold',     icon: '../assets/img/achievements/jack-of-all-trades-gold.png',     link: null },
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Platinum', icon: '../assets/img/achievements/jack-of-all-trades-platinum.png', link: null },
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Diamond',  icon: '../assets/img/achievements/jack-of-all-trades-diamond.png',  link: null },
-      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Mythic',   icon: '../assets/img/achievements/jack-of-all-trades-mythic.png',   link: null }
+      { id: 'jack-of-all-trades-locked',   name: 'Jack of All Trades', tier: 'Locked',   description: 'You have not completed this achievement.',      icon: '../assets/img/achievements/jack-of-all-trades-locked.png' },
+      { id: 'jack-of-all-trades-bronze',   name: 'Jack of All Trades', tier: 'Bronze',   description: 'Reach a total level of 100 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-bronze.png' },
+      { id: 'jack-of-all-trades-silver',   name: 'Jack of All Trades', tier: 'Silver',   description: 'Reach a total level of 250 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-silver.png' },
+      { id: 'jack-of-all-trades-gold',     name: 'Jack of All Trades', tier: 'Gold',     description: 'Reach a total level of 500 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-gold.png' },
+      { id: 'jack-of-all-trades-platinum', name: 'Jack of All Trades', tier: 'Platinum', description: 'Reach a total level of 750 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-platinum.png' },
+      { id: 'jack-of-all-trades-diamond',  name: 'Jack of All Trades', tier: 'Diamond',  description: 'Reach a total level of 1,000 across all games.',  icon: '../assets/img/achievements/jack-of-all-trades-diamond.png' },
+      { id: 'jack-of-all-trades-mythic',   name: 'Jack of All Trades', tier: 'Mythic',   description: 'Reach a total level of 1,500 across all games.',  icon: '../assets/img/achievements/jack-of-all-trades-mythic.png' }
     ];
     const PIN_SLOT_COUNT = 7;
 
@@ -609,16 +614,37 @@
         const slot = document.createElement('span');
         slot.className = 'pin-slot' + (data && data.tier === 'Locked' ? ' pin-slot-locked' : '');
         if (data) {
+          const label = data.name + ' (' + data.tier + ')';
+
           const img = document.createElement('img');
           img.src = data.icon;
-          img.alt = data.name + ' (' + data.tier + ')';
+          img.alt = '';
           img.loading = 'lazy';
           slot.appendChild(img);
 
           const tooltip = document.createElement('span');
           tooltip.className = 'pin-tooltip';
-          tooltip.textContent = data.name + ' (' + data.tier + ')';
+          tooltip.textContent = label;
           slot.appendChild(tooltip);
+
+          // keyboard-operable without nesting a <button> inside the
+          // tile's own <a> (invalid HTML) — standard ARIA button pattern
+          slot.tabIndex = 0;
+          slot.setAttribute('role', 'button');
+          slot.setAttribute('aria-label', 'Inspect achievement: ' + label);
+
+          // clicking an individual icon opens its inspection pop-out —
+          // it must NOT fall through to the tile's own achievements.html
+          // link, so stop it right here.
+          const openInspection = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.QZAchievementInspection.open(data, slot);
+          };
+          slot.addEventListener('click', openInspection);
+          slot.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') openInspection(e);
+          });
         }
         list.appendChild(slot);
       }
