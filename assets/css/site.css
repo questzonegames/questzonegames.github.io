@@ -998,6 +998,8 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
   max-height: 88vh;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none; /* Firefox — content still scrolls if it ever needs to, the track just isn't shown */
+  -ms-overflow-style: none; /* legacy Edge */
   border: 3px solid transparent;
   border-radius: 18px;
   padding: clamp(20px, 4vw, 34px) clamp(18px, 4vw, 30px) clamp(22px, 4vw, 32px);
@@ -1017,6 +1019,7 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
   transition: opacity 0.22s ease, transform 0.22s ease;
 }
 .ach-card.show { opacity: 1; transform: scale(1); }
+.ach-card::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .ach-close {
   position: absolute;
