@@ -24,39 +24,35 @@
     position: relative;
     background: var(--qp-fill);
     border: 1px solid var(--qp-border);
-    border-radius: 18px;
+    border-radius: 14px;
     padding: 30px clamp(18px, 4vw, 44px) 34px;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.06),
-      inset 0 0 60px rgba(30,70,160,0.12),
-      0 0 0 1px rgba(0,0,0,0.4),
-      0 0 40px rgba(40,100,220,0.15);
+      inset 0 0 0 1px rgba(90,150,255,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 0 60px rgba(30,70,160,0.14),
+      0 0 0 1px rgba(0,0,0,0.5),
+      0 0 46px rgba(40,100,220,0.18);
   }
-  /* corner accent brackets — the small angled highlight ticks from the
-     reference, top-left and bottom-right */
-  .profile-frame::before, .profile-frame::after {
-    content: '';
+  /* corner accent brackets — the angled highlight ticks from the
+     reference, on all four corners */
+  .corner-brackets { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; overflow: hidden; }
+  .corner-brackets i {
     position: absolute;
-    width: 46px; height: 46px;
-    pointer-events: none;
-    opacity: 0.9;
+    width: 30px; height: 30px;
+    border: 2px solid var(--blue-light);
+    opacity: 0.95;
+    filter: drop-shadow(0 0 4px rgba(120,170,255,0.6));
   }
-  .profile-frame::before {
-    top: -1px; left: -1px;
-    border-top: 2px solid var(--blue-light);
-    border-left: 2px solid var(--blue-light);
-    border-radius: 18px 0 0 0;
-    -webkit-mask: linear-gradient(135deg, #000 0 30%, transparent 31%);
-            mask: linear-gradient(135deg, #000 0 30%, transparent 31%);
-  }
-  .profile-frame::after {
-    bottom: -1px; right: -1px;
-    border-bottom: 2px solid var(--blue-light);
-    border-right: 2px solid var(--blue-light);
-    border-radius: 0 0 18px 0;
-    -webkit-mask: linear-gradient(-45deg, #000 0 30%, transparent 31%);
-            mask: linear-gradient(-45deg, #000 0 30%, transparent 31%);
-  }
+  .corner-brackets i:nth-child(1) { top: -1px; left: -1px; border-right: none; border-bottom: none; border-radius: 14px 0 0 0; }
+  .corner-brackets i:nth-child(2) { top: -1px; right: -1px; border-left: none; border-bottom: none; border-radius: 0 14px 0 0; }
+  .corner-brackets i:nth-child(3) { bottom: -1px; left: -1px; border-right: none; border-top: none; border-radius: 0 0 0 14px; }
+  .corner-brackets i:nth-child(4) { bottom: -1px; right: -1px; border-left: none; border-top: none; border-radius: 0 0 14px 0; }
+
+  .corner-brackets.sm i { width: 16px; height: 16px; border-width: 1.5px; opacity: 0.75; }
+  .corner-brackets.sm i:nth-child(1) { border-radius: 11px 0 0 0; }
+  .corner-brackets.sm i:nth-child(2) { border-radius: 0 11px 0 0; }
+  .corner-brackets.sm i:nth-child(3) { border-radius: 0 0 0 11px; }
+  .corner-brackets.sm i:nth-child(4) { border-radius: 0 0 11px 0; }
 
   .profile-heading {
     display: flex;
@@ -97,13 +93,17 @@
     position: relative;
     width: 100%;
     aspect-ratio: 3 / 4;
-    border-radius: 12px;
-    border: 1px solid var(--qp-border-dim);
+    border-radius: 11px;
+    border: 1px solid var(--qp-border);
     background:
       radial-gradient(ellipse at 50% 100%, rgba(70,140,255,0.16), transparent 60%),
       radial-gradient(circle at 30% 15%, rgba(255,255,255,0.05), transparent 40%),
       linear-gradient(180deg, #060b16 0%, #030509 100%);
-    box-shadow: inset 0 0 30px rgba(0,0,0,0.6), 0 0 24px rgba(40,100,220,0.12);
+    box-shadow:
+      inset 0 0 0 1px rgba(90,150,255,0.1),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 0 30px rgba(0,0,0,0.6),
+      0 0 24px rgba(40,100,220,0.16);
     overflow: hidden;
     display: flex;
     align-items: flex-end;
@@ -153,18 +153,54 @@
     flex-direction: column;
     background: linear-gradient(165deg, #0c1729 0%, #070d1a 100%);
     border: 1px solid var(--qp-border-dim);
-    border-radius: 12px;
+    border-radius: 11px;
     padding: 16px 18px;
     text-decoration: none;
     color: var(--text);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 20px rgba(20,50,110,0.15);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+    overflow: hidden;
+    isolation: isolate;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -10px 16px -12px rgba(60,140,255,0.18),
+      inset 0 0 20px rgba(20,50,110,0.15);
+    transform: perspective(700px) rotateX(0deg) rotateY(0deg) scale(1);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease-out;
+    will-change: transform;
   }
   .tile:hover {
     border-color: var(--qp-border);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 24px rgba(30,70,150,0.25), 0 0 22px rgba(60,140,255,0.25);
-    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.1),
+      inset 0 -10px 18px -10px rgba(70,150,255,0.32),
+      inset 0 0 24px rgba(30,70,150,0.28),
+      0 10px 26px rgba(0,0,0,0.4),
+      0 0 26px rgba(60,140,255,0.3);
   }
+
+  /* cursor-follow soft light — position driven by --mx/--my (site sets
+     these on mousemove); invisible until hovered */
+  .tile-light {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    opacity: 0; transition: opacity 0.25s ease;
+    background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(150,195,255,0.16), transparent 42%);
+  }
+  .tile:hover .tile-light { opacity: 1; }
+
+  /* thin diagonal shimmer streak, swept across on hover */
+  .tile-shimmer { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; border-radius: inherit; }
+  .tile-shimmer::after {
+    content: '';
+    position: absolute; top: -140%; left: -45%;
+    width: 26%; height: 380%;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.22) 45%, rgba(190,220,255,0.16) 55%, rgba(255,255,255,0) 100%);
+    transform: rotate(18deg);
+  }
+  .tile:hover .tile-shimmer::after { animation: tile-shimmer 1.3s ease; }
+  @keyframes tile-shimmer { from { left: -45%; } to { left: 145%; } }
+
+  .tile > * { position: relative; z-index: 3; }
+  .tile .flare { z-index: 4; }
+  .tile:hover .flare { opacity: 1; }
   .tile-label {
     font-family: 'Orbitron', sans-serif;
     font-size: 11px;
@@ -261,12 +297,14 @@
     </div>
 
     <div class="profile-frame">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <h1 class="profile-heading"><span class="dash"></span>Profile<span class="dash"></span></h1>
 
       <div class="profile-grid">
         <!-- Avatar panel — later: real avatar render + equipped cosmetics -->
         <div class="avatar-panel">
           <div class="avatar-stage" id="avatar-stage">
+            <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
             <div class="avatar-platform"></div>
             <span class="avatar-figure" aria-hidden="true">🧑‍🚀</span>
           </div>
@@ -277,10 +315,12 @@
         <div class="profile-sections">
           <div class="section-row points-row">
             <a href="wallet.html" class="tile tile-points" id="quest-points-tile" aria-label="Open your wallet">
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-label">Quest Points</span>
               <span class="tile-value" id="quest-points-value">1,250</span>
             </a>
             <a href="achievements.html" class="tile tile-pinned" id="pinned-achievements-tile" aria-label="Open your achievements">
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-label">Pinned Achievements</span>
               <div class="pinned-badges" id="pinned-achievements-list">
                 <span class="badge badge-gold">🏆</span>
@@ -293,14 +333,17 @@
 
           <div class="section-row nav-row">
             <a href="skills.html" class="tile tile-nav">
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-icon">⚔️</span>
               <span class="tile-title">Skills</span>
             </a>
             <a href="inventory.html" class="tile tile-nav">
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-icon">🎒</span>
               <span class="tile-title">Inventory</span>
             </a>
             <a href="achievements.html" class="tile tile-nav">
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-icon">🏅</span>
               <span class="tile-title">Achievements</span>
             </a>
@@ -341,6 +384,54 @@
       s.style.opacity = (Math.random() * 0.5 + 0.3).toFixed(2);
       stage.appendChild(s);
     }
+  })();
+
+  // ---- interactive tiles: subtle 3D tilt, cursor-follow light, and a
+  // lens-flare glint that drifts opposite the cursor — same easing
+  // approach as the header chrome buttons, applied per-tile. ----
+  (function () {
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const MAX_TILT = 3;   // degrees
+    const MAX_LIFT = 1.02; // scale
+
+    document.querySelectorAll('.tile').forEach((tile) => {
+      const light = document.createElement('span');
+      light.className = 'tile-light';
+      const sweep = document.createElement('span');
+      sweep.className = 'tile-shimmer';
+      const flare = document.createElement('span');
+      flare.className = 'flare';
+      tile.appendChild(light);
+      tile.appendChild(sweep);
+      tile.appendChild(flare);
+
+      if (reduceMotion) return; // keep the static hover styling only
+
+      const maxDrift = 10;
+      tile.addEventListener('mousemove', (e) => {
+        const r = tile.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width;   // 0..1
+        const py = (e.clientY - r.top) / r.height;   // 0..1
+
+        // gentle 3D tilt toward the cursor
+        const rotY = (px - 0.5) * MAX_TILT * 2;
+        const rotX = (0.5 - py) * MAX_TILT * 2;
+        tile.style.transform = `perspective(700px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${MAX_LIFT})`;
+
+        // cursor-follow soft light
+        tile.style.setProperty('--mx', (px * 100) + '%');
+        tile.style.setProperty('--my', (py * 100) + '%');
+
+        // flare drifts opposite the cursor, staying near the frame
+        const dx = -(px * 2 - 1) * maxDrift;
+        const dy = -(py * 2 - 1) * maxDrift;
+        flare.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      });
+      tile.addEventListener('mouseleave', () => {
+        tile.style.transform = 'perspective(700px) rotateX(0deg) rotateY(0deg) scale(1)';
+        flare.style.transform = 'translate(-50%, -50%)';
+      });
+    });
   })();
 </script>
 </body>
