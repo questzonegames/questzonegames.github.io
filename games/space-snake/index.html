@@ -74,7 +74,7 @@
     flex-direction: column;
     align-items: center;
     min-height: calc(100% - 46px);
-    padding: 18px 14px 30px;
+    padding: 12px 14px 16px;
   }
 
   .title-row {
@@ -82,7 +82,7 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
   }
 
   .title {
@@ -129,14 +129,14 @@
     letter-spacing: 0.35em;
     color: var(--accent);
     opacity: 0.75;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
   }
 
   .hud {
     display: flex;
     gap: 22px;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     font-size: 14px;
     color: var(--text-main);
   }
@@ -166,8 +166,8 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin: 0 0 16px;
-    padding: 8px 18px;
+    margin: 0 0 10px;
+    padding: 6px 16px;
     min-width: 230px;
     justify-content: center;
     border-radius: 9px;
@@ -219,13 +219,21 @@
     text-align: right;
   }
 
+  /* Board dominates the page: height-driven so it scales with available
+     viewport height first (the real constraint on most desktop monitors),
+     falling back to a width cap on tall/narrow windows. Chrome/gunmetal/
+     electric-blue frame — thin (5px) so it doesn't steal play-area space. */
   #board-frame {
     position: relative;
-    border-radius: 10px;
-    padding: 4px;
-    background: linear-gradient(135deg, rgba(110,168,255,0.35), rgba(57,255,143,0.15));
-    box-shadow: 0 0 40px rgba(80,120,255,0.25), 0 0 80px rgba(0,0,0,0.6);
-    width: min(88vw, 680px);
+    border-radius: 14px;
+    padding: 5px;
+    background: linear-gradient(135deg, #e9eefa 0%, #a6b2c9 10%, #4c5670 24%, #212637 38%, #6f9fdc 52%, #8fd2ff 58%, #212637 72%, #4c5670 84%, #cdd7ea 100%);
+    box-shadow:
+      0 0 0 1px rgba(6,10,20,0.65),
+      inset 0 0 0 1px rgba(255,255,255,0.14),
+      0 12px 34px rgba(0,0,0,0.55),
+      0 0 55px rgba(80,140,255,0.28);
+    width: min(76vh, 78vw);
   }
 
   canvas#game {
@@ -233,14 +241,14 @@
     width: 100%;
     height: auto;
     aspect-ratio: 1 / 1;
-    border-radius: 7px;
+    border-radius: 10px;
     background: transparent;
   }
 
   .overlay {
     position: absolute;
-    inset: 4px;
-    border-radius: 7px;
+    inset: 5px;
+    border-radius: 10px;
     background: rgba(4,5,12,0.86);
     display: flex;
     flex-direction: column;
@@ -304,8 +312,8 @@
   button:active { transform: translateY(3px); box-shadow: 0 1px 0 #0a5c30, 0 2px 6px rgba(20,180,110,0.35); }
 
   .hint {
-    margin-top: 14px;
-    font-size: 11px;
+    margin-top: 8px;
+    font-size: 10px;
     letter-spacing: 0.1em;
     opacity: 0.45;
     text-align: center;
@@ -367,7 +375,7 @@
   </div>
 
   <div id="board-frame">
-    <canvas id="game" width="680" height="680"></canvas>
+    <canvas id="game" width="900" height="900"></canvas>
 
     <div id="start-overlay" class="overlay">
       <h2>READY TO LAUNCH?</h2>
@@ -396,7 +404,7 @@
 <script>
 (function () {
   // ================= Config =================
-  const GRID = 50;
+  const GRID = 40;
   const MIN_SNAKE_LENGTH = 3;           // matches the starting snake length
   const BASE_TICK_MS = 130;             // starting move interval
   const MIN_TICK_MS = 60;               // fastest the *base* speed can reach
@@ -795,7 +803,7 @@
 
   function drawGrid() {
     const size = CELL * GRID;
-    ctx.strokeStyle = 'rgba(110,140,220,0.18)';
+    ctx.strokeStyle = 'rgba(110,140,220,0.22)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID; i++) {
       ctx.beginPath();
@@ -809,15 +817,32 @@
     }
   }
 
-  // Space debris: a tumbling metallic fragment (not generic "food").
+  // Space debris — the single most important object on the board, so it
+  // gets a warm amber/gold treatment (deliberately the opposite end of the
+  // palette from the cyan snake/lightning and the dark navy board) plus a
+  // halo and a gentle pulse, so it reads instantly without scanning.
   function drawDebris() {
     const cx = debris.x * CELL + CELL / 2;
     const cy = debris.y * CELL + CELL / 2;
-    const r = CELL * 0.34;
+    const pulse = 0.5 + 0.5 * Math.sin(frame * 0.06); // 0..1 breathing
+    const r = CELL * (0.40 + pulse * 0.025);
     const points = 7;
+
+    // soft warm halo — deliberately a bit larger than the asteroid itself
+    const haloR = CELL * (0.64 + pulse * 0.06);
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, haloR);
+    halo.addColorStop(0, `rgba(255,168,70,${(0.32 + pulse * 0.14).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(255,168,70,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate((frame * 0.015) % (Math.PI * 2));
+    ctx.rotate((frame * 0.012) % (Math.PI * 2));
+    ctx.shadowColor = `rgba(255,150,50,${(0.55 + pulse * 0.35).toFixed(3)})`;
+    ctx.shadowBlur = CELL * (0.24 + pulse * 0.08);
     ctx.beginPath();
     for (let i = 0; i < points; i++) {
       const a = (i / points) * Math.PI * 2;
@@ -827,31 +852,57 @@
     }
     ctx.closePath();
     const grad = ctx.createLinearGradient(-r, -r, r, r);
-    grad.addColorStop(0, '#e4eaf6');
-    grad.addColorStop(0.45, '#96a2ba');
-    grad.addColorStop(0.55, '#4c5670');
-    grad.addColorStop(1, '#1c2030');
+    grad.addColorStop(0, '#ffe9c2');
+    grad.addColorStop(0.4, '#ffb04e');
+    grad.addColorStop(0.7, '#d97a1f');
+    grad.addColorStop(1, '#8a4a12');
     ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(140,190,255,0.55)';
-    ctx.lineWidth = Math.max(1, CELL * 0.03);
+    ctx.strokeStyle = 'rgba(255,214,150,0.8)';
+    ctx.lineWidth = Math.max(1, CELL * 0.035);
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.beginPath();
-    ctx.arc(-r * 0.25, -r * 0.3, r * 0.14, 0, Math.PI * 2);
+    ctx.arc(-r * 0.25, -r * 0.3, r * 0.15, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
+  // Lightning — electric cyan/white core with a yellow spark tip, a soft
+  // cyan halo, and tiny orbiting spark flecks. Deliberately cool/electric
+  // so it never reads as "another asteroid" next to the warm debris.
   function drawLightningPickup(p, now) {
     if (!isPickupVisible(now, p)) return;
     const cx = p.x * CELL + CELL / 2;
     const cy = p.y * CELL + CELL / 2;
-    const s = CELL * 0.36;
+    const pulse = 0.5 + 0.5 * Math.sin(frame * 0.12);
+    const s = CELL * (0.40 + pulse * 0.02);
+
+    const haloR = CELL * (0.6 + pulse * 0.05);
+    const halo = ctx.createRadialGradient(cx, cy, s * 0.3, cx, cy, haloR);
+    halo.addColorStop(0, `rgba(120,230,255,${(0.32 + pulse * 0.14).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(120,230,255,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.shadowColor = 'rgba(255,224,102,0.85)';
-    ctx.shadowBlur = CELL * 0.2;
+
+    // faint orbiting spark flecks
+    ctx.fillStyle = `rgba(255,244,180,${(0.5 + pulse * 0.4).toFixed(3)})`;
+    for (let k = 0; k < 3; k++) {
+      const a = frame * 0.05 + k * (Math.PI * 2 / 3);
+      const sr = s * 0.95;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * sr, Math.sin(a) * sr, CELL * 0.022, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.shadowColor = `rgba(110,225,255,${(0.75 + pulse * 0.25).toFixed(3)})`;
+    ctx.shadowBlur = CELL * (0.24 + pulse * 0.08);
     ctx.beginPath();
     ctx.moveTo(-s * 0.1, -s);
     ctx.lineTo(s * 0.42, -s * 0.12);
@@ -862,29 +913,45 @@
     ctx.lineTo(-s * 0.34, s * 0.08);
     ctx.closePath();
     const grad = ctx.createLinearGradient(0, -s, 0, s);
-    grad.addColorStop(0, '#fff6c8');
-    grad.addColorStop(0.5, '#ffe066');
-    grad.addColorStop(1, '#ffb020');
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.35, '#bdf3ff');
+    grad.addColorStop(0.7, '#4fd7ff');
+    grad.addColorStop(1, '#ffe066');
     ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = Math.max(1, CELL * 0.025);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = Math.max(1, CELL * 0.03);
     ctx.stroke();
     ctx.restore();
   }
 
+  // Skull — an ominous red/purple treatment (not plain white bone) with
+  // faintly glowing red eye sockets and a dangerous halo, so it reads as
+  // a threat rather than just another light-colored pickup.
   function drawSkullPickup(p, now) {
     if (!isPickupVisible(now, p)) return;
     const cx = p.x * CELL + CELL / 2;
     const cy = p.y * CELL + CELL / 2;
-    const r = CELL * 0.3;
+    const pulse = 0.5 + 0.5 * Math.sin(frame * 0.09);
+    const r = CELL * (0.34 + pulse * 0.02);
+
+    const haloR = CELL * (0.6 + pulse * 0.05);
+    const halo = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, haloR);
+    halo.addColorStop(0, `rgba(255,50,90,${(0.28 + pulse * 0.14).toFixed(3)})`);
+    halo.addColorStop(0.6, `rgba(150,40,120,${(0.12 + pulse * 0.06).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(150,40,120,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.shadowColor = 'rgba(255,94,122,0.8)';
-    ctx.shadowBlur = CELL * 0.16;
+    ctx.shadowColor = `rgba(255,60,100,${(0.6 + pulse * 0.3).toFixed(3)})`;
+    ctx.shadowBlur = CELL * (0.2 + pulse * 0.08);
 
     // crossbones (behind the skull)
-    ctx.strokeStyle = '#d8dee8';
+    ctx.strokeStyle = '#d8b8d0';
     ctx.lineWidth = Math.max(1.5, r * 0.16);
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -892,8 +959,12 @@
     ctx.moveTo(-r * 0.8, -r * 0.2); ctx.lineTo(r * 0.8, r * 0.6);
     ctx.stroke();
 
-    // skull
-    ctx.fillStyle = '#eef2fb';
+    // skull — pale bone with a purple-red undertone
+    const sg = ctx.createLinearGradient(0, -r, 0, r * 0.6);
+    sg.addColorStop(0, '#fbe9f2');
+    sg.addColorStop(0.55, '#e7bdd3');
+    sg.addColorStop(1, '#c98bb0');
+    ctx.fillStyle = sg;
     ctx.beginPath();
     ctx.arc(0, -r * 0.12, r * 0.66, Math.PI, 0);
     ctx.lineTo(r * 0.56, r * 0.22);
@@ -903,12 +974,16 @@
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // eye sockets
-    ctx.fillStyle = '#1a0d14';
+    // eye sockets with a faint glowing red ember
+    ctx.fillStyle = '#2a0a18';
     ctx.beginPath(); ctx.arc(-r * 0.26, -r * 0.08, r * 0.15, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(r * 0.26, -r * 0.08, r * 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(255,70,110,${(0.5 + pulse * 0.4).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(-r * 0.26, -r * 0.08, r * 0.06, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.26, -r * 0.08, r * 0.06, 0, Math.PI * 2); ctx.fill();
 
     // nose
+    ctx.fillStyle = '#2a0a18';
     ctx.beginPath();
     ctx.moveTo(0, r * 0.06);
     ctx.lineTo(-r * 0.07, r * 0.2);
@@ -965,22 +1040,37 @@
 
       const grad = ctx.createLinearGradient(x, y + pad, x, y + CELL - pad);
       if (isHead) {
-        grad.addColorStop(0, '#6dffb8');
-        grad.addColorStop(0.58, '#1fbd6e');
-        grad.addColorStop(0.6, '#f4ff8c');
-        grad.addColorStop(1, '#c8dd3e');
+        grad.addColorStop(0, '#7dffc4');
+        grad.addColorStop(0.58, '#25d17d');
+        grad.addColorStop(0.6, '#f6ff96');
+        grad.addColorStop(1, '#cfe648');
       } else {
         const alt = i % 2 === 0;
-        grad.addColorStop(0, alt ? '#39ff8f' : '#2be07f');
-        grad.addColorStop(0.6, alt ? '#0f8a4a' : '#0c7a40');
-        grad.addColorStop(0.62, alt ? '#e4f56a' : '#d8ec5c');
-        grad.addColorStop(1, alt ? '#a9c23c' : '#9fb838');
+        grad.addColorStop(0, alt ? '#4dffa0' : '#3ff096');
+        grad.addColorStop(0.6, alt ? '#12a05a' : '#0f8f4e');
+        grad.addColorStop(0.62, alt ? '#eafb78' : '#dff268');
+        grad.addColorStop(1, alt ? '#b3cc44' : '#a8c33e');
       }
+
+      // faint ambient glow on every segment — small radius so it stays
+      // safely inside the cell, giving the whole snake a soft sci-fi glow
+      // rather than just the head.
+      ctx.save();
+      ctx.shadowColor = 'rgba(100,255,190,0.4)';
+      ctx.shadowBlur = CELL * 0.08;
       ctx.fillStyle = grad;
       roundedRect(x + pad, y + pad, w, w, r);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-      ctx.lineWidth = Math.max(1, CELL * 0.02);
+      ctx.restore();
+
+      // dark edge for shape definition, plus a thin inner cyan rim line
+      // for a subtle sci-fi highlight.
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = Math.max(1, CELL * 0.022);
+      roundedRect(x + pad, y + pad, w, w, r);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(120,230,255,0.3)';
+      ctx.lineWidth = Math.max(1, CELL * 0.012);
       ctx.stroke();
 
       // speed-boost energy rim — a pulsing cyan glow along every segment
