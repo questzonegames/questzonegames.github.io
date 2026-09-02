@@ -80,6 +80,14 @@
     });
     imgs[0].style.opacity = '1'; // show the front frame immediately, before the first tick
 
+    // Equipped-item indicator: until real per-direction equipment art
+    // exists, equipped items show as a small chip strip along the bottom
+    // of the avatar box rather than pretending to be attached to the
+    // character (see setAvatarEquipment below for why).
+    const loadout = document.createElement('div');
+    loadout.className = 'avatar-loadout';
+    container.appendChild(loadout);
+
     // ---- single state machine: 'holding' | 'transitioning' | 'dragging' ----
     let phase = 'holding';
     let angle = 0;            // current render angle, degrees, unbounded (mod 360 in render())
@@ -214,15 +222,29 @@
     function next() { step(1, performance.now()); }
     function prev() { step(-1, performance.now()); }
 
-    // ---- equipment-slot readiness (not implemented yet) ----
-    // Future cosmetics would layer additional per-angle sprite sets (one
-    // image per FRAMES entry per equipped item) on top of the base avatar
-    // here, keyed by slot, and cross-fade them in lock-step with the base
-    // render() above. Accepting the call now — without acting on it — lets
-    // calling code integrate against the final shape early.
-    function setAvatarEquipment(_slots) {
-      // slots: { head, necklace, body, legs, boots, gloves, back, mainHand, offHand, accessory }
-      // no-op until per-slot sprite art exists
+    // ---- equipment display ----
+    // The real end state (once per-item art exists) is per-angle sprite
+    // sets layered on top of the base avatar here, keyed by slot, cross-
+    // fading in lock-step with the base render() above — FRAMES-shaped
+    // art per item, attached at the right depth for front/right/back/left
+    // so gear turns with the character instead of floating in place.
+    // Until that art exists, show equipped items as small icon chips
+    // along the bottom of the box instead: still real, immediate feedback
+    // wired to the same equippedItems state, just not pretending to be
+    // pixel-attached to a character with no equipment art yet.
+    const SLOT_ORDER = ['head', 'necklace', 'body', 'mainHand', 'offHand', 'gloves', 'legs', 'boots', 'back', 'accessory'];
+    function setAvatarEquipment(slots) {
+      const items = slots || {};
+      loadout.innerHTML = '';
+      SLOT_ORDER.forEach((slotKey) => {
+        const item = items[slotKey];
+        if (!item) return;
+        const chip = document.createElement('span');
+        chip.className = 'avatar-loadout-chip';
+        chip.textContent = item.icon || '';
+        chip.title = item.name || '';
+        loadout.appendChild(chip);
+      });
     }
 
     function destroy() {
@@ -235,6 +257,7 @@
       container.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('pointerup', onPointerUp);
       imgs.forEach((img) => img.remove());
+      loadout.remove();
       container.classList.remove('dragging');
     }
 
