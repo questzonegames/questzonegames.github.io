@@ -312,30 +312,97 @@
   }
 
   .tile-pinned { justify-content: flex-start; }
-  .pinned-badges { display: flex; gap: 14px; margin-top: 14px; flex: 1; align-items: center; }
-  .badge {
+
+  /* ---- pinned achievements: 7-slot showcase ----
+     One slot per pin (populated from PINNED_ACHIEVEMENTS_DATA — see the
+     script at the bottom of this page). Each slot is just an <img> plus
+     a custom tooltip; the artwork already carries its own frame/glow, so
+     no extra decorative ring is drawn around it. */
+  .pinned-badges {
+    display: flex;
+    gap: clamp(6px, 1.3vw, 14px);
+    margin-top: 14px;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 2px;
+  }
+  .pin-slot {
     position: relative;
-    width: clamp(44px, 6vw, 58px);
-    aspect-ratio: 1/1;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: clamp(18px, 2.6vw, 24px);
-    background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.16), transparent 55%), #0a1220;
-    box-shadow: inset 0 0 8px rgba(0,0,0,0.6), inset 0 0 0 3px rgba(10,14,24,0.8);
+    width: clamp(36px, 5.6vw, 54px);
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.18s ease;
   }
-  .badge::before {
+  .pin-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    filter: drop-shadow(0 0 7px rgba(90,160,255,0.4));
+    transition: filter 0.2s ease;
+  }
+  /* soft glint burst on hover — absent for the locked slot */
+  .pin-slot::after {
     content: '';
-    position: absolute; inset: -2px;
+    position: absolute;
+    inset: -8px;
     border-radius: 50%;
-    background: conic-gradient(from -45deg, rgba(255,255,255,0.9), transparent 30%, transparent 70%, rgba(255,255,255,0.5));
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-    opacity: 0.5;
+    background: radial-gradient(circle, rgba(150,200,255,0.4), transparent 70%);
+    opacity: 0;
+    transform: scale(0.6);
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.35s ease;
   }
-  .badge-gold   { box-shadow: 0 0 14px rgba(232,197,101,0.4), inset 0 0 8px rgba(0,0,0,0.6), inset 0 0 0 3px #7a5f27, inset 0 0 0 4px rgba(232,197,101,0.5); }
-  .badge-blue   { box-shadow: 0 0 14px rgba(127,179,255,0.4), inset 0 0 8px rgba(0,0,0,0.6), inset 0 0 0 3px #2c4f80, inset 0 0 0 4px rgba(127,179,255,0.5); }
-  .badge-orange { box-shadow: 0 0 14px rgba(255,154,90,0.4), inset 0 0 8px rgba(0,0,0,0.6), inset 0 0 0 3px #7a3f1c, inset 0 0 0 4px rgba(255,154,90,0.5); }
-  .badge-purple { box-shadow: 0 0 14px rgba(185,138,255,0.4), inset 0 0 8px rgba(0,0,0,0.6), inset 0 0 0 3px #4a2d7a, inset 0 0 0 4px rgba(185,138,255,0.5); }
+  .pin-slot:hover { transform: translateY(-3px) scale(1.04); z-index: 5; }
+  .pin-slot:hover img { filter: drop-shadow(0 0 15px rgba(120,190,255,0.8)) drop-shadow(0 0 4px rgba(255,255,255,0.45)); }
+  .pin-slot:hover::after { opacity: 1; transform: scale(1); }
+
+  /* locked stays visibly muted — no bright tier glow on hover */
+  .pin-slot.pin-slot-locked img { filter: grayscale(0.85) brightness(0.55) saturate(0.35); }
+  .pin-slot.pin-slot-locked:hover img { filter: grayscale(0.75) brightness(0.6) saturate(0.4) drop-shadow(0 0 4px rgba(110,130,160,0.3)); }
+  .pin-slot.pin-slot-locked:hover::after { opacity: 0; }
+
+  /* premium custom tooltip — replaces the default browser title tooltip */
+  .pin-tooltip {
+    position: absolute;
+    left: 50%; bottom: calc(100% + 10px);
+    transform: translate(-50%, 4px) scale(0.96);
+    white-space: nowrap;
+    background: linear-gradient(180deg, rgba(16,23,42,0.97), rgba(6,9,18,0.98));
+    border: 1px solid rgba(120,180,255,0.35);
+    border-radius: 7px;
+    padding: 6px 11px;
+    font-family: 'Exo 2', sans-serif;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #eef2fb;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55), 0 0 14px rgba(70,150,255,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 20;
+  }
+  .pin-tooltip::after {
+    content: '';
+    position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(8,12,22,0.98);
+  }
+  .pin-slot:hover .pin-tooltip { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  /* keep the outermost tooltips from overhanging the tile edge */
+  .pin-slot:first-child .pin-tooltip { left: 0; transform: translate(0, 4px) scale(0.96); }
+  .pin-slot:first-child:hover .pin-tooltip { transform: translate(0, 0) scale(1); }
+  .pin-slot:first-child .pin-tooltip::after { left: 20px; transform: none; }
+  .pin-slot:last-child .pin-tooltip { left: auto; right: 0; transform: translate(0, 4px) scale(0.96); }
+  .pin-slot:last-child:hover .pin-tooltip { transform: translate(0, 0) scale(1); }
+  .pin-slot:last-child .pin-tooltip::after { left: auto; right: 20px; transform: none; }
 
   .tile-nav {
     align-items: center;
@@ -434,12 +501,7 @@
             <a href="achievements.html" class="tile tile-pinned bezel-sm" id="pinned-achievements-tile" aria-label="Open your achievements">
               <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-label">Pinned Achievements</span>
-              <div class="pinned-badges" id="pinned-achievements-list">
-                <span class="badge badge-gold">🏆</span>
-                <span class="badge badge-blue">⭐</span>
-                <span class="badge badge-orange">🔥</span>
-                <span class="badge badge-purple">💎</span>
-              </div>
+              <div class="pinned-badges" id="pinned-achievements-list"><!-- rendered from PINNED_ACHIEVEMENTS_DATA --></div>
             </a>
           </div>
 
@@ -520,6 +582,46 @@
       s.style.top = (Math.random() * 55) + '%';
       s.style.opacity = (Math.random() * 0.5 + 0.3).toFixed(2);
       stage.appendChild(s);
+    }
+  })();
+
+  // ---- pinned achievements: 7-slot showcase ----
+  // Data-driven so a future account system can just swap this array for
+  // whatever the player actually has pinned — nothing else on the page
+  // needs to change. Each slot: { id, name, tier, icon, link }. `link` is
+  // optional and reserved for a future per-achievement details page.
+  (function () {
+    const PINNED_ACHIEVEMENTS_DATA = [
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Locked',   icon: '../assets/img/achievements/jack-of-all-trades-locked.png',   link: null },
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Bronze',   icon: '../assets/img/achievements/jack-of-all-trades-bronze.png',   link: null },
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Silver',   icon: '../assets/img/achievements/jack-of-all-trades-silver.png',   link: null },
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Gold',     icon: '../assets/img/achievements/jack-of-all-trades-gold.png',     link: null },
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Platinum', icon: '../assets/img/achievements/jack-of-all-trades-platinum.png', link: null },
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Diamond',  icon: '../assets/img/achievements/jack-of-all-trades-diamond.png',  link: null },
+      { id: 'jack-of-all-trades', name: 'Jack of All Trades', tier: 'Mythic',   icon: '../assets/img/achievements/jack-of-all-trades-mythic.png',   link: null }
+    ];
+    const PIN_SLOT_COUNT = 7;
+
+    const list = document.getElementById('pinned-achievements-list');
+    if (list) {
+      for (let i = 0; i < PIN_SLOT_COUNT; i++) {
+        const data = PINNED_ACHIEVEMENTS_DATA[i];
+        const slot = document.createElement('span');
+        slot.className = 'pin-slot' + (data && data.tier === 'Locked' ? ' pin-slot-locked' : '');
+        if (data) {
+          const img = document.createElement('img');
+          img.src = data.icon;
+          img.alt = data.name + ' (' + data.tier + ')';
+          img.loading = 'lazy';
+          slot.appendChild(img);
+
+          const tooltip = document.createElement('span');
+          tooltip.className = 'pin-tooltip';
+          tooltip.textContent = data.name + ' (' + data.tier + ')';
+          slot.appendChild(tooltip);
+        }
+        list.appendChild(slot);
+      }
     }
   })();
 
