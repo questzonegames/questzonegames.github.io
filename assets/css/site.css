@@ -903,36 +903,35 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
 @keyframes tile-shimmer { from { left: -45%; } to { left: 145%; } }
 
 /* ---- .has-thumb: real game card with its own artwork (e.g. Space
-   Snake) instead of the icon/label/number placeholder — same chrome
-   frame + hover interaction, full-bleed image underneath. ---- */
-.game-card.has-thumb { padding: 0; }
-
+   Snake) instead of the icon/label/number placeholder. Uses the exact
+   same .game-card frame/box-shadow ring stack and :hover state as
+   every other card — nothing overridden here. The artwork sits
+   inset from the edge (instead of running full-bleed to 0) so that
+   shared chrome/gunmetal/seam ring stack stays fully visible around
+   it, same thickness as the frame around every placeholder card. ---- */
 .game-card .card-thumb {
   position: absolute;
-  inset: 0;
+  inset: 10px;
   z-index: 0;
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 20px);
+  height: calc(100% - 20px);
+  border-radius: 6px;
   object-fit: cover;
-  object-position: 50% 38%;
-  transition: filter 0.25s ease, transform 0.35s ease;
-}
-.game-card.has-thumb:hover .card-thumb {
-  filter: brightness(1.08) saturate(1.12);
-  transform: scale(1.045);
+  object-position: 50% 10%;
 }
 
 .game-card .card-thumb-fade {
   position: absolute;
-  inset: 0;
+  inset: 10px;
   z-index: 1;
+  border-radius: 6px;
   background: linear-gradient(180deg, rgba(4,8,18,0) 55%, rgba(4,8,18,0.82) 100%);
   pointer-events: none;
 }
 
 .game-card .card-title {
   position: absolute;
-  left: 4px; right: 4px; bottom: clamp(6px, 1vw, 10px);
+  left: 14px; right: 14px; bottom: 14px;
   z-index: 3;
   text-align: center;
   font-family: 'Orbitron', sans-serif;
@@ -946,15 +945,4 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   color: transparent;
   text-shadow: 0 0 10px rgba(90,170,255,0.55);
   pointer-events: none;
-}
-
-.game-card.has-thumb:hover {
-  box-shadow:
-    inset 0 0 0 1.5px var(--gunmetal),
-    inset 0 0 0 3px rgba(150,215,255,1),
-    inset 0 0 0 4px rgba(6,10,20,0.9),
-    inset 0 0 18px 5px rgba(90,180,255,0.65),
-    inset 0 1px 0 rgba(255,255,255,0.12),
-    0 10px 24px rgba(0,0,0,0.5),
-    0 0 28px rgba(60,140,255,0.45);
 }
