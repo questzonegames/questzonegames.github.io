@@ -23,6 +23,36 @@
     });
   });
 
+  // ---- chrome button lens flare (Profile / Signup / Login) ----
+  // A small sparkle on the frame that drifts opposite the cursor —
+  // giving the illusion of a reflective surface reacting to viewpoint.
+  // CSS handles the actual easing (.flare has a transition), this just
+  // sets the target transform on mousemove.
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('.btn-chrome-dark, .btn-chrome-blue').forEach((btn) => {
+    const sweep = document.createElement('span');
+    sweep.className = 'chrome-sweep';
+    const flare = document.createElement('span');
+    flare.className = 'flare';
+    btn.appendChild(sweep);
+    btn.appendChild(flare);
+
+    if (reduceMotion) return; // keep the flare static, skip the tracking
+
+    const maxDrift = 9; // px — stays near the corner, never wanders into the center
+    btn.addEventListener('mousemove', (e) => {
+      const r = btn.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * 2 - 1;   // -1..1
+      const py = ((e.clientY - r.top) / r.height) * 2 - 1;   // -1..1
+      const dx = -px * maxDrift; // inverse — cursor right, flare drifts left
+      const dy = -py * maxDrift; // cursor down, flare drifts up
+      flare.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    });
+    btn.addEventListener('mouseleave', () => {
+      flare.style.transform = 'translate(-50%, -50%)';
+    });
+  });
+
   // ---- header search ----
   const searchForm = document.getElementById('site-search-form');
   const searchNote = document.getElementById('search-note');
