@@ -60,18 +60,35 @@
 
   function makeGameCard(opts) {
     const a = document.createElement('a');
-    a.className = 'game-card';
+    a.className = 'game-card' + (opts.image ? ' has-thumb' : '');
     a.href = opts.route || '#';
     a.setAttribute('aria-label', opts.title);
-    a.innerHTML =
-      '<span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>' +
-      '<span class="icon" aria-hidden="true">' + gamepadIcon + '</span>' +
-      (opts.label ? '<span class="label">' + opts.label + '</span>' : '') +
-      (opts.number ? '<span class="number">' + opts.number + '</span>' : '');
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.qzToast(opts.comingSoon);
-    });
+
+    if (opts.image) {
+      // real, live game — full-bleed artwork + metallic title overlay,
+      // no placeholder icon/label/number.
+      a.innerHTML =
+        '<span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>' +
+        '<img class="card-thumb" src="' + opts.image + '" alt="" loading="lazy">' +
+        '<span class="card-thumb-fade"></span>' +
+        '<span class="card-title">' + opts.title + '</span>';
+    } else {
+      a.innerHTML =
+        '<span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>' +
+        '<span class="icon" aria-hidden="true">' + gamepadIcon + '</span>' +
+        (opts.label ? '<span class="label">' + opts.label + '</span>' : '') +
+        (opts.number ? '<span class="number">' + opts.number + '</span>' : '');
+    }
+
+    if (opts.active) {
+      // real route — let the <a href> navigate normally (supports
+      // ctrl/cmd-click, middle-click, etc. like any other game link)
+    } else {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.qzToast(opts.comingSoon);
+      });
+    }
     return a;
   }
 
@@ -86,12 +103,28 @@
       status: 'coming-soon',
       category: 'total-level'
     }));
+
+    // Slot 01 is a real, live game — swap the placeholder for Space
+    // Snake (existing route, no duplicate page). Slots 02-24 stay
+    // untouched placeholders.
+    TOTAL_LEVEL_GAMES[0] = {
+      id: 'space-snake',
+      number: '01',
+      title: 'Space Snake',
+      image: 'assets/img/space-snake-thumb.png',
+      route: 'games/space-snake/',
+      status: 'active',
+      category: 'total-level'
+    };
+
     TOTAL_LEVEL_GAMES.forEach((g) => {
       totalLevelGrid.appendChild(makeGameCard({
         title: g.title,
         route: g.route,
         label: 'Total Level<br>Game',
         number: g.number,
+        image: g.image,
+        active: g.status === 'active',
         comingSoon: 'This Total Level Game slot is coming soon!'
       }));
     });
