@@ -44,9 +44,19 @@
     { key: 'default', label: 'Default' }
   ];
 
-  const SKIN_COLOURS = [
-    { key: 'default', label: 'Default' }
-  ];
+  // keyed by gender, same reasoning as hairstyles/beards above — skin tone
+  // art is a full body render per combination (see assets/img/avatar/), not
+  // a tintable layer, so what's available genuinely differs per gender
+  // until matching art exists for both.
+  const SKIN_COLOURS = {
+    male: [
+      { key: 'black', label: 'Black' },
+      { key: 'pale', label: 'Pale' }
+    ],
+    female: [
+      { key: 'default', label: 'Default' }
+    ]
+  };
 
   window.QZ_CHARACTER_OPTIONS = {
     genders: GENDERS,

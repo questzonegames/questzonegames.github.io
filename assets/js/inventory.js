@@ -517,11 +517,22 @@
     return true;
   }
 
+  async function applyBaseAppearance() {
+    if (!avatar || !avatar.setBaseAppearance || !client || !viewUserId) return;
+    const { data: custom } = await client
+      .from('avatar_customization')
+      .select('gender, skin_colour')
+      .eq('user_id', viewUserId)
+      .single();
+    if (custom) avatar.setBaseAppearance(custom.gender, custom.skin_colour);
+  }
+
   function mountAvatar() {
     const avatarContainer = document.getElementById('armory-avatar-3d');
     if (avatarContainer && window.QZAvatarViewer) {
       avatar = window.QZAvatarViewer.mount(avatarContainer);
       window.qzAvatar = avatar;
+      applyBaseAppearance();
     }
     const arrowLeft = document.getElementById('armory-arrow-left');
     const arrowRight = document.getElementById('armory-arrow-right');
@@ -533,6 +544,7 @@
         avatar = window.QZAvatarViewer.mount(avatarContainer);
         window.qzAvatar = avatar;
         if (avatar) avatar.setAvatarEquipment(expandedEquipped());
+        applyBaseAppearance();
       }
     });
   }

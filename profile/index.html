@@ -1138,6 +1138,15 @@
       if (row.item_id && catalogById[row.item_id]) equipped[row.slot] = catalogById[row.item_id];
     });
     window.qzAvatar.setAvatarEquipment(equipped);
+
+    if (window.qzAvatar.setBaseAppearance) {
+      const { data: custom } = await window.QZAuth.client
+        .from('avatar_customization')
+        .select('gender, skin_colour')
+        .eq('user_id', targetUserId)
+        .single();
+      if (custom) window.qzAvatar.setBaseAppearance(custom.gender, custom.skin_colour);
+    }
   }
   applyRealEquipment();
 

@@ -29,12 +29,26 @@
   const CROSSFADE_HOLD = 0.35;  // fraction of a 90° sweep spent fully on one frame
 
   // clockwise pose order: Front -> Right -> Back -> Left -> Front
-  const FRAMES = [
-    { key: 'front', src: '../assets/img/avatar/avatar-front.png' },
-    { key: 'right', src: '../assets/img/avatar/avatar-right.png' },
-    { key: 'back',  src: '../assets/img/avatar/avatar-back.png' },
-    { key: 'left',  src: '../assets/img/avatar/avatar-left.png' }
-  ];
+  const POSES = ['front', 'right', 'back', 'left'];
+  const BASE_DIR = '../assets/img/avatar/';
+
+  // Real (gender, skinColour) body art that actually exists as files today
+  // — see assets/js/character-data.js for the matching options list a
+  // Customise screen offers. Anything not in here (an unbuilt skin tone, or
+  // female entirely until its base art exists) falls back to the site's
+  // original default body rather than a broken image — same "only real
+  // options are ever exposed" rule as everywhere else this pattern is used.
+  const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true };
+
+  function baseSrc(pose, gender, skinColour) {
+    const key = (gender || 'male') + '-' + (skinColour || 'default');
+    if (AVAILABLE_BASES[key]) return BASE_DIR + key + '-' + pose + '.png';
+    return BASE_DIR + 'avatar-' + pose + '.png';
+  }
+
+  function defaultFrames() {
+    return POSES.map((pose) => ({ key: pose, src: baseSrc(pose, 'male', 'default') }));
+  }
 
   function reduceMotion() {
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -62,7 +76,9 @@
     if (!container) return null;
 
     container.classList.add('avatar-3d');
-    const imgs = FRAMES.map((f) => {
+    let currentGender = 'male';
+    let currentSkinColour = 'default';
+    const imgs = defaultFrames().map((f) => {
       const img = document.createElement('img');
       img.className = 'avatar-sprite';
       img.src = f.src;
@@ -294,6 +310,21 @@
       render(); // reflect the change immediately, don't wait for the next tick
     }
 
+    // Swap which body art the 4 base sprites point at — e.g. after loading
+    // an account's avatar_customization row, or live as someone picks a
+    // different option on the Customise screen. Unknown/unavailable combos
+    // quietly fall back to the original default body (see baseSrc above)
+    // rather than showing a broken image.
+    function setBaseAppearance(gender, skinColour) {
+      currentGender = gender || 'male';
+      currentSkinColour = skinColour || 'default';
+      imgs.forEach((img, i) => {
+        const pose = POSES[i];
+        img.dataset.broken = '';
+        img.src = baseSrc(pose, currentGender, currentSkinColour);
+      });
+    }
+
     function destroy() {
       destroyed = true;
       stop();
@@ -311,7 +342,7 @@
 
     window.addEventListener('pagehide', destroy, { once: true });
 
-    return { destroy, setAvatarEquipment, next, prev };
+    return { destroy, setAvatarEquipment, setBaseAppearance, next, prev };
   }
 
   window.QZAvatarViewer = { mount };

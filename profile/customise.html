@@ -359,6 +359,21 @@
     });
   }
 
+  // a hair/beard/skin choice that only exists for the OTHER gender (e.g.
+  // male's "Black" skin tone) isn't valid here — fall back to that list's
+  // first real option instead of carrying over a key this gender has no
+  // art for. Also normalizes current.* itself, not just what's displayed —
+  // so a stale/no-longer-valid saved value can never look selected in the
+  // cycler while actually being a different value underneath.
+  function normalizeForGender(gender) {
+    const hairList = OPTS.hairstyles[gender] || [];
+    const beardList = OPTS.beards[gender] || [];
+    const skinList = OPTS.skinColours[gender] || [];
+    if (!hairList.some((o) => o.key === current.hair_style)) current.hair_style = hairList[0] ? hairList[0].key : 'default';
+    if (!beardList.some((o) => o.key === current.beard_style)) current.beard_style = beardList[0] ? beardList[0].key : 'none';
+    if (!skinList.some((o) => o.key === current.skin_colour)) current.skin_colour = skinList[0] ? skinList[0].key : 'default';
+  }
+
   function renderAll() {
     renderCycler('cc-hairstyle-cycler', OPTS.hairstyles[current.gender] || [], current.hair_style, (key) => {
       current.hair_style = key; renderAll();
@@ -366,7 +381,7 @@
     renderCycler('cc-beard-cycler', OPTS.beards[current.gender] || [], current.beard_style, (key) => {
       current.beard_style = key; renderAll();
     });
-    renderCycler('cc-skin-cycler', OPTS.skinColours, current.skin_colour, (key) => {
+    renderCycler('cc-skin-cycler', OPTS.skinColours[current.gender] || [], current.skin_colour, (key) => {
       current.skin_colour = key; renderAll();
     });
     renderCycler('cc-haircolour-cycler', OPTS.hairColours, current.hair_colour, (key) => {
@@ -383,15 +398,22 @@
       btn.type = 'button';
       btn.className = 'cc-gender-btn' + (current.gender === g.key ? ' active' : '');
       btn.textContent = g.label;
-      btn.addEventListener('click', () => { current.gender = g.key; renderAll(); });
+      btn.addEventListener('click', () => {
+        current.gender = g.key;
+        normalizeForGender(g.key);
+        renderAll();
+      });
       genderRoot.appendChild(btn);
     });
+
+    if (avatar) avatar.setBaseAppearance(current.gender, current.skin_colour);
   }
 
   async function mountAvatar() {
     const container = document.getElementById('cc-avatar-3d');
     if (!container || !window.QZAvatarViewer) return;
     avatar = window.QZAvatarViewer.mount(container);
+    avatar.setBaseAppearance(current.gender, current.skin_colour);
     document.getElementById('cc-arrow-left').addEventListener('click', () => avatar && avatar.prev());
     document.getElementById('cc-arrow-right').addEventListener('click', () => avatar && avatar.next());
 
@@ -429,6 +451,12 @@
         beard_style: data.beard_style, beard_colour: data.beard_colour, skin_colour: data.skin_colour
       };
     }
+    // a previously-saved choice (or a fresh default row) can point at an
+    // option that no longer exists for this gender — e.g. 'default' skin
+    // colour used to be the only option, now male only offers black/pale.
+    // Normalize it to a real option BEFORE first render, so the cycler's
+    // displayed value and current.* always genuinely agree with each other.
+    normalizeForGender(current.gender);
 
     renderAll();
     await mountAvatar();
