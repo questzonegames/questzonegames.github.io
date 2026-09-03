@@ -11,16 +11,21 @@
 -- instead of pasting into the SQL Editor by hand — see supabase/migrations/.
 -- This file matches the migration baseline in
 -- supabase/migrations/20260903004123_initial_schema.sql plus every
--- migration applied after it (currently also 20260903013123_admin_bans.sql).
+-- migration applied after it (currently also 20260903013123_admin_bans.sql,
+-- 20260903014514_access_token_hook.sql, and
+-- 20260903014729_ban_message_for_login.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
 --
 -- One manual dashboard step outside any migration: Authentication → Hooks
--- (BETA) → Password Verification Hook must be turned ON, pointing at
--- public.hook_password_verification_attempt, for bans to actually block a
--- login (the function itself is created by 20260903013123_admin_bans.sql,
--- but enabling it as an Auth Hook isn't something a SQL migration can do).
+-- → Add hook → "Customize Access Token (JWT) Claims hook" → Postgres
+-- Function → public.hook_custom_access_token, for bans to actually block a
+-- login server-side (the function itself is created by
+-- 20260903014514_access_token_hook.sql, but enabling it as an Auth Hook
+-- isn't something a SQL migration can do). public.hook_password_verification_
+-- attempt from the previous migration is unused — that hook type needs
+-- Supabase's Team/Enterprise plan, not available on this project's Free plan.
 --
 -- After running this once on a fresh project, make YOUR OWN account an admin
 -- (see the very bottom of this file for the exact command — run it AFTER
@@ -752,3 +757,90 @@ $$;
 
 grant execute on function public.hook_password_verification_attempt(jsonb) to supabase_auth_admin;
 revoke execute on function public.hook_password_verification_attempt(jsonb) from authenticated, anon, public;
+-- ============================================================================
+-- Custom Access Token Hook — the actual server-side ban enforcement.
+-- ============================================================================
+-- The "Password Verification Attempt" hook (used by
+-- hook_password_verification_attempt, added in the previous migration) turns
+-- out to require Supabase's Team/Enterprise plan — not available on this
+-- project's Free plan. That function is left in place (harmless, unused)
+-- for if the project ever upgrades.
+--
+-- The "Customize Access Token (JWT) Claims" hook IS available on Free plan,
+-- and works even better for banning here: it runs on every token issuance
+-- AND every token refresh, not just the initial sign-in. Raising an
+-- exception in it fails the whole operation — so a banned account can't
+-- get a new access token at sign-in, and an account banned mid-session
+-- fails to refresh its session the next time GoTrue tries to (typically
+-- within the hour, per [auth] token expiry in supabase/config.toml),
+-- server-side, with no reliance on the client behaving.
+--
+-- Manual dashboard step (same category as SMTP/Confirm Email/the abandoned
+-- Password Verification hook): Authentication → Hooks → Add hook →
+-- "Customize Access Token (JWT) Claims hook" → Postgres Function →
+-- public.hook_custom_access_token.
+-- ============================================================================
+
+create or replace function public.hook_custom_access_token(event jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := (event->>'user_id')::uuid;
+begin
+  if v_user_id is not null and public.is_banned(v_user_id) then
+    raise exception '%', coalesce(public.ban_message(v_user_id), 'This account is banned.');
+  end if;
+  return jsonb_build_object('claims', event->'claims');
+end;
+$$;
+
+grant execute on function public.hook_custom_access_token(jsonb) to supabase_auth_admin;
+revoke execute on function public.hook_custom_access_token(jsonb) from authenticated, anon, public;
+-- ============================================================================
+-- ban_message_for_login() — recovers a friendly ban message after a login
+-- attempt fails.
+-- ============================================================================
+-- The hook_custom_access_token Auth Hook genuinely blocks a banned
+-- account's sign-in server-side (confirmed live), but Supabase Auth turns
+-- any Postgres hook exception into a generic "Error running hook..."
+-- message for the client — it does not forward the exception text itself.
+-- So after a failed sign-in, the client calls this (anon-callable, since
+-- they're not authenticated yet) with the email/username they typed to
+-- ask "was that a ban, and if so, what does it say" and shows that instead
+-- of the generic error when the answer is non-null.
+--
+-- This can't be used to enumerate accounts: it returns null for both "no
+-- such account" and "account exists but isn't banned" — the two cases a
+-- wrong password already produces indistinguishably today — and only ever
+-- returns non-null for a genuinely banned account, which is exactly the
+-- information a banned player is supposed to see.
+-- ============================================================================
+
+create or replace function public.ban_message_for_login(p_identifier text)
+returns text
+language plpgsql
+security definer
+set search_path = public, auth
+stable
+as $$
+declare
+  v_user_id uuid;
+begin
+  if p_identifier like '%@%' then
+    select u.id into v_user_id from auth.users u where lower(u.email) = lower(p_identifier);
+  else
+    select p.id into v_user_id from public.profiles p where lower(p.username) = lower(p_identifier);
+  end if;
+
+  if v_user_id is null then
+    return null;
+  end if;
+
+  return public.ban_message(v_user_id);
+end;
+$$;
+
+grant execute on function public.ban_message_for_login(text) to anon, authenticated;

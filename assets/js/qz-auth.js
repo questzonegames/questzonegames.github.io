@@ -72,6 +72,27 @@
 
     const { data, error } = await c.auth.signInWithPassword({ email, password });
     if (error) {
+      // A banned account is rejected server-side by the hook_custom_access_
+      // token Auth Hook — genuinely secure, but Supabase turns any Postgres
+      // hook exception into a generic "Error running hook..." message
+      // rather than forwarding its text. Recover the real reason so a
+      // banned player actually sees why, instead of a confusing error.
+      //
+      // Only do that lookup when the error actually came from the hook
+      // (its message mentions "hook") — NOT on every failed sign-in.
+      // signInWithPassword rejects a WRONG PASSWORD before the hook ever
+      // runs, so gating on this keeps that case showing Supabase's normal
+      // "Invalid login credentials" and never reveals that a given email
+      // belongs to a banned account to someone who doesn't already know
+      // its correct password.
+      if (/hook/i.test(error.message || '')) {
+        let banMsg = null;
+        try {
+          const banRes = await c.rpc('ban_message_for_login', { p_identifier: email });
+          banMsg = banRes.data;
+        } catch (_) { /* fall through to the original error below */ }
+        if (banMsg) throw new Error(banMsg);
+      }
       // Supabase's own message ("Invalid login credentials") doesn't leak
       // whether the account exists — keep that property for username logins too.
       throw error;
