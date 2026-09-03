@@ -34,20 +34,29 @@
 
   // Real (gender, skinColour) body art that actually exists as files today
   // — see assets/js/character-data.js for the matching options list a
-  // Customise screen offers. Anything not in here (an unbuilt skin tone, or
-  // female entirely until its base art exists) falls back to the site's
-  // original default body rather than a broken image — same "only real
-  // options are ever exposed" rule as everywhere else this pattern is used.
+  // Customise screen offers. 'male-normal' is deliberately handled
+  // separately below: it's the site's original default character
+  // (avatar-*.png, predating skin tones entirely), always male-presenting,
+  // so it must never be what an unavailable FEMALE combo silently falls
+  // back to — that exact mistake once shipped (a "Female" selection with
+  // no real art rendered this male body under the Female label). Female
+  // has zero entries in AVAILABLE_BASES on purpose; character-data.js's
+  // empty female skinColours list is what makes profile/customise.html
+  // disable the Female button entirely until real art exists, so this
+  // fallback path should never actually be reachable for gender:'female'
+  // in practice — but if it ever is, it still only ever resolves to the
+  // one body that's actually real (male-normal), never a mislabeled one.
   const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true };
 
   function baseSrc(pose, gender, skinColour) {
-    const key = (gender || 'male') + '-' + (skinColour || 'default');
+    const key = (gender || 'male') + '-' + (skinColour || 'normal');
+    if (key === 'male-normal') return BASE_DIR + 'avatar-' + pose + '.png';
     if (AVAILABLE_BASES[key]) return BASE_DIR + key + '-' + pose + '.png';
     return BASE_DIR + 'avatar-' + pose + '.png';
   }
 
   function defaultFrames() {
-    return POSES.map((pose) => ({ key: pose, src: baseSrc(pose, 'male', 'default') }));
+    return POSES.map((pose) => ({ key: pose, src: baseSrc(pose, 'male', 'normal') }));
   }
 
   function reduceMotion() {

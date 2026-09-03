@@ -15,7 +15,8 @@
 -- 20260903014514_access_token_hook.sql, 20260903014729_ban_message_for_login.sql,
 -- 20260903034135_admin_account_info.sql, 20260903034846_fix_account_info_types.sql,
 -- 20260903040317_admin_edit_controls.sql, 20260903042739_admin_inventory_gifting.sql,
--- and 20260903053242_avatar_customization.sql).
+-- 20260903053242_avatar_customization.sql, and
+-- 20260903062722_avatar_skin_colour_normal_default.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -1239,3 +1240,14 @@ exception
     raise exception 'That username is already taken.';
 end;
 $$;
+-- ============================================================================
+-- The site's original default character (assets/img/avatar/avatar-*.png)
+-- is a male skin tone called "normal" now, not a generic "default" — see
+-- assets/js/character-data.js / avatar-viewer.js for why (a "default" key
+-- was accidentally shared between genders and could resolve to the male
+-- body under a Female label). New signups should get the correct key from
+-- day one; existing rows were already backfilled by hand.
+-- ============================================================================
+
+alter table public.avatar_customization
+  alter column skin_colour set default 'normal';

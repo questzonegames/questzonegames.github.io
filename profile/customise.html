@@ -163,6 +163,10 @@
     background: linear-gradient(180deg, rgba(59,130,246,0.28) 0%, rgba(28,58,143,0.35) 100%);
     box-shadow: 0 0 14px rgba(70,140,255,0.4);
   }
+  .cc-gender-btn:disabled {
+    cursor: default; opacity: 0.45;
+  }
+  .cc-gender-btn:disabled:hover { color: var(--text-dim); border-color: rgba(120,160,220,0.3); }
 
   .cc-confirm-row { margin-top: clamp(18px, 2.6vw, 26px); display: flex; justify-content: center; }
   .cc-confirm-btn {
@@ -329,7 +333,7 @@
   let uid = null;
   let client = null;
   let avatar = null;
-  let current = { gender: 'male', hair_style: 'default', hair_colour: 'default', beard_style: 'none', beard_colour: 'default', skin_colour: 'default' };
+  let current = { gender: 'male', hair_style: 'default', hair_colour: 'default', beard_style: 'none', beard_colour: 'default', skin_colour: 'normal' };
 
   // ---- generic cycler ----
   function svgArrow(dir) {
@@ -394,15 +398,24 @@
     const genderRoot = document.getElementById('cc-gender-toggle');
     genderRoot.innerHTML = '';
     OPTS.genders.forEach((g) => {
+      // a gender with no real skin-tone art yet (currently female) is
+      // shown but not selectable — same "only real options are ever
+      // clickable" rule as the Design/Colour cyclers, rather than letting
+      // it be picked and silently fall back to a different gender's body
+      const hasRealArt = (OPTS.skinColours[g.key] || []).length > 0;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cc-gender-btn' + (current.gender === g.key ? ' active' : '');
-      btn.textContent = g.label;
-      btn.addEventListener('click', () => {
-        current.gender = g.key;
-        normalizeForGender(g.key);
-        renderAll();
-      });
+      btn.textContent = g.label + (hasRealArt ? '' : ' (Coming Soon)');
+      if (!hasRealArt) {
+        btn.disabled = true;
+      } else {
+        btn.addEventListener('click', () => {
+          current.gender = g.key;
+          normalizeForGender(g.key);
+          renderAll();
+        });
+      }
       genderRoot.appendChild(btn);
     });
 

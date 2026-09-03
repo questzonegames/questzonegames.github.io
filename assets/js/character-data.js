@@ -48,14 +48,23 @@
   // art is a full body render per combination (see assets/img/avatar/), not
   // a tintable layer, so what's available genuinely differs per gender
   // until matching art exists for both.
+  //
+  // 'normal' is the site's original default character (assets/img/avatar/
+  // avatar-*.png, predating this whole customization system) — it was
+  // always a male-presenting body, so it belongs here as male's third skin
+  // tone, not as a stand-in "female" look. female is deliberately EMPTY:
+  // there is no female base art at all yet, and profile/customise.html
+  // disables the Female button whenever a gender's list is empty rather
+  // than letting it silently fall back to showing the male body under the
+  // wrong label (a real bug this project actually shipped once — see the
+  // avatar-viewer.js comment on AVAILABLE_BASES).
   const SKIN_COLOURS = {
     male: [
+      { key: 'normal', label: 'Normal' },
       { key: 'black', label: 'Black' },
       { key: 'pale', label: 'Pale' }
     ],
-    female: [
-      { key: 'default', label: 'Default' }
-    ]
+    female: []
   };
 
   window.QZ_CHARACTER_OPTIONS = {
