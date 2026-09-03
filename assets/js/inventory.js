@@ -59,6 +59,8 @@
   let client = null;
   let uid = null;                 // the SIGNED-IN account's own id — always the caller, never the viewed account
   let viewUserId = null;          // whose inventory is being shown — uid, unless adminReadOnly
+  let viewUsername = null;        // that account's username, ONLY set in admin view — named explicitly in the
+                                   // remove-item confirmation so it's never ambiguous which account is affected
   let adminReadOnly = false;      // true when an admin is viewing someone else's inventory (view-only)
   let ownedIds = new Set();       // item ids this account owns (inventory_items)
   let acquiredAtById = {};        // item id -> inventory_items.acquired_at (ISO string)
@@ -133,14 +135,19 @@
   // database even if called directly by a non-admin.
   async function adminDeleteItem(item) {
     if (!adminReadOnly || !client) return;
-    if (!window.confirm('Remove "' + item.name + '" from this account’s inventory? This cannot be undone.')) return;
+    // Names the account explicitly (not just "this account") so which
+    // inventory is about to be touched is never ambiguous before an
+    // irreversible delete — the account itself is also verified server-
+    // side by admin_delete_inventory_item's own p_user parameter, this is
+    // just making sure the ADMIN clicking confirm sees it plainly too.
+    if (!window.confirm('Remove "' + item.name + '" from ' + (viewUsername || 'this account') + '’s inventory? This cannot be undone.')) return;
     const { error } = await client.rpc('admin_delete_inventory_item', { p_user: viewUserId, p_item_id: item.id });
     if (error) { window.alert('Could not remove item: ' + error.message); return; }
     ownedIds.delete(item.id);
     delete acquiredAtById[item.id];
     Object.keys(equipped).forEach((slot) => { if (equipped[slot] === item.id) delete equipped[slot]; });
     renderAll();
-    if (window.qzToast) window.qzToast('Removed "' + item.name + '" from this account’s inventory.');
+    if (window.qzToast) window.qzToast('Removed "' + item.name + '" from ' + (viewUsername || 'this account') + '’s inventory.');
   }
 
   // ---------------- context menu ----------------
@@ -546,6 +553,7 @@
         return;
       }
       viewUserId = targetId;
+      viewUsername = targetProfile.username;
       adminReadOnly = true;
       if (nameEl) nameEl.textContent = targetProfile.username;
 
