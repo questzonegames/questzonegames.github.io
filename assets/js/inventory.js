@@ -626,6 +626,15 @@
     if (gridEl) gridEl.hidden = false;
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  // Never leave the page stuck on "Loading your inventory…" — if anything
+  // above throws (a bad equipped item, a bug, a dropped request), surface
+  // it instead of silently hanging forever with no visible explanation.
+  function initSafe() {
+    init().catch((err) => {
+      console.error('Inventory failed to load:', err);
+      setState('<div class="icon">⚠️</div>Something went wrong loading your inventory.<br><br><a class="btn btn-chrome-dark" href="index.html">‹ Back to Profile</a>');
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSafe);
+  else initSafe();
 })();
