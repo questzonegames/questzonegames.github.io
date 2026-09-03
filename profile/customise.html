@@ -502,7 +502,13 @@
     contentEl.hidden = false;
   }
 
-  init();
+  // Never leave the page stuck on "Loading…" — if anything above throws
+  // (a bad equipped item, a bug, a dropped request), surface it instead of
+  // silently hanging forever with no visible explanation.
+  init().catch((err) => {
+    console.error('Character Creation failed to load:', err);
+    setState('<div class="icon">⚠️</div>Something went wrong loading your character.<br><br><a class="btn btn-chrome-blue" href="index.html">‹ Back to Profile</a>');
+  });
 </script>
 </body>
 </html>

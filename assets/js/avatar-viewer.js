@@ -278,7 +278,7 @@
     }
     function setEquipLayer(slotKey, views) {
       clearEquipLayer(slotKey);
-      const limgs = FRAMES.map((f) => {
+      const limgs = POSES.map((pose) => {
         const img = document.createElement('img');
         // both a slot-general class (avatar-equip-head) and a per-
         // direction one (avatar-equip-head-front/-right/-back/-left) —
@@ -286,8 +286,8 @@
         // item can also carry its own per-direction scale/offset/tilt
         // via the more specific class when a single placement doesn't
         // fit every angle (e.g. side views needing a narrower crown)
-        img.className = 'avatar-equip-layer avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + f.key;
-        img.src = views[f.key];
+        img.className = 'avatar-equip-layer avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
+        img.src = views[pose];
         img.alt = '';
         img.setAttribute('aria-hidden', 'true');
         img.decoding = 'async';
