@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin — Quest Zone</title>
+<title>Admin Zone — Quest Zone</title>
 <link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
@@ -46,12 +46,26 @@
   }
   .admin-state .icon { font-size: 34px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
 
+  .admin-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .admin-search { position: relative; min-width: 220px; flex: 1 1 260px; max-width: 360px; }
+  .admin-search input {
+    width: 100%; padding: 9px 14px 9px 34px; border-radius: 8px;
+    border: 1.5px solid rgba(120,160,220,0.3); background: rgba(4,8,16,0.65);
+    color: var(--text); font-size: 12.5px;
+  }
+  .admin-search input:focus { outline: none; border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+  .admin-search::before {
+    content: '🔍'; position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    font-size: 12px; opacity: 0.6; pointer-events: none;
+  }
+  .admin-hint { font-size: 11px; color: var(--text-dim); }
+
   .admin-table-wrap {
     overflow-x: auto;
     border-radius: 11px;
     border: 1.5px solid rgba(120,160,220,0.25);
   }
-  table.admin-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 760px; }
+  table.admin-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 820px; }
   table.admin-table th, table.admin-table td {
     padding: 10px 14px; text-align: left; white-space: nowrap;
     border-bottom: 1px solid rgba(120,160,220,0.15);
@@ -61,7 +75,8 @@
     text-transform: uppercase; color: var(--text-dim);
     background: rgba(10,16,30,0.7);
   }
-  table.admin-table tbody tr:hover { background: rgba(59,130,246,0.06); }
+  table.admin-table tbody tr { cursor: pointer; transition: background 0.12s ease; }
+  table.admin-table tbody tr:hover { background: rgba(59,130,246,0.09); }
   table.admin-table td.mono { font-variant-numeric: tabular-nums; }
   .admin-tag {
     display: inline-block; padding: 2px 8px; border-radius: 5px;
@@ -69,6 +84,9 @@
   }
   .admin-tag.admin { background: rgba(59,130,246,0.22); color: var(--blue-light); border: 1px solid rgba(90,150,255,0.4); }
   .admin-tag.player { background: rgba(140,160,190,0.12); color: var(--text-dim); border: 1px solid rgba(140,160,190,0.25); }
+  .admin-tag.active { background: rgba(60,200,120,0.14); color: #6be3a0; border: 1px solid rgba(90,220,150,0.35); }
+  .admin-tag.banned { background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.4); }
+  .admin-row-you td:first-child { color: var(--blue-light); }
 
   .admin-summary { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
   .admin-stat {
@@ -78,6 +96,118 @@
   }
   .admin-stat .n { font-family: 'Orbitron', sans-serif; font-size: 20px; color: #fff; }
   .admin-stat .l { font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+
+  /* ---- context menu (mirrors profile/inventory.html's qz-context-menu) ---- */
+  .qz-context-menu {
+    position: fixed; z-index: 500; min-width: 170px; padding: 6px;
+    border-radius: 9px; border: 1.5px solid rgba(140,195,255,0.4);
+    background: linear-gradient(165deg, #101a30 0%, #060b16 100%);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.55), 0 0 20px rgba(60,140,255,0.25);
+  }
+  .qz-context-menu button {
+    display: block; width: 100%; text-align: left; padding: 8px 10px;
+    border-radius: 6px; border: none; background: transparent; color: var(--text);
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.06em;
+    cursor: pointer; transition: background 0.12s ease, color 0.12s ease;
+  }
+  .qz-context-menu button:hover { background: rgba(59,130,246,0.22); color: #fff; }
+  .qz-context-menu button.danger:hover { background: rgba(240,70,70,0.22); color: #ffb4b4; }
+  .qz-context-menu .sep { height: 1px; margin: 5px 4px; background: rgba(140,160,190,0.18); }
+
+  /* ---- modal backdrop shared by the profile detail + ban dialogs ---- */
+  .qz-backdrop {
+    position: fixed; inset: 0; z-index: 600; display: none;
+    align-items: flex-start; justify-content: center;
+    padding: 5vh 16px; overflow-y: auto;
+    background: rgba(4,7,14,0.72); backdrop-filter: blur(3px);
+  }
+  .qz-backdrop.show { display: flex; }
+  .qz-modal {
+    position: relative; width: 100%; max-width: 720px;
+    border: 1.5px solid rgba(140,195,255,0.35); border-radius: 14px;
+    background: var(--qp-fill);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(60,140,255,0.15);
+    padding: 26px clamp(16px, 3vw, 30px) 28px;
+  }
+  .qz-modal.narrow { max-width: 440px; }
+  .qz-modal-close {
+    position: absolute; top: 14px; right: 14px; width: 30px; height: 30px;
+    border-radius: 50%; border: 1.5px solid rgba(140,160,190,0.3); background: rgba(10,16,28,0.7);
+    color: var(--text-dim); font-size: 15px; cursor: pointer; line-height: 1;
+  }
+  .qz-modal-close:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+
+  .adet-head { display: flex; gap: 20px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+  .adet-avatar { width: 110px; height: 110px; border-radius: 12px; overflow: hidden; position: relative; flex: none;
+    border: 1.5px solid rgba(120,160,220,0.3); background: radial-gradient(circle at 50% 30%, rgba(60,110,200,0.25), rgba(4,8,16,0.9)); }
+  .adet-avatar #admin-detail-avatar { position: absolute; inset: 0; }
+  .adet-avatar img { position: absolute; left: 50%; bottom: 0; height: 96%; transform: translateX(-50%); }
+  .adet-id h2 { margin: 0 0 4px; font-family: 'Orbitron', sans-serif; font-size: 19px; color: #fff; }
+  .adet-id .meta { font-size: 11.5px; color: var(--text-dim); }
+  .adet-id .tags { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .adet-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .adet-stats .admin-stat { padding: 8px 14px; }
+  .adet-stats .admin-stat .n { font-size: 17px; }
+
+  .adet-section { margin-bottom: 20px; }
+  .adet-section h3 {
+    margin: 0 0 10px; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--blue-light);
+  }
+  .adet-ban-banner {
+    padding: 10px 14px; border-radius: 9px; margin-bottom: 18px; font-size: 12px; line-height: 1.6;
+    background: rgba(240,70,70,0.12); border: 1px solid rgba(240,90,90,0.4); color: #ffb4b4;
+  }
+
+  .adet-skills { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
+  .adet-skill { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 7px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(120,160,220,0.15); font-size: 11.5px; }
+  .adet-skill .lvl { font-family: 'Orbitron', sans-serif; color: var(--blue-light); }
+
+  .adet-empty { font-size: 12px; color: var(--text-dim); padding: 8px 2px; }
+
+  .adet-ach-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+  .adet-ach { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(120,160,220,0.15); font-size: 12px; }
+  .adet-ach .tier { margin-left: auto; font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; }
+
+  .adet-inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
+  .adet-inv-card { border-radius: 9px; padding: 10px 8px; text-align: center; cursor: context-menu;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(120,160,220,0.18); }
+  .adet-inv-card .ic { font-size: 26px; display: block; margin-bottom: 4px; }
+  .adet-inv-card img { width: 40px; height: 40px; object-fit: contain; margin-bottom: 4px; }
+  .adet-inv-card .nm { font-size: 10.5px; color: var(--text); display: block; }
+  .adet-inv-card .sl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
+
+  .adet-ban-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* ---- ban modal form ---- */
+  .ban-target { font-size: 12.5px; color: var(--text-dim); margin-bottom: 16px; }
+  .ban-target b { color: #fff; }
+  .ban-field { margin-bottom: 14px; }
+  .ban-field label { display: block; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+  .ban-type-toggle { display: flex; gap: 8px; }
+  .ban-type-toggle button {
+    flex: 1; padding: 9px; border-radius: 8px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text-dim); font-family: 'Orbitron', sans-serif;
+    font-size: 11px; letter-spacing: 0.05em; cursor: pointer;
+  }
+  .ban-type-toggle button.active.temp { border-color: var(--blue-light); color: var(--blue-light); background: rgba(59,130,246,0.15); }
+  .ban-type-toggle button.active.perm { border-color: rgba(240,90,90,0.6); color: #ff9d9d; background: rgba(240,70,70,0.15); }
+  .ban-duration-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ban-duration-presets button {
+    padding: 6px 11px; border-radius: 7px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text-dim); font-size: 11px; cursor: pointer;
+  }
+  .ban-duration-presets button.active { border-color: var(--blue-light); color: var(--blue-light); background: rgba(59,130,246,0.15); }
+  .ban-field input[type="number"], .ban-field textarea {
+    width: 100%; padding: 9px 12px; border-radius: 8px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.65); color: var(--text); font-size: 12.5px; font-family: inherit;
+  }
+  .ban-field textarea { resize: vertical; min-height: 64px; }
+  .ban-error { font-size: 12px; color: #ff9d9d; margin-bottom: 12px; display: none; }
+  .ban-error.show { display: block; }
 </style>
 </head>
 <body>
@@ -107,22 +237,30 @@
   <div class="container">
     <div class="admin-frame bezel-lg">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
-      <h1 class="admin-heading"><span class="dash"></span>Admin<span class="dash"></span></h1>
+      <h1 class="admin-heading"><span class="dash"></span>Admin Zone<span class="dash"></span></h1>
 
       <div id="admin-state" class="admin-state">Checking access…</div>
       <div id="admin-content" hidden>
         <div class="admin-summary" id="admin-summary"></div>
+
+        <div class="admin-toolbar">
+          <div class="admin-search">
+            <input type="text" id="admin-search-input" placeholder="Search by username…" autocomplete="off">
+          </div>
+          <span class="admin-hint">Click a row to view a full profile · Right-click for quick actions</span>
+        </div>
+
         <div class="admin-table-wrap">
           <table class="admin-table">
             <thead>
               <tr>
                 <th>Username</th>
                 <th>Role</th>
+                <th>Status</th>
                 <th>Joined</th>
-                <th>Total XP</th>
-                <th>Games w/ XP</th>
+                <th>Total Level</th>
+                <th>Quest Points</th>
                 <th>Inventory</th>
-                <th>User ID</th>
               </tr>
             </thead>
             <tbody id="admin-rows"></tbody>
@@ -142,6 +280,80 @@
   </div>
 </footer>
 
+<!-- ---- player detail modal ---- -->
+<div class="qz-backdrop" id="admin-detail-backdrop">
+  <div class="qz-modal" role="dialog" aria-modal="true">
+    <button type="button" class="qz-modal-close" id="admin-detail-close" aria-label="Close">✕</button>
+    <div class="adet-head">
+      <div class="adet-avatar"><div id="admin-detail-avatar"></div></div>
+      <div class="adet-id">
+        <h2 id="adet-username">—</h2>
+        <div class="meta" id="adet-meta">—</div>
+        <div class="tags" id="adet-tags"></div>
+      </div>
+    </div>
+
+    <div id="adet-ban-banner" class="adet-ban-banner" hidden></div>
+
+    <div class="adet-stats" id="adet-stats"></div>
+
+    <div class="adet-section">
+      <h3>Skills</h3>
+      <div class="adet-skills" id="adet-skills"></div>
+    </div>
+
+    <div class="adet-section">
+      <h3>Achievements</h3>
+      <div class="adet-ach-list" id="adet-achievements"></div>
+    </div>
+
+    <div class="adet-section">
+      <h3>Inventory <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);">— right-click an item to delete it</span></h3>
+      <div class="adet-inv-grid" id="adet-inventory"></div>
+    </div>
+
+    <div class="adet-section">
+      <h3>Moderation</h3>
+      <div class="adet-ban-actions" id="adet-ban-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ---- ban modal ---- -->
+<div class="qz-backdrop" id="ban-backdrop">
+  <div class="qz-modal narrow" role="dialog" aria-modal="true">
+    <button type="button" class="qz-modal-close" id="ban-modal-close" aria-label="Close">✕</button>
+    <h2 style="margin:0 0 4px;font-family:'Orbitron',sans-serif;font-size:16px;color:#fff;">Ban Account</h2>
+    <div class="ban-target">Banning <b id="ban-target-username">—</b></div>
+
+    <div class="ban-error" id="ban-error"></div>
+
+    <div class="ban-field">
+      <label>Ban type</label>
+      <div class="ban-type-toggle">
+        <button type="button" id="ban-type-temp" class="temp">Temporary</button>
+        <button type="button" id="ban-type-perm" class="perm">Permanent</button>
+      </div>
+    </div>
+
+    <div class="ban-field" id="ban-duration-field">
+      <label>Duration</label>
+      <div class="ban-duration-presets" id="ban-duration-presets"></div>
+      <input type="number" id="ban-custom-hours" min="1" step="1" placeholder="Or enter custom hours…">
+    </div>
+
+    <div class="ban-field">
+      <label>Reason</label>
+      <textarea id="ban-reason" placeholder="Why is this account being banned? Shown to the player."></textarea>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button type="button" class="btn btn-chrome-dark" id="ban-cancel">Cancel</button>
+      <button type="button" class="btn btn-chrome-blue" id="ban-confirm" style="background:linear-gradient(135deg,#c0392b,#8e2b20);">Ban Account</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="../assets/js/qz-config.js"></script>
 <script src="../assets/js/qz-auth.js"></script>
@@ -149,21 +361,43 @@
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
+<script src="../assets/js/inventory-data.js"></script>
+<script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script>
-  // This page's ONLY real protection is Row Level Security: the queries
-  // below ask Postgres for every row in profiles/game_progress/
-  // inventory_items, and the database itself hands back nothing but the
-  // caller's own row unless their profile is flagged is_admin (see
-  // supabase/schema.sql — is_admin() + the "_select_own_or_admin"
-  // policies). The is_admin check in this script only decides whether to
-  // *render* the table; a non-admin who deletes this whole script via dev
-  // tools and calls the same query by hand still only gets their own row
-  // back, because the database enforces it, not this page.
+  // This page's ONLY real protection is Row Level Security: every query
+  // below asks Postgres for every row across profiles/game_progress/
+  // inventory_items/etc, and the database itself hands back nothing but the
+  // caller's own rows unless their profile is flagged is_admin (see
+  // supabase/schema.sql — is_admin() + the "_select_own_or_admin" policies).
+  // Likewise every write here (ban/unban/delete item) goes through a
+  // SECURITY DEFINER function that re-checks is_admin() itself
+  // (admin_ban_user / admin_unban_user / admin_delete_inventory_item) — a
+  // non-admin who deletes this whole script via dev tools and calls the
+  // same RPCs by hand gets "Not authorized." from the database, not a
+  // client-side check that can be skipped.
   (function () {
     const stateEl = document.getElementById('admin-state');
     const contentEl = document.getElementById('admin-content');
     const summaryEl = document.getElementById('admin-summary');
     const rowsEl = document.getElementById('admin-rows');
+    const searchInput = document.getElementById('admin-search-input');
+
+    const SLOT_LABEL = {
+      head: 'Head', necklace: 'Necklace', body: 'Body', legs: 'Legs', boots: 'Boots',
+      gloves: 'Gloves', back: 'Back', mainHand: 'Main Hand', offHand: 'Off Hand', accessory: 'Accessory'
+    };
+
+    let client = null;
+    let myId = null;
+    let profiles = [];
+    let gamesList = [];
+    let progressByUser = {};
+    let inventoryByUser = {};
+    let equippedByUser = {};
+    let achievementsByUser = {};
+    let currentDetailUser = null;
+    let banTargetUser = null;
+    let detailAvatar = null;
 
     function setState(html) { stateEl.innerHTML = html; stateEl.hidden = false; contentEl.hidden = true; }
 
@@ -173,6 +407,398 @@
       }[c]));
     }
 
+    function isBanned(p) {
+      if (!p) return false;
+      if (p.banned_permanently) return true;
+      return !!(p.banned_until && new Date(p.banned_until) > new Date());
+    }
+
+    function banStatusLabel(p) {
+      if (p.banned_permanently) return 'Banned permanently';
+      if (p.banned_until && new Date(p.banned_until) > new Date()) {
+        return 'Banned until ' + formatUk(p.banned_until);
+      }
+      return null;
+    }
+
+    function formatUk(iso) {
+      const d = new Date(iso);
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const year = d.getUTCFullYear();
+      let hours = d.getUTCHours();
+      const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12; if (hours === 0) hours = 12;
+      return hours + ':' + minutes + ' ' + ampm + ' on ' + day + '/' + month + '/' + year + ' (UTC)';
+    }
+
+    function totalLevelFor(userId) {
+      const rows = progressByUser[userId] || [];
+      const sum = rows.reduce((acc, r) => acc + (Number(r.level || 1) - 1), 0);
+      return gamesList.length + sum;
+    }
+
+    // ---------------- context menu (mirrors profile/inventory.html) ----------------
+    let menuEl = null;
+    function closeMenu() {
+      if (menuEl) { menuEl.remove(); menuEl = null; }
+      document.removeEventListener('pointerdown', onOutsidePointer, true);
+      document.removeEventListener('keydown', onMenuKey, true);
+    }
+    function onOutsidePointer(e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }
+    function onMenuKey(e) { if (e.key === 'Escape') closeMenu(); }
+    function openMenu(x, y, actions) {
+      closeMenu();
+      menuEl = document.createElement('div');
+      menuEl.className = 'qz-context-menu';
+      actions.forEach((a) => {
+        if (a.sep) { const s = document.createElement('div'); s.className = 'sep'; menuEl.appendChild(s); return; }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if (a.danger) btn.className = 'danger';
+        btn.textContent = a.label;
+        btn.addEventListener('click', () => { closeMenu(); a.onClick(); });
+        menuEl.appendChild(btn);
+      });
+      document.body.appendChild(menuEl);
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const rect = menuEl.getBoundingClientRect();
+      const left = Math.min(x, vw - rect.width - 8);
+      const top = Math.min(y, vh - rect.height - 8);
+      menuEl.style.left = Math.max(8, left) + 'px';
+      menuEl.style.top = Math.max(8, top) + 'px';
+      setTimeout(() => {
+        document.addEventListener('pointerdown', onOutsidePointer, true);
+        document.addEventListener('keydown', onMenuKey, true);
+      }, 0);
+    }
+
+    function rowContextActions(p) {
+      const actions = [
+        { label: 'VIEW FULL PROFILE', onClick: () => openDetail(p.id) }
+      ];
+      actions.push({ sep: true });
+      if (isBanned(p)) {
+        actions.push({ label: 'UNBAN ACCOUNT', onClick: () => doUnban(p) });
+      } else if (p.id !== myId) {
+        actions.push({ label: 'BAN TEMPORARILY', onClick: () => openBanModal(p, false) });
+        actions.push({ label: 'BAN PERMANENTLY', danger: true, onClick: () => openBanModal(p, true) });
+      }
+      return actions;
+    }
+
+    // ---------------- table ----------------
+    function renderTable() {
+      const q = (searchInput.value || '').trim().toLowerCase();
+      const filtered = q ? profiles.filter((p) => p.username.toLowerCase().includes(q)) : profiles;
+
+      rowsEl.innerHTML = '';
+      if (!filtered.length) {
+        rowsEl.innerHTML = '<tr><td colspan="7" style="color:var(--text-dim);">No matching accounts.</td></tr>';
+        return;
+      }
+
+      filtered.forEach((p) => {
+        const tr = document.createElement('tr');
+        if (p.id === myId) tr.className = 'admin-row-you';
+        const banned = isBanned(p);
+        const statusLabel = banned ? banStatusLabel(p) : 'Active';
+        const joined = p.created_at ? new Date(p.created_at).toLocaleDateString() : '—';
+        const invCount = (inventoryByUser[p.id] || []).length;
+
+        tr.innerHTML =
+          '<td>' + escapeHtml(p.username) + (p.id === myId ? ' <span style="color:var(--text-dim);font-size:10.5px;">(you)</span>' : '') + '</td>' +
+          '<td><span class="admin-tag ' + (p.is_admin ? 'admin">Admin' : 'player">Player') + '</span></td>' +
+          '<td><span class="admin-tag ' + (banned ? 'banned' : 'active') + '">' + escapeHtml(statusLabel) + '</span></td>' +
+          '<td>' + joined + '</td>' +
+          '<td class="mono">' + totalLevelFor(p.id) + '</td>' +
+          '<td class="mono">' + Number(p.quest_points || 0).toLocaleString() + '</td>' +
+          '<td class="mono">' + invCount + '</td>';
+
+        tr.addEventListener('click', () => openDetail(p.id));
+        tr.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          openMenu(e.clientX, e.clientY, rowContextActions(p));
+        });
+        rowsEl.appendChild(tr);
+      });
+    }
+
+    searchInput.addEventListener('input', renderTable);
+
+    // ---------------- detail modal ----------------
+    const detailBackdrop = document.getElementById('admin-detail-backdrop');
+    document.getElementById('admin-detail-close').addEventListener('click', closeDetail);
+    detailBackdrop.addEventListener('click', (e) => { if (e.target === detailBackdrop) closeDetail(); });
+
+    function closeDetail() {
+      detailBackdrop.classList.remove('show');
+      currentDetailUser = null;
+    }
+
+    function catalogItem(itemId) {
+      return (window.QZ_ITEM_CATALOG || []).find((i) => i.id === itemId) || null;
+    }
+
+    function openDetail(userId) {
+      const p = profiles.find((x) => x.id === userId);
+      if (!p) return;
+      currentDetailUser = p;
+
+      document.getElementById('adet-username').textContent = p.username;
+      document.getElementById('adet-meta').textContent =
+        'Joined ' + (p.created_at ? new Date(p.created_at).toLocaleString() : '—') + ' · ' + p.id;
+
+      const tagsEl = document.getElementById('adet-tags');
+      tagsEl.innerHTML = '<span class="admin-tag ' + (p.is_admin ? 'admin">Admin' : 'player">Player') + '</span>';
+
+      const banBanner = document.getElementById('adet-ban-banner');
+      const banned = isBanned(p);
+      if (banned) {
+        banBanner.hidden = false;
+        banBanner.textContent = '🚫 ' + banStatusLabel(p) + (p.ban_reason ? ' — Reason: ' + p.ban_reason : '');
+        tagsEl.innerHTML += '<span class="admin-tag banned">Banned</span>';
+      } else {
+        banBanner.hidden = true;
+      }
+
+      document.getElementById('adet-stats').innerHTML =
+        '<div class="admin-stat"><div class="n">' + totalLevelFor(p.id) + '</div><div class="l">Total Level</div></div>' +
+        '<div class="admin-stat"><div class="n">' + Number(p.quest_points || 0).toLocaleString() + '</div><div class="l">Quest Points</div></div>' +
+        '<div class="admin-stat"><div class="n">' + (inventoryByUser[p.id] || []).length + '</div><div class="l">Items Owned</div></div>' +
+        '<div class="admin-stat"><div class="n">' + (achievementsByUser[p.id] || []).length + '</div><div class="l">Achievements</div></div>';
+
+      // ---- skills ----
+      const rows = progressByUser[p.id] || [];
+      const rowByGame = {};
+      rows.forEach((r) => { rowByGame[r.game_key] = r; });
+      const skillsEl = document.getElementById('adet-skills');
+      skillsEl.innerHTML = gamesList.map((g) => {
+        const r = rowByGame[g.game_key];
+        const xp = r ? Number(r.xp || 0) : 0;
+        const disp = window.QZXp ? window.QZXp.displayLevel(xp) : { base: r ? r.level : 1, isVirtual: false };
+        const lvlText = disp.isVirtual ? disp.base + ' (Virtual ' + disp.virtual + ')' : String(disp.base);
+        return '<div class="adet-skill"><span>' + escapeHtml(g.name) + '</span><span class="lvl">Lv ' + lvlText + '</span></div>';
+      }).join('') || '<div class="adet-empty">No games registered yet.</div>';
+
+      // ---- achievements ----
+      const achEl = document.getElementById('adet-achievements');
+      const achievements = achievementsByUser[p.id] || [];
+      achEl.innerHTML = achievements.length
+        ? achievements.map((a) => (
+            '<div class="adet-ach">' +
+              '<span>' + (a.icon || '🏆') + '</span>' +
+              '<span>' + escapeHtml(a.name) + '</span>' +
+              '<span class="tier">' + escapeHtml(a.tier || '') + '</span>' +
+            '</div>'
+          )).join('')
+        : '<div class="adet-empty">No achievements unlocked yet.</div>';
+
+      // ---- inventory ----
+      const invEl = document.getElementById('adet-inventory');
+      const items = inventoryByUser[p.id] || [];
+      invEl.innerHTML = '';
+      if (!items.length) {
+        invEl.innerHTML = '<div class="adet-empty">Inventory is empty.</div>';
+      } else {
+        items.forEach((row) => {
+          const item = catalogItem(row.item_id);
+          const card = document.createElement('div');
+          card.className = 'adet-inv-card';
+          const name = item ? item.name : row.item_id;
+          const slotLabel = item ? (SLOT_LABEL[item.slot] || item.slot) + ' Slot' : '';
+          const thumb = item && item.views ? '<img src="' + item.views.front + '" alt="">' : '<span class="ic">' + ((item && item.icon) || '❔') + '</span>';
+          card.innerHTML = thumb + '<span class="nm">' + escapeHtml(name) + '</span>' + (slotLabel ? '<span class="sl">' + escapeHtml(slotLabel) + '</span>' : '');
+          card.title = name + (slotLabel ? '\n' + slotLabel : '') + '\nRight-click to delete';
+          card.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            openMenu(e.clientX, e.clientY, [
+              { label: 'DELETE ITEM', danger: true, onClick: () => confirmDeleteItem(p, row.item_id, name) }
+            ]);
+          });
+          invEl.appendChild(card);
+        });
+      }
+
+      // ---- moderation actions ----
+      const banActionsEl = document.getElementById('adet-ban-actions');
+      banActionsEl.innerHTML = '';
+      if (p.id === myId) {
+        banActionsEl.innerHTML = '<span class="admin-hint">You can’t ban your own account.</span>';
+      } else if (banned) {
+        const unbanBtn = document.createElement('button');
+        unbanBtn.type = 'button';
+        unbanBtn.className = 'btn btn-chrome-blue';
+        unbanBtn.textContent = 'Unban Account';
+        unbanBtn.addEventListener('click', () => doUnban(p));
+        banActionsEl.appendChild(unbanBtn);
+      } else {
+        const tempBtn = document.createElement('button');
+        tempBtn.type = 'button';
+        tempBtn.className = 'btn btn-chrome-dark';
+        tempBtn.textContent = 'Ban Temporarily';
+        tempBtn.addEventListener('click', () => openBanModal(p, false));
+        const permBtn = document.createElement('button');
+        permBtn.type = 'button';
+        permBtn.className = 'btn btn-chrome-blue';
+        permBtn.style.background = 'linear-gradient(135deg,#c0392b,#8e2b20)';
+        permBtn.textContent = 'Ban Permanently';
+        permBtn.addEventListener('click', () => openBanModal(p, true));
+        banActionsEl.appendChild(tempBtn);
+        banActionsEl.appendChild(permBtn);
+      }
+
+      // ---- avatar ----
+      const avatarHost = document.getElementById('admin-detail-avatar');
+      avatarHost.innerHTML = '';
+      if (window.QZAvatarViewer) {
+        detailAvatar = window.QZAvatarViewer.mount(avatarHost);
+        const equipped = equippedByUser[p.id] || {};
+        const catalogById = {};
+        (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+        const equipMap = {};
+        Object.keys(equipped).forEach((slot) => {
+          const itemId = equipped[slot];
+          if (itemId && catalogById[itemId]) equipMap[slot] = catalogById[itemId];
+        });
+        detailAvatar.setAvatarEquipment(equipMap);
+      }
+
+      detailBackdrop.classList.add('show');
+    }
+
+    async function confirmDeleteItem(p, itemId, name) {
+      if (!window.confirm('Delete "' + name + '" from ' + p.username + '’s inventory? This cannot be undone.')) return;
+      const { error } = await client.rpc('admin_delete_inventory_item', { p_user: p.id, p_item_id: itemId });
+      if (error) { window.alert('Could not delete item: ' + error.message); return; }
+      inventoryByUser[p.id] = (inventoryByUser[p.id] || []).filter((r) => r.item_id !== itemId);
+      if (equippedByUser[p.id]) {
+        Object.keys(equippedByUser[p.id]).forEach((slot) => {
+          if (equippedByUser[p.id][slot] === itemId) delete equippedByUser[p.id][slot];
+        });
+      }
+      renderTable();
+      if (currentDetailUser && currentDetailUser.id === p.id) openDetail(p.id);
+      if (window.qzToast) window.qzToast('Deleted "' + name + '" from ' + p.username + '’s inventory.');
+    }
+
+    // ---------------- ban modal ----------------
+    const banBackdrop = document.getElementById('ban-backdrop');
+    const banTypeTemp = document.getElementById('ban-type-temp');
+    const banTypePerm = document.getElementById('ban-type-perm');
+    const banDurationField = document.getElementById('ban-duration-field');
+    const banPresetsEl = document.getElementById('ban-duration-presets');
+    const banCustomHours = document.getElementById('ban-custom-hours');
+    const banReasonEl = document.getElementById('ban-reason');
+    const banErrorEl = document.getElementById('ban-error');
+    const PRESETS = [
+      { label: '1 Hour', hours: 1 },
+      { label: '24 Hours', hours: 24 },
+      { label: '7 Days', hours: 24 * 7 },
+      { label: '30 Days', hours: 24 * 30 }
+    ];
+    let banIsPermanent = false;
+    let banSelectedHours = 24;
+
+    PRESETS.forEach((preset) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = preset.label;
+      btn.addEventListener('click', () => {
+        banSelectedHours = preset.hours;
+        banCustomHours.value = '';
+        renderBanPresets();
+      });
+      btn._hours = preset.hours;
+      banPresetsEl.appendChild(btn);
+    });
+    function renderBanPresets() {
+      [...banPresetsEl.children].forEach((btn) => btn.classList.toggle('active', btn._hours === banSelectedHours && !banCustomHours.value));
+    }
+    banCustomHours.addEventListener('input', renderBanPresets);
+
+    function setBanType(permanent) {
+      banIsPermanent = permanent;
+      banTypeTemp.classList.toggle('active', !permanent);
+      banTypePerm.classList.toggle('active', permanent);
+      banDurationField.style.display = permanent ? 'none' : '';
+    }
+    banTypeTemp.addEventListener('click', () => setBanType(false));
+    banTypePerm.addEventListener('click', () => setBanType(true));
+
+    function openBanModal(p, permanent) {
+      banTargetUser = p;
+      document.getElementById('ban-target-username').textContent = p.username;
+      banReasonEl.value = '';
+      banCustomHours.value = '';
+      banSelectedHours = 24;
+      banErrorEl.classList.remove('show');
+      setBanType(!!permanent);
+      renderBanPresets();
+      banBackdrop.classList.add('show');
+    }
+    function closeBanModal() { banBackdrop.classList.remove('show'); banTargetUser = null; }
+    document.getElementById('ban-modal-close').addEventListener('click', closeBanModal);
+    document.getElementById('ban-cancel').addEventListener('click', closeBanModal);
+    banBackdrop.addEventListener('click', (e) => { if (e.target === banBackdrop) closeBanModal(); });
+
+    document.getElementById('ban-confirm').addEventListener('click', async () => {
+      if (!banTargetUser) return;
+      const reason = banReasonEl.value.trim();
+      const hours = banCustomHours.value ? Number(banCustomHours.value) : banSelectedHours;
+
+      if (!banIsPermanent && (!hours || hours <= 0)) {
+        banErrorEl.textContent = 'Choose a duration or enter custom hours.';
+        banErrorEl.classList.add('show');
+        return;
+      }
+
+      const confirmMsg = banIsPermanent
+        ? 'Permanently ban ' + banTargetUser.username + '? They will never be able to log in again unless unbanned.'
+        : 'Ban ' + banTargetUser.username + ' for ' + hours + ' hour(s)?';
+      if (!window.confirm(confirmMsg)) return;
+
+      const { error } = await client.rpc('admin_ban_user', {
+        p_user: banTargetUser.id,
+        p_hours: banIsPermanent ? null : hours,
+        p_permanent: banIsPermanent,
+        p_reason: reason || null
+      });
+      if (error) { banErrorEl.textContent = error.message; banErrorEl.classList.add('show'); return; }
+
+      await reloadOneProfile(banTargetUser.id);
+      renderTable();
+      closeBanModal();
+      if (currentDetailUser && currentDetailUser.id === banTargetUser.id) openDetail(banTargetUser.id);
+      if (window.qzToast) window.qzToast(banTargetUser.username + ' has been banned.');
+    });
+
+    async function doUnban(p) {
+      if (!window.confirm('Lift the ban on ' + p.username + '?')) return;
+      const { error } = await client.rpc('admin_unban_user', { p_user: p.id });
+      if (error) { window.alert('Could not unban: ' + error.message); return; }
+      await reloadOneProfile(p.id);
+      renderTable();
+      if (currentDetailUser && currentDetailUser.id === p.id) openDetail(p.id);
+      if (window.qzToast) window.qzToast(p.username + ' has been unbanned.');
+    }
+
+    async function reloadOneProfile(userId) {
+      const { data, error } = await client.from('profiles').select('*').eq('id', userId).single();
+      if (error || !data) return;
+      const idx = profiles.findIndex((p) => p.id === userId);
+      if (idx >= 0) profiles[idx] = data;
+    }
+
+    // Escape closes whichever modal is open
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (banBackdrop.classList.contains('show')) closeBanModal();
+      else if (detailBackdrop.classList.contains('show')) closeDetail();
+    });
+
+    // ---------------- init ----------------
     async function init() {
       if (!window.QZAuth || !window.QZAuth.configured) {
         setState('<div class="icon">⚠️</div>Accounts aren’t configured on this deployment yet.');
@@ -192,13 +818,17 @@
         return;
       }
 
+      myId = profile.id;
+      client = window.QZAuth.client;
       setState('Loading account data…');
 
-      const client = window.QZAuth.client;
-      const [profilesRes, progressRes, inventoryRes] = await Promise.all([
+      const [profilesRes, gamesRes, progressRes, inventoryRes, equippedRes, unlockedRes] = await Promise.all([
         client.from('profiles').select('*').order('created_at', { ascending: true }),
+        client.from('games').select('game_key, name, sort_order').order('sort_order', { ascending: true }),
         client.from('game_progress').select('*'),
-        client.from('inventory_items').select('user_id')
+        client.from('inventory_items').select('*'),
+        client.from('equipped_items').select('*'),
+        client.from('unlocked_achievements').select('user_id, achievements(achievement_id, name, tier, icon)')
       ]);
 
       if (profilesRes.error) {
@@ -206,41 +836,39 @@
         return;
       }
 
-      const profiles = profilesRes.data || [];
-      const progress = progressRes.data || [];
-      const inventory = inventoryRes.data || [];
+      profiles = profilesRes.data || [];
+      gamesList = gamesRes.data || [];
 
-      const progressByUser = {};
-      progress.forEach((row) => {
+      progressByUser = {};
+      (progressRes.data || []).forEach((row) => {
         (progressByUser[row.user_id] = progressByUser[row.user_id] || []).push(row);
       });
-      const inventoryCountByUser = {};
-      inventory.forEach((row) => {
-        inventoryCountByUser[row.user_id] = (inventoryCountByUser[row.user_id] || 0) + 1;
+
+      inventoryByUser = {};
+      (inventoryRes.data || []).forEach((row) => {
+        (inventoryByUser[row.user_id] = inventoryByUser[row.user_id] || []).push(row);
       });
 
+      equippedByUser = {};
+      (equippedRes.data || []).forEach((row) => {
+        equippedByUser[row.user_id] = equippedByUser[row.user_id] || {};
+        if (row.item_id) equippedByUser[row.user_id][row.slot] = row.item_id;
+      });
+
+      achievementsByUser = {};
+      (unlockedRes.data || []).forEach((row) => {
+        if (!row.achievements) return;
+        (achievementsByUser[row.user_id] = achievementsByUser[row.user_id] || []).push(row.achievements);
+      });
+
+      const bannedCount = profiles.filter(isBanned).length;
       summaryEl.innerHTML =
         '<div class="admin-stat"><div class="n">' + profiles.length + '</div><div class="l">Accounts</div></div>' +
         '<div class="admin-stat"><div class="n">' + profiles.filter((p) => p.is_admin).length + '</div><div class="l">Admins</div></div>' +
-        '<div class="admin-stat"><div class="n">' + progress.length + '</div><div class="l">Game/XP Rows</div></div>' +
-        '<div class="admin-stat"><div class="n">' + inventory.length + '</div><div class="l">Items Owned (all accounts)</div></div>';
+        '<div class="admin-stat"><div class="n">' + bannedCount + '</div><div class="l">Currently Banned</div></div>' +
+        '<div class="admin-stat"><div class="n">' + (inventoryRes.data || []).length + '</div><div class="l">Items Owned (all accounts)</div></div>';
 
-      rowsEl.innerHTML = profiles.map((p) => {
-        const rows = progressByUser[p.id] || [];
-        const totalXp = rows.reduce((sum, r) => sum + Number(r.xp || 0), 0);
-        const joined = p.created_at ? new Date(p.created_at).toLocaleDateString() : '—';
-        return (
-          '<tr>' +
-          '<td>' + escapeHtml(p.username) + '</td>' +
-          '<td><span class="admin-tag ' + (p.is_admin ? 'admin">Admin' : 'player">Player') + '</span></td>' +
-          '<td>' + joined + '</td>' +
-          '<td class="mono">' + totalXp.toLocaleString() + '</td>' +
-          '<td class="mono">' + rows.length + '</td>' +
-          '<td class="mono">' + (inventoryCountByUser[p.id] || 0) + '</td>' +
-          '<td class="mono" style="color:var(--text-dim);font-size:11px;">' + escapeHtml(p.id) + '</td>' +
-          '</tr>'
-        );
-      }).join('') || '<tr><td colspan="7" style="color:var(--text-dim);">No accounts yet.</td></tr>';
+      renderTable();
 
       stateEl.hidden = true;
       contentEl.hidden = false;

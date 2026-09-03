@@ -45,7 +45,7 @@
       const adminBtn = document.createElement('a');
       adminBtn.href = prefix + 'profile/admin.html';
       adminBtn.className = 'btn btn-chrome-blue';
-      adminBtn.textContent = '🛠 Admin';
+      adminBtn.textContent = '🛠 Admin Zone';
       actions.appendChild(adminBtn);
     }
 
@@ -78,6 +78,14 @@
     }
 
     const profile = await window.QZAuth.getProfile();
+
+    const banMessage = await window.QZAuth.enforceNotBanned(profile);
+    if (banMessage) {
+      repointComingSoonAuthLinks(prefix);
+      if (window.qzToast) window.qzToast(banMessage);
+      return;
+    }
+
     renderLoggedIn(actions, prefix, profile);
   }
 

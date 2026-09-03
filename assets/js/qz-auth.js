@@ -76,6 +76,19 @@
       // whether the account exists — keep that property for username logins too.
       throw error;
     }
+
+    // Real enforcement is the Password Verification Auth Hook (server-side,
+    // rejects before a session is even issued — see admin_bans migration).
+    // This is a belt-and-suspenders client-side check for the case where
+    // that hook isn't enabled yet, or a ban lands between hook checks: never
+    // leave a banned account signed in past this point.
+    const profile = await getProfile();
+    if (profile && (profile.banned_permanently || (profile.banned_until && new Date(profile.banned_until) > new Date()))) {
+      const message = await banMessageFor(profile);
+      await signOut();
+      throw new Error(message);
+    }
+
     return data;
   }
 
@@ -100,5 +113,31 @@
     return data;
   }
 
-  window.QZAuth = { client, configured, isEmail, signUp, signIn, signOut, getSession, getProfile };
+  function isBannedProfile(profile) {
+    if (!profile) return false;
+    if (profile.banned_permanently) return true;
+    return !!(profile.banned_until && new Date(profile.banned_until) > new Date());
+  }
+
+  async function banMessageFor(profile) {
+    if (!client || !profile) return 'This account is banned.';
+    const { data } = await client.rpc('ban_message', { p_user: profile.id });
+    return data || 'This account is banned.';
+  }
+
+  // Call on any page right after getProfile() to make sure a ban that lands
+  // while someone's already signed in actually logs them out promptly,
+  // instead of waiting for their token to expire. Returns the ban message
+  // if it signed them out, otherwise null.
+  async function enforceNotBanned(profile) {
+    if (!isBannedProfile(profile)) return null;
+    const message = await banMessageFor(profile);
+    await signOut();
+    return message;
+  }
+
+  window.QZAuth = {
+    client, configured, isEmail, signUp, signIn, signOut, getSession, getProfile,
+    isBannedProfile, banMessageFor, enforceNotBanned
+  };
 })();
