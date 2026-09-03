@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Inventory — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  main.armory { padding: 26px 0 50px; position: relative; z-index: 1; }
+
+  .armory-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 30px clamp(16px, 3vw, 36px) 36px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .armory-frame::after {
+    content: '';
+    position: absolute; left: 8%; right: 8%; bottom: -3px; height: 2px;
+    background: var(--edge-blue);
+    filter: blur(0.5px);
+    box-shadow: 0 0 14px 2px rgba(90,180,255,0.5);
+    pointer-events: none;
+  }
+
+  .armory-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    margin: 0 0 clamp(18px, 2.6vw, 28px);
+  }
+  .armory-back-btn, .armory-top-spacer { flex: 0 0 auto; min-width: 118px; }
+  .armory-top-spacer { visibility: hidden; }
+  .armory-heading {
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 18px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(20px, 3vw, 30px); letter-spacing: 0.12em; text-align: center; margin: 0;
+    background: linear-gradient(180deg, #ffffff 0%, #cfd9ee 40%, #93a3c4 60%, #eef3fc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,170,255,0.6), 0 2px 1px rgba(0,0,0,0.6);
+  }
+  .armory-heading .dash {
+    flex: 1 1 60px; max-width: 90px; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--blue-light), transparent);
+    box-shadow: 0 0 8px rgba(120,170,255,0.6); opacity: 0.9;
+  }
+
+  .inv-state {
+    max-width: 480px; margin: 30px auto; text-align: center;
+    color: var(--text-dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .inv-state .icon { font-size: 32px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
+  .inv-state .btn { margin-top: 14px; }
+
+  .admin-view-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: rgba(240,150,40,0.12);
+    border: 1.5px solid rgba(240,170,60,0.5);
+    color: #ffcf85; padding: 11px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 18px;
+  }
+  .admin-view-banner strong { font-family: 'Orbitron', sans-serif; letter-spacing: 0.06em; color: #ffdca0; }
+  .admin-view-banner .back-link { margin-left: auto; color: var(--blue-light); font-size: 12px; text-decoration: none; }
+  .admin-view-banner .back-link:hover { text-decoration: underline; }
+  .admin-view-banner[hidden] { display: none; }
+
+  .ainv-panel {
+    position: relative;
+    border: 2px solid transparent; border-radius: 11px;
+    padding: 18px 18px 20px;
+    background:
+      radial-gradient(ellipse at 50% 120%, rgba(60,130,255,0.08), transparent 60%),
+      linear-gradient(165deg, #0e1a30 0%, #081020 60%, #060b16 100%) padding-box,
+      var(--chrome-frame-soft) border-box;
+  }
+  .ainv-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; text-align: center; }
+  .ainv-search {
+    width: 100%; max-width: 340px; margin: 0 auto 12px; display: block;
+    padding: 8px 12px; border-radius: 7px;
+    border: 1px solid rgba(120,160,220,0.3); background: rgba(4,8,16,0.6);
+    color: var(--text); font-size: 12.5px; font-family: inherit;
+  }
+  .ainv-search::placeholder { color: var(--text-dim); }
+  .ainv-search:focus { outline: none; border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+
+  .ainv-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; justify-content: center; }
+  .ainv-filter {
+    font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(10,16,30,0.6); color: var(--text-dim); cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .ainv-filter:hover { color: var(--text); border-color: rgba(150,200,255,0.5); }
+  .ainv-filter.active {
+    color: #fff; background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%);
+    border-color: rgba(150,200,255,0.8); box-shadow: 0 0 12px rgba(70,140,255,0.5);
+  }
+
+  .ainv-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px;
+    min-height: 120px;
+  }
+  .ainv-card {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 12px 8px 10px; border-radius: 9px; border: 1.5px solid rgba(120,160,220,0.25);
+    background: linear-gradient(165deg, rgba(20,32,56,0.7) 0%, rgba(8,14,26,0.7) 100%);
+    color: var(--text); cursor: context-menu; font-family: inherit;
+    transition: transform 0.15s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .ainv-card:hover { transform: translateY(-2px); border-color: rgba(150,200,255,0.6); box-shadow: 0 6px 16px rgba(0,0,0,0.4), 0 0 14px rgba(70,140,255,0.3); }
+  .ainv-card.owned { border-color: rgba(90,220,150,0.4); }
+  .ainv-card-icon { font-size: 26px; line-height: 1; }
+  .ainv-card-icon img { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 5px rgba(120,180,255,0.35)); }
+  .ainv-card-name { font-size: 11.5px; text-align: center; line-height: 1.25; }
+  .ainv-card-slot { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .ainv-card-tag {
+    position: absolute; top: 5px; right: 5px;
+    font-family: 'Orbitron', sans-serif; font-size: 7.5px; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 5px; border-radius: 4px;
+    background: rgba(60,200,120,0.2); color: #6be3a0; border: 1px solid rgba(90,220,150,0.4);
+  }
+  .ainv-empty { grid-column: 1 / -1; text-align: center; color: var(--text-dim); font-size: 12.5px; padding: 20px 0; }
+
+  /* ---- context menu (mirrors profile/inventory.html) ---- */
+  .qz-context-menu {
+    position: fixed; z-index: 500; min-width: 190px; padding: 6px;
+    border-radius: 9px; border: 1.5px solid rgba(140,195,255,0.4);
+    background: linear-gradient(165deg, #101a30 0%, #060b16 100%);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.55), 0 0 20px rgba(60,140,255,0.25);
+  }
+  .qz-context-menu button {
+    display: block; width: 100%; text-align: left; padding: 8px 10px;
+    border-radius: 6px; border: none; background: transparent; color: var(--text);
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.06em;
+    cursor: pointer; transition: background 0.12s ease, color 0.12s ease;
+  }
+  .qz-context-menu button:hover { background: rgba(59,130,246,0.22); color: #fff; }
+  .qz-context-menu button.grant:hover { background: rgba(60,200,120,0.22); color: #9df0c2; }
+
+  .qz-examine { padding: 14px 16px; text-align: center; min-width: 160px; }
+  .qz-examine-icon { font-size: 28px; margin-bottom: 6px; }
+  .qz-examine-name { font-family: 'Orbitron', sans-serif; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+  .qz-examine-slot { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html">
+      <img src="../assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="../index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="../signup.html" class="btn btn-chrome-blue" data-coming-soon="">Signup</a>
+      <a href="../login.html" class="btn btn-chrome-dark" data-coming-soon="">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="armory">
+  <div class="container">
+
+    <div class="admin-view-banner" id="admin-view-banner" hidden>
+      🛡️ <span><strong>ADMIN VIEW</strong> — Granting items to <span id="admin-view-username">—</span>. You're still signed in as yourself.</span>
+      <a class="back-link" href="admin.html">← Back to Admin Zone</a>
+    </div>
+
+    <div class="armory-frame bezel-lg">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+
+      <div class="armory-top">
+        <a href="index.html" class="btn btn-chrome-dark armory-back-btn" id="armory-back-btn">‹ Profile</a>
+        <h1 class="armory-heading"><span class="dash"></span>Admin Inventory<span class="dash"></span></h1>
+        <span class="armory-top-spacer"></span>
+      </div>
+
+      <div id="ainv-state" class="inv-state">Loading…</div>
+
+      <div id="ainv-content" hidden>
+        <div class="ainv-panel">
+          <div class="ainv-hint" id="ainv-hint">Every cosmetic and item in the game. Right-click one to send it.</div>
+          <input type="text" id="ainv-search" class="ainv-search" placeholder="Search items..." autocomplete="off">
+          <div class="ainv-filters" id="ainv-filters"></div>
+          <div class="ainv-grid" id="ainv-grid"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/inventory-data.js"></script>
+<script src="../assets/js/item-notify.js"></script>
+<script>
+  // This page's ONLY real protection is Row Level Security + the
+  // SECURITY DEFINER admin_grant_item() function re-checking is_admin()
+  // itself — a non-admin who reaches this page via dev tools and calls
+  // that RPC directly gets "Not authorized." from the database, not a
+  // client-side check that can be skipped. The catalog itself
+  // (window.QZ_ITEM_CATALOG) isn't secret — it's already loaded on every
+  // page with equipment art — what's gated is the ability to GRANT from it.
+  (function () {
+    const SLOTS = window.QZ_EQUIPMENT_SLOTS || [];
+    const CATALOG = window.QZ_ITEM_CATALOG || [];
+    const SLOT_LABEL = {};
+    SLOTS.forEach((s) => { SLOT_LABEL[s.key] = s.label; });
+
+    const stateEl = document.getElementById('ainv-state');
+    const contentEl = document.getElementById('ainv-content');
+    const gridEl = document.getElementById('ainv-grid');
+    const filtersEl = document.getElementById('ainv-filters');
+    const searchEl = document.getElementById('ainv-search');
+
+    let client = null;
+    let recipientId = null;
+    let recipientLabel = 'you';       // used mid-sentence: "Send X to {recipientLabel}?"
+    let recipientPossessive = 'YOUR'; // used as a heading/menu label: "{recipientPossessive} INVENTORY"
+    let ownedIds = new Set();
+    let activeFilter = 'all';
+    let searchTerm = '';
+
+    function setState(html) { stateEl.innerHTML = html; stateEl.hidden = false; contentEl.hidden = true; }
+
+    // ---------------- context menu (mirrors profile/inventory.html) ----------------
+    let menuEl = null;
+    function closeMenu() {
+      if (menuEl) { menuEl.remove(); menuEl = null; }
+      document.removeEventListener('pointerdown', onOutsidePointer, true);
+      document.removeEventListener('keydown', onMenuKey, true);
+    }
+    function onOutsidePointer(e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }
+    function onMenuKey(e) { if (e.key === 'Escape') closeMenu(); }
+    function openMenu(x, y, actions) {
+      closeMenu();
+      menuEl = document.createElement('div');
+      menuEl.className = 'qz-context-menu';
+      actions.forEach((a) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if (a.grant) btn.className = 'grant';
+        btn.textContent = a.label;
+        btn.addEventListener('click', () => { closeMenu(); a.onClick(); });
+        menuEl.appendChild(btn);
+      });
+      document.body.appendChild(menuEl);
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const rect = menuEl.getBoundingClientRect();
+      const left = Math.min(x, vw - rect.width - 8);
+      const top = Math.min(y, vh - rect.height - 8);
+      menuEl.style.left = Math.max(8, left) + 'px';
+      menuEl.style.top = Math.max(8, top) + 'px';
+      setTimeout(() => {
+        document.addEventListener('pointerdown', onOutsidePointer, true);
+        document.addEventListener('keydown', onMenuKey, true);
+      }, 0);
+    }
+
+    let examineEl = null;
+    function closeExamine() {
+      if (examineEl) { examineEl.remove(); examineEl = null; }
+      document.removeEventListener('pointerdown', onOutsideExamine, true);
+    }
+    function onOutsideExamine(e) { if (examineEl && !examineEl.contains(e.target)) closeExamine(); }
+    function openExamine(item, x, y) {
+      closeExamine(); closeMenu();
+      examineEl = document.createElement('div');
+      examineEl.className = 'qz-examine';
+      examineEl.innerHTML =
+        '<div class="qz-examine-icon">' + (item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon) + '</div>' +
+        '<div class="qz-examine-name">' + item.name + '</div>' +
+        '<div class="qz-examine-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</div>';
+      document.body.appendChild(examineEl);
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const rect = examineEl.getBoundingClientRect();
+      const left = Math.min(x, vw - rect.width - 8);
+      const top = Math.min(y, vh - rect.height - 8);
+      examineEl.style.left = Math.max(8, left) + 'px';
+      examineEl.style.top = Math.max(8, top) + 'px';
+      setTimeout(() => document.addEventListener('pointerdown', onOutsideExamine, true), 0);
+    }
+
+    async function grantItem(item) {
+      if (!window.confirm('Send "' + item.name + '" to ' + recipientLabel + '’s inventory?')) return;
+      const { error } = await client.rpc('admin_grant_item', { p_recipient: recipientId, p_item_id: item.id });
+      if (error) { window.alert('Could not send item: ' + error.message); return; }
+      ownedIds.add(item.id);
+      renderGrid();
+      if (window.qzToast) window.qzToast('Sent "' + item.name + '" to ' + recipientLabel + '.');
+    }
+
+    function itemMatchesSearch(item, term) {
+      if (!term) return true;
+      const t = term.trim().toLowerCase();
+      if (!t) return true;
+      return item.name.toLowerCase().includes(t) || item.slot.toLowerCase().includes(t) || (SLOT_LABEL[item.slot] || '').toLowerCase().includes(t);
+    }
+
+    function filteredItems() {
+      return CATALOG.filter((it) => (activeFilter === 'all' || it.slot === activeFilter) && itemMatchesSearch(it, searchTerm));
+    }
+
+    function renderFilters() {
+      filtersEl.innerHTML = '';
+      const defs = [{ key: 'all', label: 'All' }].concat(SLOTS);
+      defs.forEach((f) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ainv-filter' + (activeFilter === f.key ? ' active' : '');
+        btn.textContent = f.label;
+        btn.addEventListener('click', () => { activeFilter = f.key; renderFilters(); renderGrid(); });
+        filtersEl.appendChild(btn);
+      });
+    }
+
+    function renderGrid() {
+      const items = filteredItems();
+      gridEl.innerHTML = '';
+      if (!items.length) {
+        gridEl.innerHTML = '<div class="ainv-empty">No items match.</div>';
+        return;
+      }
+      items.forEach((item) => {
+        const owned = ownedIds.has(item.id);
+        const slotLabel = (SLOT_LABEL[item.slot] || item.slot) + ' Slot';
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'ainv-card' + (owned ? ' owned' : '');
+        card.title = item.name + '\n' + slotLabel + (owned ? '\nAlready owned' : '');
+        const thumb = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+        card.innerHTML =
+          '<span class="ainv-card-icon">' + thumb + '</span>' +
+          '<span class="ainv-card-name">' + item.name + '</span>' +
+          '<span class="ainv-card-slot">' + slotLabel + '</span>' +
+          (owned ? '<span class="ainv-card-tag">Owned</span>' : '');
+
+        card.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const actions = [{ label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }];
+          if (!owned) actions.push({ label: 'SEND TO ' + recipientPossessive + ' INVENTORY', grant: true, onClick: () => grantItem(item) });
+          openMenu(e.clientX, e.clientY, actions);
+        });
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const rect = card.getBoundingClientRect();
+            card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: rect.left + 12, clientY: rect.bottom }));
+          }
+        });
+        gridEl.appendChild(card);
+      });
+    }
+
+    async function init() {
+      if (!window.QZAuth || !window.QZAuth.configured) {
+        setState('<div class="icon">⚠️</div>Accounts aren’t configured on this deployment yet.');
+        return;
+      }
+      const session = await window.QZAuth.getSession();
+      if (!session) {
+        setState('<div class="icon">🔒</div>You need to be logged in to view this page.<br><br><a class="btn btn-chrome-blue" href="../login.html">Log In</a>');
+        return;
+      }
+      const profile = await window.QZAuth.getProfile();
+      if (!profile || !profile.is_admin) {
+        setState('<div class="icon">🚫</div>This page is only available to Quest Zone administrators.');
+        return;
+      }
+
+      client = window.QZAuth.client;
+
+      const params = new URLSearchParams(location.search);
+      const targetId = params.get('admin_view');
+      if (targetId) {
+        const { data: targetProfile, error: profErr } = await client.from('profiles').select('username').eq('id', targetId).single();
+        if (profErr || !targetProfile) {
+          setState('<div class="icon">⚠️</div>That account could not be found.');
+          return;
+        }
+        recipientId = targetId;
+        recipientLabel = targetProfile.username;
+        recipientPossessive = targetProfile.username.toUpperCase() + "’S";
+        document.getElementById('admin-view-username').textContent = targetProfile.username;
+        document.getElementById('admin-view-banner').hidden = false;
+        document.getElementById('armory-back-btn').setAttribute('href', 'index.html?admin_view=' + encodeURIComponent(targetId));
+        document.getElementById('ainv-hint').textContent = 'Every cosmetic and item in the game. Right-click one to gift it to ' + targetProfile.username + '.';
+      } else {
+        recipientId = profile.id;
+        recipientLabel = 'you';
+      }
+
+      const { data: invData, error: invErr } = await client.from('inventory_items').select('item_id').eq('user_id', recipientId);
+      if (invErr) { setState('<div class="icon">⚠️</div>Could not load inventory: ' + invErr.message); return; }
+      ownedIds = new Set((invData || []).map((r) => r.item_id));
+
+      searchEl.addEventListener('input', () => { searchTerm = searchEl.value; renderGrid(); });
+      renderFilters();
+      renderGrid();
+
+      stateEl.hidden = true;
+      contentEl.hidden = false;
+    }
+
+    init();
+  })();
+</script>
+</body>
+</html>

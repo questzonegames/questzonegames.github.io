@@ -62,6 +62,8 @@
   let viewUsername = null;        // that account's username, ONLY set in admin view — named explicitly in the
                                    // remove-item confirmation so it's never ambiguous which account is affected
   let adminReadOnly = false;      // true when an admin is viewing someone else's inventory (view-only)
+  let isAdminSelf = false;        // true when the signed-in account is an admin viewing THEIR OWN inventory —
+                                   // offers "RETURN TO ADMIN INVENTORY" alongside the normal equip/unequip
   let ownedIds = new Set();       // item ids this account owns (inventory_items)
   let acquiredAtById = {};        // item id -> inventory_items.acquired_at (ISO string)
   let equipped = {};              // slotKey -> itemId, ONLY for slots with a row (equipped_items)
@@ -148,6 +150,24 @@
     Object.keys(equipped).forEach((slot) => { if (equipped[slot] === item.id) delete equipped[slot]; });
     renderAll();
     if (window.qzToast) window.qzToast('Removed "' + item.name + '" from ' + (viewUsername || 'this account') + '’s inventory.');
+  }
+
+  // Admin-only, self-view: send an item from your OWN inventory back to
+  // the shared Admin Inventory bank — same admin_delete_inventory_item()
+  // function as adminDeleteItem above, just targeting your own uid instead
+  // of a viewed account's id. Nothing "moves" server-side beyond deleting
+  // your own row — the item was never anything but a catalog entry to
+  // begin with, so removing your copy of it IS returning it to the bank.
+  async function returnToAdminInventory(item) {
+    if (!isAdminSelf || !client) return;
+    if (!window.confirm('Return "' + item.name + '" to the Admin Inventory? You can send it back to yourself any time.')) return;
+    const { error } = await client.rpc('admin_delete_inventory_item', { p_user: uid, p_item_id: item.id });
+    if (error) { window.alert('Could not return item: ' + error.message); return; }
+    ownedIds.delete(item.id);
+    delete acquiredAtById[item.id];
+    delete equipped[item.slot];
+    renderAll();
+    if (window.qzToast) window.qzToast('Returned "' + item.name + '" to the Admin Inventory.');
   }
 
   // ---------------- context menu ----------------
@@ -259,7 +279,7 @@
             : [
                 { label: 'UNEQUIP', onClick: () => unequip(slotDef.key) },
                 { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
-              ];
+              ].concat(isAdminSelf ? [{ label: 'RETURN TO ADMIN INVENTORY', danger: true, onClick: () => returnToAdminInventory(item) }] : []);
           openMenu(e.clientX, e.clientY, actions);
         });
       }
@@ -354,15 +374,16 @@
               { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) },
               { label: 'REMOVE ITEM', danger: true, onClick: () => adminDeleteItem(item) }
             ]
-          : equippedNow
-            ? [
-                { label: 'UNEQUIP', onClick: () => unequip(item.slot) },
-                { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
-              ]
-            : [
-                { label: 'EQUIP', onClick: () => equip(item.id) },
-                { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
-              ];
+          : (equippedNow
+              ? [
+                  { label: 'UNEQUIP', onClick: () => unequip(item.slot) },
+                  { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
+                ]
+              : [
+                  { label: 'EQUIP', onClick: () => equip(item.id) },
+                  { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
+                ]
+            ).concat(isAdminSelf ? [{ label: 'RETURN TO ADMIN INVENTORY', danger: true, onClick: () => returnToAdminInventory(item) }] : []);
         openMenu(e.clientX, e.clientY, actions);
       });
       // keyboard/touch equivalent of right-click, for reachability
@@ -566,6 +587,7 @@
       if (backBtn) backBtn.setAttribute('href', 'index.html?admin_view=' + encodeURIComponent(targetId));
     } else if (nameEl && profile) {
       nameEl.textContent = profile.username;
+      isAdminSelf = !!profile.is_admin;
     }
 
     const ok = await loadAccountData();

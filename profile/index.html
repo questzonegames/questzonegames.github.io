@@ -468,6 +468,7 @@
   .section-row { display: grid; gap: clamp(14px, 2vw, 20px); flex: 1; }
   .section-row.points-row { grid-template-columns: 0.85fr 1.4fr; }
   .section-row.nav-row { grid-template-columns: repeat(3, 1fr); }
+  .section-row.nav-row.nav-row-admin { grid-template-columns: repeat(4, 1fr); }
 
   .tile {
     position: relative;
@@ -704,7 +705,10 @@
     .section-row.points-row { grid-template-columns: 1fr; }
   }
   @media (max-width: 480px) {
-    .section-row.nav-row { grid-template-columns: 1fr; }
+    .section-row.nav-row, .section-row.nav-row.nav-row-admin { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) and (min-width: 481px) {
+    .section-row.nav-row.nav-row-admin { grid-template-columns: repeat(2, 1fr); }
   }
 </style>
 </head>
@@ -821,6 +825,17 @@
               </span>
               <span class="tile-title">Achievements</span>
             </a>
+            <a href="admin-inventory.html" class="tile tile-nav bezel-sm" id="admin-inventory-tile" hidden>
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
+              <span class="tile-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 10l9-6 9 6-9 6-9-6z"/>
+                  <path d="M3 10v7l9 6 9-6v-7"/>
+                  <path d="M12 16v6"/>
+                </svg>
+              </span>
+              <span class="tile-title">Admin Inventory</span>
+            </a>
           </div>
         </div>
       </div>
@@ -906,6 +921,7 @@
 <script src="../assets/js/site.js"></script>
 <script src="../assets/js/achievement-inspection.js"></script>
 <script src="../assets/js/inventory-data.js"></script>
+<script src="../assets/js/item-notify.js"></script>
 <script>
   // ===== Admin view resolver =====
   // If ?admin_view=<user id> is present, decides whether the CURRENT
@@ -1040,6 +1056,22 @@
         infoItem('Last Sign-In', info && info.last_sign_in_at ? formatAdminUk(info.last_sign_in_at) : '—');
       document.getElementById('admin-info-panel').hidden = false;
     }
+
+    // reaching this branch already required the signed-in viewer to be an
+    // admin (resolveAdminView checks that before ever getting here)
+    showAdminInventoryTile(true, view.targetId);
+  }
+
+  // Only ever shown for an admin viewer — self-view passes the signed-in
+  // account's own is_admin flag; admin-view mode is only reachable at all
+  // once resolveAdminView has already confirmed the viewer is an admin.
+  function showAdminInventoryTile(isAdmin, adminViewTargetId) {
+    const tile = document.getElementById('admin-inventory-tile');
+    const navRow = tile && tile.closest('.nav-row');
+    if (!tile || !isAdmin) return;
+    tile.hidden = false;
+    if (navRow) navRow.classList.add('nav-row-admin');
+    tile.setAttribute('href', adminViewTargetId ? 'admin-inventory.html?admin_view=' + encodeURIComponent(adminViewTargetId) : 'admin-inventory.html');
   }
 
   function infoItem(label, valueHtml) {
@@ -1135,6 +1167,7 @@
       if (qpEl) qpEl.textContent = Number(profile.quest_points || 0).toLocaleString();
       const banner = document.getElementById('preview-banner');
       if (banner) banner.style.display = 'none';
+      showAdminInventoryTile(profile.is_admin, null); // own profile — grant to self
     }
     loadRealProfile();
   })();
