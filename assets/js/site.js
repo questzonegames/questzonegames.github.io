@@ -16,10 +16,21 @@
   };
 
   // ---- signup / login placeholders ----
+  // qz-header-auth.js repoints Signup/Login from this placeholder to the
+  // real signup.html/login.html once accounts are live, by removing the
+  // data-coming-soon attribute and setting a real href — but it does that
+  // asynchronously (it awaits getSession() first), so it can still be
+  // mid-flight when this runs and binds these listeners. Re-reading the
+  // attribute INSIDE the handler (not just at bind time) means a listener
+  // bound before the repoint still does the right thing afterwards: once
+  // the attribute's gone, this becomes a no-op and the real href navigates
+  // normally instead of the click being silently eaten by preventDefault.
   document.querySelectorAll('[data-coming-soon]').forEach((el) => {
     el.addEventListener('click', (e) => {
+      const msg = el.getAttribute('data-coming-soon');
+      if (!msg) return;
       e.preventDefault();
-      window.qzToast(el.getAttribute('data-coming-soon') || 'Coming soon!');
+      window.qzToast(msg);
     });
   });
 
