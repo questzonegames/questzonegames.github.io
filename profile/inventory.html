@@ -74,6 +74,30 @@
   .inv-state .icon { font-size: 32px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
   .inv-state .btn { margin-top: 14px; }
 
+  /* ---------- admin-view banner (see profile/index.html for the same
+     component — duplicated per page rather than shared, same reasoning
+     as everything else page-local on this site) ---------- */
+  .admin-view-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: rgba(240,150,40,0.12);
+    border: 1.5px solid rgba(240,170,60,0.5);
+    color: #ffcf85;
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  /* author-origin "display: flex" above would otherwise outrank the
+     browser's own [hidden]{display:none} default regardless of the
+     attribute being set — this rule just needs to out-specificity it */
+  .admin-view-banner[hidden] { display: none; }
+  .admin-view-banner strong { font-family: 'Orbitron', sans-serif; letter-spacing: 0.06em; color: #ffdca0; }
+  .admin-view-banner .back-link { margin-left: auto; color: var(--blue-light); font-size: 12px; text-decoration: none; }
+  .admin-view-banner .back-link:hover { text-decoration: underline; }
+  .admin-view-readonly-note {
+    text-align: center; font-size: 11.5px; color: var(--text-dim); margin-top: 10px;
+  }
+
   /* ---------- three-column layout ---------- */
   .armory-grid {
     display: grid;
@@ -504,11 +528,16 @@
 <main class="armory">
   <div class="container">
 
+    <div class="admin-view-banner" id="admin-view-banner" hidden>
+      🛡️ <span><strong>ADMIN VIEW</strong> — <span id="admin-view-username">—</span>'s inventory (read-only). You're still signed in as yourself.</span>
+      <a class="back-link" href="admin.html">← Back to Admin Zone</a>
+    </div>
+
     <div class="armory-frame bezel-lg">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
 
       <div class="armory-top">
-        <a href="index.html" class="btn btn-chrome-dark armory-back-btn">‹ Profile</a>
+        <a href="index.html" class="btn btn-chrome-dark armory-back-btn" id="armory-back-btn">‹ Profile</a>
         <h1 class="armory-heading"><span class="dash"></span>Inventory<span class="dash"></span></h1>
         <span class="armory-top-spacer"></span>
       </div>

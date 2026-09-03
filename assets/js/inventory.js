@@ -57,7 +57,9 @@
   CATALOG.forEach((it) => { catalogById[it.id] = it; });
 
   let client = null;
-  let uid = null;
+  let uid = null;                 // the SIGNED-IN account's own id — always the caller, never the viewed account
+  let viewUserId = null;          // whose inventory is being shown — uid, unless adminReadOnly
+  let adminReadOnly = false;      // true when an admin is viewing someone else's inventory (view-only)
   let ownedIds = new Set();       // item ids this account owns (inventory_items)
   let acquiredAtById = {};        // item id -> inventory_items.acquired_at (ISO string)
   let equipped = {};              // slotKey -> itemId, ONLY for slots with a row (equipped_items)
@@ -100,6 +102,7 @@
   }
 
   async function equip(itemId) {
+    if (adminReadOnly) return; // admin viewing someone else's inventory — view only, no write path yet
     const item = catalogById[itemId];
     if (!item || !ownedIds.has(itemId) || !client) return;
     const { error } = await client
@@ -110,6 +113,7 @@
     renderAll();
   }
   async function unequip(slotKey) {
+    if (adminReadOnly) return;
     if (!equipped[slotKey] || !client) return;
     const { error } = await client
       .from('equipped_items')
@@ -221,10 +225,13 @@
       if (item) {
         tile.addEventListener('contextmenu', (e) => {
           e.preventDefault();
-          openMenu(e.clientX, e.clientY, [
-            { label: 'UNEQUIP', onClick: () => unequip(slotDef.key) },
-            { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
-          ]);
+          const actions = adminReadOnly
+            ? [{ label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }]
+            : [
+                { label: 'UNEQUIP', onClick: () => unequip(slotDef.key) },
+                { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
+              ];
+          openMenu(e.clientX, e.clientY, actions);
         });
       }
 
@@ -313,15 +320,17 @@
 
       card.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        const actions = equippedNow
-          ? [
-              { label: 'UNEQUIP', onClick: () => unequip(item.slot) },
-              { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
-            ]
-          : [
-              { label: 'EQUIP', onClick: () => equip(item.id) },
-              { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
-            ];
+        const actions = adminReadOnly
+          ? [{ label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }]
+          : equippedNow
+            ? [
+                { label: 'UNEQUIP', onClick: () => unequip(item.slot) },
+                { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
+              ]
+            : [
+                { label: 'EQUIP', onClick: () => equip(item.id) },
+                { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
+              ];
         openMenu(e.clientX, e.clientY, actions);
       });
       // keyboard/touch equivalent of right-click, for reachability
@@ -435,9 +444,14 @@
   }
 
   async function loadAccountData() {
+    // Explicit .eq(user_id) rather than relying on RLS to implicitly scope
+    // to "just my rows" — correct either way for a normal self-view, but
+    // required once an admin can also be the caller: without it, an
+    // admin's unfiltered select would come back with EVERY account's rows
+    // (RLS lets admins see all of them), not just the one being viewed.
     const [invRes, eqRes] = await Promise.all([
-      client.from('inventory_items').select('item_id,acquired_at'),
-      client.from('equipped_items').select('slot,item_id')
+      client.from('inventory_items').select('item_id,acquired_at').eq('user_id', viewUserId),
+      client.from('equipped_items').select('slot,item_id').eq('user_id', viewUserId)
     ]);
     if (invRes.error) { setState('<div class="icon">⚠️</div>Could not load your inventory: ' + invRes.error.message); return false; }
     if (eqRes.error) { setState('<div class="icon">⚠️</div>Could not load your equipment: ' + eqRes.error.message); return false; }
@@ -483,10 +497,43 @@
 
     client = window.QZAuth.client;
     uid = session.user.id;
+    viewUserId = uid;
 
     const profile = await window.QZAuth.getProfile();
     const nameEl = document.getElementById('armory-username');
-    if (nameEl && profile) nameEl.textContent = profile.username;
+
+    // ?admin_view=<user id> — an admin viewing someone else's inventory,
+    // read-only. Real enforcement is RLS: the profiles lookup below only
+    // ever returns a row because "profiles_select_own_or_admin" allows it
+    // for an admin caller — a non-admin who forges this URL gets zero
+    // rows and lands on the same blocked state as "account not found",
+    // no matter what the is_admin check right above it says.
+    const params = new URLSearchParams(location.search);
+    const targetId = params.get('admin_view');
+    if (targetId) {
+      if (!profile || !profile.is_admin) {
+        setState('<div class="icon">🚫</div>This view is only available to Quest Zone administrators.');
+        return;
+      }
+      const { data: targetProfile, error: profErr } = await client.from('profiles').select('username').eq('id', targetId).single();
+      if (profErr || !targetProfile) {
+        setState('<div class="icon">⚠️</div>That account could not be found.');
+        return;
+      }
+      viewUserId = targetId;
+      adminReadOnly = true;
+      if (nameEl) nameEl.textContent = targetProfile.username;
+
+      const banner = document.getElementById('admin-view-banner');
+      const bannerName = document.getElementById('admin-view-username');
+      if (bannerName) bannerName.textContent = targetProfile.username;
+      if (banner) banner.hidden = false;
+
+      const backBtn = document.getElementById('armory-back-btn');
+      if (backBtn) backBtn.setAttribute('href', 'index.html?admin_view=' + encodeURIComponent(targetId));
+    } else if (nameEl && profile) {
+      nameEl.textContent = profile.username;
+    }
 
     const ok = await loadAccountData();
     if (!ok) return;

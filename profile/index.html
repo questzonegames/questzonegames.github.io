@@ -22,6 +22,66 @@
     margin-bottom: 20px;
   }
 
+  /* ---------- admin-view banner + blocked state + info panel ---------- */
+  .admin-view-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: rgba(240,150,40,0.12);
+    border: 1.5px solid rgba(240,170,60,0.5);
+    color: #ffcf85;
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  /* author-origin "display: flex" above would otherwise outrank the
+     browser's own [hidden]{display:none} default regardless of the
+     attribute being set — this rule just needs to out-specificity it */
+  .admin-view-banner[hidden] { display: none; }
+  .admin-view-banner strong {
+    font-family: 'Orbitron', sans-serif; letter-spacing: 0.06em; color: #ffdca0;
+  }
+  .admin-view-banner .back-link {
+    margin-left: auto; color: var(--blue-light); font-size: 12px; text-decoration: none;
+  }
+  .admin-view-banner .back-link:hover { text-decoration: underline; }
+
+  .admin-blocked-state {
+    max-width: 480px; margin: 60px auto; text-align: center;
+    color: var(--text-dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .admin-blocked-state .icon { font-size: 34px; margin-bottom: 12px; }
+
+  .admin-info-panel {
+    margin-top: clamp(16px, 2.4vw, 24px);
+    border-radius: 11px;
+    padding: 18px clamp(16px, 2.4vw, 24px);
+    background: linear-gradient(165deg, rgba(20,32,56,0.7) 0%, rgba(8,14,26,0.7) 100%);
+    border: 1.5px solid rgba(120,160,220,0.25);
+  }
+  .admin-info-panel h2 {
+    margin: 0 0 14px;
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--blue-light);
+  }
+  .admin-info-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 20px;
+  }
+  .admin-info-item .l {
+    font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 3px;
+  }
+  .admin-info-item .v { font-size: 13px; color: var(--text); word-break: break-word; }
+  .admin-info-item .v.mono { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--text-dim); }
+  .admin-info-item .v .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 5px;
+    font-family: 'Orbitron', sans-serif; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .admin-info-item .v .tag.admin { background: rgba(59,130,246,0.22); color: var(--blue-light); border: 1px solid rgba(90,150,255,0.4); }
+  .admin-info-item .v .tag.player { background: rgba(140,160,190,0.12); color: var(--text-dim); border: 1px solid rgba(140,160,190,0.25); }
+  .admin-info-item .v .tag.active { background: rgba(60,200,120,0.14); color: #6be3a0; border: 1px solid rgba(90,220,150,0.35); }
+  .admin-info-item .v .tag.banned { background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.4); }
+  .admin-info-item .v .tag.yes { background: rgba(60,200,120,0.14); color: #6be3a0; border: 1px solid rgba(90,220,150,0.35); }
+  .admin-info-item .v .tag.no { background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.4); }
+
   /* ---------- sci-fi dashboard frame ---------- */
   /* the chrome frame gradient: silver -> steel -> blue reflection ->
      steel -> silver, used as a border-box layer behind every panel so
@@ -569,7 +629,14 @@
       ⚠️ <span><strong>Preview Mode</strong> — Accounts are not available yet. This shows what your Quest Zone profile will look like once accounts launch.</span>
     </div>
 
-    <div class="profile-frame bezel-lg">
+    <div class="admin-view-banner" id="admin-view-banner" hidden>
+      🛡️ <span><strong>ADMIN VIEW</strong> — <span id="admin-view-username">—</span>. You're viewing this account's profile as an administrator; you're still signed in as yourself.</span>
+      <a class="back-link" href="admin.html">← Back to Admin Zone</a>
+    </div>
+
+    <div class="admin-blocked-state" id="admin-blocked-state" hidden></div>
+
+    <div class="profile-frame bezel-lg" id="profile-frame-main">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <h1 class="profile-heading"><span class="dash"></span>Profile<span class="dash"></span></h1>
 
@@ -605,7 +672,7 @@
           </div>
 
           <div class="section-row nav-row">
-            <a href="skills.html" class="tile tile-nav bezel-sm">
+            <a href="skills.html" class="tile tile-nav bezel-sm" id="skills-tile">
               <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -619,7 +686,7 @@
               </span>
               <span class="tile-title">Skills</span>
             </a>
-            <a href="inventory.html" class="tile tile-nav bezel-sm">
+            <a href="inventory.html" class="tile tile-nav bezel-sm" id="inventory-tile">
               <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -632,7 +699,7 @@
               </span>
               <span class="tile-title">Inventory</span>
             </a>
-            <a href="achievements.html" class="tile tile-nav bezel-sm">
+            <a href="achievements.html" class="tile tile-nav bezel-sm" id="achievements-tile">
               <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
@@ -647,6 +714,11 @@
             </a>
           </div>
         </div>
+      </div>
+
+      <div class="admin-info-panel" id="admin-info-panel" hidden>
+        <h2>Admin — Account Info (read-only)</h2>
+        <div class="admin-info-grid" id="admin-info-grid"></div>
       </div>
     </div>
 
@@ -670,6 +742,146 @@
 <script src="../assets/js/site.js"></script>
 <script src="../assets/js/achievement-inspection.js"></script>
 <script src="../assets/js/inventory-data.js"></script>
+<script>
+  // ===== Admin view resolver =====
+  // If ?admin_view=<user id> is present, decides whether the CURRENT
+  // signed-in account is actually an admin (checked against the real
+  // database, not just trusted from the URL) and, if so, fetches the
+  // TARGET account's profile row + email/verification info to show
+  // instead of the signed-in admin's own data.
+  //
+  // The other scripts on this page (avatar equipment, quest points/
+  // username, pinned achievements) all `await window.QZAdminViewReady`
+  // before deciding whose data to load, so there's no race between this
+  // resolving and them rendering — and if this resolves to "blocked",
+  // they skip rendering entirely (see admin-blocked-state below).
+  //
+  // Real enforcement is still the database: `.eq('id', targetId)` against
+  // profiles only ever returns a row here because RLS's
+  // "profiles_select_own_or_admin" policy allows it for an admin caller —
+  // a non-admin who forges this URL gets zero rows back and lands on the
+  // blocked state, no matter what the client-side is_admin check above it
+  // says. Same for admin_get_account_info(), which raises "Not
+  // authorized." itself if the caller isn't actually an admin.
+  window.QZAdminViewReady = (async function resolveAdminView() {
+    const result = { active: false, targetId: null, targetProfile: null, accountInfo: null, error: null };
+    const params = new URLSearchParams(location.search);
+    const targetId = params.get('admin_view');
+    if (!targetId) return result;
+    if (!window.QZAuth || !window.QZAuth.configured) { result.error = 'not-configured'; renderAdminViewUI(result); return result; }
+
+    const session = await window.QZAuth.getSession();
+    if (!session) { result.error = 'not-logged-in'; renderAdminViewUI(result); return result; }
+
+    const me = await window.QZAuth.getProfile();
+    if (!me || !me.is_admin) { result.error = 'not-admin'; renderAdminViewUI(result); return result; }
+
+    const client = window.QZAuth.client;
+    const { data: targetProfile, error: profErr } = await client.from('profiles').select('*').eq('id', targetId).single();
+    if (profErr || !targetProfile) { result.error = 'not-found'; renderAdminViewUI(result); return result; }
+
+    const { data: infoRows } = await client.rpc('admin_get_account_info', { p_user: targetId });
+
+    result.active = true;
+    result.targetId = targetId;
+    result.targetProfile = targetProfile;
+    result.accountInfo = (infoRows && infoRows[0]) || null;
+    window.QZAdminView = result;
+    renderAdminViewUI(result);
+    return result;
+  })();
+
+  function escapeAdminHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function formatAdminUk(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    let hours = d.getUTCHours();
+    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12; if (hours === 0) hours = 12;
+    return hours + ':' + minutes + ' ' + ampm + ' on ' + day + '/' + month + '/' + year + ' (UTC)';
+  }
+
+  function isProfileBanned(p) {
+    if (!p) return false;
+    if (p.banned_permanently) return true;
+    return !!(p.banned_until && new Date(p.banned_until) > new Date());
+  }
+
+  function renderAdminViewUI(view) {
+    const banner = document.getElementById('preview-banner');
+    if (banner) banner.style.display = 'none';
+
+    if (!view.active) {
+      const messages = {
+        'not-logged-in': ['🔒', 'You need to be logged in as an administrator to view this.'],
+        'not-admin': ['🚫', 'This view is only available to Quest Zone administrators.'],
+        'not-found': ['⚠️', 'That account could not be found.'],
+        'not-configured': ['⚠️', 'Accounts aren’t configured on this deployment yet.']
+      };
+      const [icon, text] = messages[view.error] || ['⚠️', 'Could not open this account.'];
+      const blocked = document.getElementById('admin-blocked-state');
+      const frame = document.getElementById('profile-frame-main');
+      if (blocked) {
+        blocked.innerHTML = '<div class="icon">' + icon + '</div>' + escapeAdminHtml(text) +
+          '<br><br><a class="btn btn-chrome-blue" href="admin.html">← Back to Admin Zone</a>';
+        blocked.hidden = false;
+      }
+      if (frame) frame.style.display = 'none';
+      return;
+    }
+
+    const p = view.targetProfile;
+    const info = view.accountInfo;
+
+    const adminBanner = document.getElementById('admin-view-banner');
+    const bannerName = document.getElementById('admin-view-username');
+    if (bannerName) bannerName.textContent = p.username;
+    if (adminBanner) adminBanner.hidden = false;
+
+    // forward admin_view on every tile so navigating deeper (e.g.
+    // Inventory) stays in the same admin-view context
+    ['skills-tile', 'inventory-tile', 'achievements-tile', 'quest-points-tile', 'pinned-achievements-tile'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const base = el.getAttribute('href').split('?')[0];
+      el.setAttribute('href', base + '?admin_view=' + encodeURIComponent(view.targetId));
+    });
+
+    const banned = isProfileBanned(p);
+    const statusHtml = banned
+      ? '<span class="tag banned">Banned' + (p.banned_permanently ? ' (Permanent)' : ' (until ' + formatAdminUk(p.banned_until) + ')') + '</span>'
+      : '<span class="tag active">Active</span>';
+
+    const grid = document.getElementById('admin-info-grid');
+    if (grid) {
+      grid.innerHTML =
+        infoItem('Username', escapeAdminHtml(p.username)) +
+        infoItem('User ID', '<span class="mono">' + escapeAdminHtml(p.id) + '</span>') +
+        infoItem('Email', escapeAdminHtml(info ? info.email : '—')) +
+        infoItem('Role', p.is_admin ? '<span class="tag admin">Admin</span>' : '<span class="tag player">Player</span>') +
+        infoItem('Account Status', statusHtml) +
+        (banned && p.ban_reason ? infoItem('Ban Reason', escapeAdminHtml(p.ban_reason)) : '') +
+        infoItem('Joined', p.created_at ? formatAdminUk(p.created_at) : '—') +
+        infoItem('Email Verified', info && info.email_confirmed_at ? '<span class="tag yes">Yes</span>' : '<span class="tag no">No</span>') +
+        infoItem('Last Sign-In', info && info.last_sign_in_at ? formatAdminUk(info.last_sign_in_at) : '—');
+      document.getElementById('admin-info-panel').hidden = false;
+    }
+  }
+
+  function infoItem(label, valueHtml) {
+    return '<div class="admin-info-item"><div class="l">' + escapeAdminHtml(label) + '</div><div class="v">' + valueHtml + '</div></div>';
+  }
+</script>
 <script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script type="module">
   // Mount the avatar viewer into the existing avatar-stage box. Kept as
@@ -689,12 +901,18 @@
   // not a snapshot from whenever this page happened to load.
   async function applyRealEquipment() {
     if (!window.qzAvatar || !window.QZAuth || !window.QZAuth.client) return;
-    const session = await window.QZAuth.getSession();
-    if (!session) return;
+    const view = await window.QZAdminViewReady;
+    if (view.error) return; // blocked admin-view state — nothing to render
+    let targetUserId = view.active ? view.targetId : null;
+    if (!targetUserId) {
+      const session = await window.QZAuth.getSession();
+      if (!session) return;
+      targetUserId = session.user.id;
+    }
     const { data, error } = await window.QZAuth.client
       .from('equipped_items')
       .select('slot,item_id')
-      .eq('user_id', session.user.id);
+      .eq('user_id', targetUserId);
     if (error || !data) return;
     const catalogById = {};
     (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
@@ -731,6 +949,18 @@
   (function () {
     async function loadRealProfile() {
       if (!window.QZAuth || !window.QZAuth.client) return;
+      const view = await window.QZAdminViewReady;
+      if (view.error) return; // blocked admin-view state — renderAdminViewUI already showed why
+      if (view.active) {
+        // admin-view: show the TARGET account's username/points, not the
+        // signed-in admin's own — renderAdminViewUI already populated the
+        // admin info panel/banner, this just fills the normal tiles too.
+        const nameEl = document.getElementById('profile-username');
+        if (nameEl) nameEl.textContent = view.targetProfile.username;
+        const qpEl = document.getElementById('quest-points-value');
+        if (qpEl) qpEl.textContent = Number(view.targetProfile.quest_points || 0).toLocaleString();
+        return;
+      }
       const session = await window.QZAuth.getSession();
       if (!session) return;
       const profile = await window.QZAuth.getProfile();
@@ -830,12 +1060,18 @@
     async function loadPinnedForCurrentUser() {
       const pinnedBySlot = {};
       if (window.QZAuth && window.QZAuth.client) {
-        const session = await window.QZAuth.getSession();
-        if (session) {
+        const view = window.QZAdminViewReady ? await window.QZAdminViewReady : { active: false, error: null };
+        if (view.error) return pinnedBySlot; // blocked admin-view state — nothing to show
+        let targetUserId = view.active ? view.targetId : null;
+        if (!targetUserId) {
+          const session = await window.QZAuth.getSession();
+          if (session) targetUserId = session.user.id;
+        }
+        if (targetUserId) {
           const { data, error } = await window.QZAuth.client
             .from('pinned_achievements')
             .select('slot, achievements(achievement_id, name, tier, description, icon)')
-            .eq('user_id', session.user.id);
+            .eq('user_id', targetUserId);
           if (!error && data) {
             data.forEach((row) => { if (row.achievements) pinnedBySlot[row.slot] = row.achievements; });
           }
