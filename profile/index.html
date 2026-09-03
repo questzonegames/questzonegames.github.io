@@ -82,6 +82,115 @@
   .admin-info-item .v .tag.yes { background: rgba(60,200,120,0.14); color: #6be3a0; border: 1px solid rgba(90,220,150,0.35); }
   .admin-info-item .v .tag.no { background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.4); }
 
+  /* ---------- admin controls panel (editing) ---------- */
+  .admin-controls-panel {
+    margin-top: clamp(14px, 2vw, 20px);
+    border-radius: 11px;
+    padding: 18px clamp(16px, 2.4vw, 24px);
+    background: linear-gradient(165deg, rgba(30,20,20,0.55) 0%, rgba(14,8,8,0.6) 100%);
+    border: 1.5px solid rgba(220,140,80,0.3);
+  }
+  .admin-controls-panel > h2 {
+    margin: 0 0 16px;
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #ffb17a;
+  }
+  .admin-ctrl-section { margin-bottom: 20px; }
+  .admin-ctrl-section:last-child { margin-bottom: 0; }
+  .admin-ctrl-section h3 {
+    margin: 0 0 10px; font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .admin-ctrl-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .admin-ctrl-hint { font-size: 11.5px; color: var(--text-dim); }
+
+  .admin-skills-list {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 320px; overflow-y: auto; padding-right: 4px;
+  }
+  .admin-skill-row {
+    display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center;
+    padding: 7px 10px; border-radius: 7px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(120,160,220,0.15);
+    font-size: 11.5px;
+  }
+  .admin-skill-row .nm { color: var(--text); }
+  .admin-skill-row .lvl { font-family: 'Orbitron', sans-serif; color: var(--blue-light); white-space: nowrap; }
+  .admin-skill-row input[type="number"] {
+    width: 110px; padding: 5px 8px; border-radius: 6px;
+    border: 1px solid rgba(120,160,220,0.35); background: rgba(4,8,16,0.7);
+    color: var(--text); font-size: 11.5px; font-variant-numeric: tabular-nums;
+  }
+  .admin-skill-row button {
+    padding: 5px 11px; border-radius: 6px; border: 1px solid rgba(150,200,255,0.5);
+    background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%); color: #fff;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 0.04em; cursor: pointer;
+  }
+  .admin-skill-row button:hover { filter: brightness(1.15); }
+
+  .admin-ach-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+  .admin-ach-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(120,160,220,0.15); font-size: 12px;
+  }
+  .admin-ach-row .tier { margin-left: auto; font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; }
+  .admin-ach-row .remove-btn {
+    border: 1px solid rgba(240,90,90,0.4); background: rgba(240,70,70,0.14); color: #ff9d9d;
+    border-radius: 6px; width: 22px; height: 22px; font-size: 12px; line-height: 1; cursor: pointer;
+  }
+  .admin-ach-row .remove-btn:hover { background: rgba(240,70,70,0.28); }
+
+  .admin-ban-status { font-size: 12.5px; color: #ffb17a; margin-bottom: 10px; line-height: 1.6; }
+
+  /* ---- ban modal (mirrors profile/admin.html's — page-local copy, same
+     reasoning as everything else duplicated per page on this site) ---- */
+  .qz-backdrop {
+    position: fixed; inset: 0; z-index: 600; display: none;
+    align-items: flex-start; justify-content: center;
+    padding: 5vh 16px; overflow-y: auto;
+    background: rgba(4,7,14,0.72); backdrop-filter: blur(3px);
+  }
+  .qz-backdrop.show { display: flex; }
+  .qz-modal {
+    position: relative; width: 100%; max-width: 440px;
+    border: 1.5px solid rgba(140,195,255,0.35); border-radius: 14px;
+    background: var(--qp-fill);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(60,140,255,0.15);
+    padding: 26px clamp(16px, 3vw, 30px) 28px;
+  }
+  .qz-modal-close {
+    position: absolute; top: 14px; right: 14px; width: 30px; height: 30px;
+    border-radius: 50%; border: 1.5px solid rgba(140,160,190,0.3); background: rgba(10,16,28,0.7);
+    color: var(--text-dim); font-size: 15px; cursor: pointer; line-height: 1;
+  }
+  .qz-modal-close:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+
+  .ban-target { font-size: 12.5px; color: var(--text-dim); margin-bottom: 16px; }
+  .ban-target b { color: #fff; }
+  .ban-field { margin-bottom: 14px; }
+  .ban-field label { display: block; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+  .ban-type-toggle { display: flex; gap: 8px; }
+  .ban-type-toggle button {
+    flex: 1; padding: 9px; border-radius: 8px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text-dim); font-family: 'Orbitron', sans-serif;
+    font-size: 11px; letter-spacing: 0.05em; cursor: pointer;
+  }
+  .ban-type-toggle button.active.temp { border-color: var(--blue-light); color: var(--blue-light); background: rgba(59,130,246,0.15); }
+  .ban-type-toggle button.active.perm { border-color: rgba(240,90,90,0.6); color: #ff9d9d; background: rgba(240,70,70,0.15); }
+  .ban-duration-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ban-duration-presets button {
+    padding: 6px 11px; border-radius: 7px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text-dim); font-size: 11px; cursor: pointer;
+  }
+  .ban-duration-presets button.active { border-color: var(--blue-light); color: var(--blue-light); background: rgba(59,130,246,0.15); }
+  .ban-field input[type="number"], .ban-field textarea {
+    width: 100%; padding: 9px 12px; border-radius: 8px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.65); color: var(--text); font-size: 12.5px; font-family: inherit;
+  }
+  .ban-field textarea { resize: vertical; min-height: 64px; }
+  .ban-error { font-size: 12px; color: #ff9d9d; margin-bottom: 12px; display: none; }
+  .ban-error.show { display: block; }
+
   /* ---------- sci-fi dashboard frame ---------- */
   /* the chrome frame gradient: silver -> steel -> blue reflection ->
      steel -> silver, used as a border-box layer behind every panel so
@@ -720,10 +829,65 @@
         <h2>Admin — Account Info (read-only)</h2>
         <div class="admin-info-grid" id="admin-info-grid"></div>
       </div>
+
+      <div class="admin-controls-panel" id="admin-controls-panel" hidden>
+        <h2>Admin Controls</h2>
+
+        <div class="admin-ctrl-section">
+          <h3>Moderation</h3>
+          <div class="admin-ban-status" id="admin-ban-status" hidden></div>
+          <div class="admin-ctrl-row" id="admin-ban-actions"></div>
+        </div>
+
+        <div class="admin-ctrl-section">
+          <h3>Skills — set exact XP (recalculates level automatically)</h3>
+          <div class="admin-skills-list" id="admin-skills-list"></div>
+        </div>
+
+        <div class="admin-ctrl-section">
+          <h3>Achievements</h3>
+          <div class="admin-ach-list" id="admin-ach-list"></div>
+        </div>
+      </div>
     </div>
 
   </div>
 </main>
+
+<!-- ---- ban modal ---- -->
+<div class="qz-backdrop" id="ban-backdrop">
+  <div class="qz-modal" role="dialog" aria-modal="true">
+    <button type="button" class="qz-modal-close" id="ban-modal-close" aria-label="Close">✕</button>
+    <h2 style="margin:0 0 4px;font-family:'Orbitron',sans-serif;font-size:16px;color:#fff;">Ban Account</h2>
+    <div class="ban-target">Banning <b id="ban-target-username">—</b></div>
+
+    <div class="ban-error" id="ban-error"></div>
+
+    <div class="ban-field">
+      <label>Ban type</label>
+      <div class="ban-type-toggle">
+        <button type="button" id="ban-type-temp" class="temp">Temporary</button>
+        <button type="button" id="ban-type-perm" class="perm">Permanent</button>
+      </div>
+    </div>
+
+    <div class="ban-field" id="ban-duration-field">
+      <label>Duration</label>
+      <div class="ban-duration-presets" id="ban-duration-presets"></div>
+      <input type="number" id="ban-custom-hours" min="1" step="1" placeholder="Or enter custom hours…">
+    </div>
+
+    <div class="ban-field">
+      <label>Reason</label>
+      <textarea id="ban-reason" placeholder="Why is this account being banned? Shown to the player."></textarea>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button type="button" class="btn btn-chrome-dark" id="ban-cancel">Cancel</button>
+      <button type="button" class="btn btn-chrome-blue" id="ban-confirm" style="background:linear-gradient(135deg,#c0392b,#8e2b20);">Ban Account</button>
+    </div>
+  </div>
+</div>
 
 <footer class="site-footer">
   <div class="container">
@@ -1097,6 +1261,10 @@
     }
 
     render();
+    window.QZRenderPinned = render; // admin controls call this after an
+                                     // achievement change, so an un-earned
+                                     // pin disappears from the showcase
+                                     // without a full page reload
   })();
 
   // ---- interactive tiles: subtle 3D tilt, cursor-follow light, and a
@@ -1145,6 +1313,264 @@
         flare.style.transform = 'translate(-50%, -50%)';
       });
     });
+  })();
+</script>
+<script>
+  // ===== Admin Controls panel (editing) =====
+  // Only ever rendered once window.QZAdminViewReady resolves to an active
+  // admin view — see the resolver script above. Every write here goes
+  // through a SECURITY DEFINER function that re-checks is_admin() itself
+  // (admin_ban_user / admin_unban_user / admin_set_game_xp /
+  // admin_delete_achievement), the same controlled-write-path pattern as
+  // the rest of the admin tooling — there is no broad "admins can edit
+  // anyone's row" RLS policy anywhere, only these narrow entry points.
+  (function () {
+    async function renderAdminControls(view) {
+      const panel = document.getElementById('admin-controls-panel');
+      if (!panel) return;
+      panel.hidden = false;
+      renderBanControls(view.targetProfile);
+      await renderSkills(view.targetId);
+      await renderAchievements(view.targetId);
+    }
+
+    function isBanned(p) {
+      if (!p) return false;
+      if (p.banned_permanently) return true;
+      return !!(p.banned_until && new Date(p.banned_until) > new Date());
+    }
+
+    function renderBanControls(p) {
+      const statusEl = document.getElementById('admin-ban-status');
+      const actionsEl = document.getElementById('admin-ban-actions');
+      const banned = isBanned(p);
+      if (banned) {
+        statusEl.hidden = false;
+        statusEl.textContent = '🚫 ' +
+          (p.banned_permanently ? 'Banned permanently' : 'Banned until ' + formatAdminUk(p.banned_until)) +
+          (p.ban_reason ? ' — Reason: ' + p.ban_reason : '');
+      } else {
+        statusEl.hidden = true;
+      }
+      actionsEl.innerHTML = '';
+      if (banned) {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'btn btn-chrome-blue'; btn.textContent = 'Unban Account';
+        btn.addEventListener('click', () => doUnban(p));
+        actionsEl.appendChild(btn);
+      } else {
+        const tempBtn = document.createElement('button');
+        tempBtn.type = 'button'; tempBtn.className = 'btn btn-chrome-dark'; tempBtn.textContent = 'Ban Temporarily';
+        tempBtn.addEventListener('click', () => openBanModal(p, false));
+        const permBtn = document.createElement('button');
+        permBtn.type = 'button'; permBtn.className = 'btn btn-chrome-blue';
+        permBtn.style.background = 'linear-gradient(135deg,#c0392b,#8e2b20)';
+        permBtn.textContent = 'Ban Permanently';
+        permBtn.addEventListener('click', () => openBanModal(p, true));
+        actionsEl.appendChild(tempBtn);
+        actionsEl.appendChild(permBtn);
+      }
+    }
+
+    async function renderSkills(targetId) {
+      const listEl = document.getElementById('admin-skills-list');
+      const c = window.QZAuth.client;
+      const [gamesRes, progressRes] = await Promise.all([
+        c.from('games').select('game_key, name, sort_order').order('sort_order', { ascending: true }),
+        c.from('game_progress').select('game_key, xp, level').eq('user_id', targetId)
+      ]);
+      const progressByGame = {};
+      (progressRes.data || []).forEach((r) => { progressByGame[r.game_key] = r; });
+      const games = gamesRes.data || [];
+
+      listEl.innerHTML = '';
+      games.forEach((g) => {
+        const row = progressByGame[g.game_key] || { xp: 0, level: 1 };
+        const xp = Number(row.xp || 0);
+        const disp = window.QZXp ? window.QZXp.displayLevel(xp) : { base: row.level, isVirtual: false, virtual: row.level };
+        const lvlText = disp.isVirtual ? disp.base + ' (Virtual ' + disp.virtual + ')' : String(disp.base);
+
+        const el = document.createElement('div');
+        el.className = 'admin-skill-row';
+        el.innerHTML =
+          '<span class="nm">' + escapeAdminHtml(g.name) + '</span>' +
+          '<span class="lvl">Lv ' + lvlText + '</span>';
+
+        const input = document.createElement('input');
+        input.type = 'number'; input.min = '0'; input.max = '2147483647'; input.step = '1';
+        input.value = xp;
+
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = 'Set XP';
+        btn.addEventListener('click', () => setSkillXp(targetId, g.game_key, input));
+
+        el.appendChild(input);
+        el.appendChild(btn);
+        listEl.appendChild(el);
+      });
+    }
+
+    async function setSkillXp(targetId, gameKey, input) {
+      const newXp = Number(input.value);
+      if (isNaN(newXp) || newXp < 0) { window.alert('Enter a valid XP amount (0 or higher).'); return; }
+      const { error } = await window.QZAuth.client.rpc('admin_set_game_xp', { p_user: targetId, p_game_key: gameKey, p_xp: newXp });
+      if (error) { window.alert('Could not set XP: ' + error.message); return; }
+      if (window.qzToast) window.qzToast('XP updated.');
+      await renderSkills(targetId);
+      await renderAchievements(targetId); // a stat drop may have made some no longer earned
+      if (window.QZRenderPinned) window.QZRenderPinned(); // a pinned one might have just been unpinned
+    }
+
+    async function renderAchievements(targetId) {
+      const listEl = document.getElementById('admin-ach-list');
+      const { data } = await window.QZAuth.client
+        .from('unlocked_achievements')
+        .select('achievement_id, achievements(achievement_id, name, tier, icon)')
+        .eq('user_id', targetId);
+      const rows = (data || []).filter((r) => r.achievements);
+
+      listEl.innerHTML = '';
+      if (!rows.length) {
+        listEl.innerHTML = '<div class="admin-ctrl-hint">No achievements unlocked.</div>';
+        return;
+      }
+      rows.forEach((r) => {
+        const a = r.achievements;
+        const el = document.createElement('div');
+        el.className = 'admin-ach-row';
+        el.innerHTML =
+          '<span>' + (a.icon || '🏆') + '</span>' +
+          '<span>' + escapeAdminHtml(a.name) + '</span>' +
+          '<span class="tier">' + escapeAdminHtml(a.tier || '') + '</span>';
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'remove-btn'; btn.textContent = '✕'; btn.title = 'Remove this achievement';
+        btn.addEventListener('click', () => removeAchievement(targetId, a.achievement_id, a.name));
+        el.appendChild(btn);
+        listEl.appendChild(el);
+      });
+    }
+
+    async function removeAchievement(targetId, achievementId, name) {
+      if (!window.confirm('Remove "' + name + '" from this account?')) return;
+      const { error } = await window.QZAuth.client.rpc('admin_delete_achievement', { p_user: targetId, p_achievement_id: achievementId });
+      if (error) { window.alert('Could not remove achievement: ' + error.message); return; }
+      if (window.qzToast) window.qzToast('Removed "' + name + '".');
+      await renderAchievements(targetId);
+      if (window.QZRenderPinned) window.QZRenderPinned();
+    }
+
+    // ---- ban modal ----
+    const banBackdrop = document.getElementById('ban-backdrop');
+    const banTypeTemp = document.getElementById('ban-type-temp');
+    const banTypePerm = document.getElementById('ban-type-perm');
+    const banDurationField = document.getElementById('ban-duration-field');
+    const banPresetsEl = document.getElementById('ban-duration-presets');
+    const banCustomHours = document.getElementById('ban-custom-hours');
+    const banReasonEl = document.getElementById('ban-reason');
+    const banErrorEl = document.getElementById('ban-error');
+    const PRESETS = [
+      { label: '1 Hour', hours: 1 },
+      { label: '24 Hours', hours: 24 },
+      { label: '7 Days', hours: 24 * 7 },
+      { label: '30 Days', hours: 24 * 30 }
+    ];
+    let banIsPermanent = false;
+    let banSelectedHours = 24;
+    let banTargetUser = null;
+
+    PRESETS.forEach((preset) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = preset.label;
+      btn.addEventListener('click', () => {
+        banSelectedHours = preset.hours;
+        banCustomHours.value = '';
+        renderBanPresets();
+      });
+      btn._hours = preset.hours;
+      banPresetsEl.appendChild(btn);
+    });
+    function renderBanPresets() {
+      [...banPresetsEl.children].forEach((btn) => btn.classList.toggle('active', btn._hours === banSelectedHours && !banCustomHours.value));
+    }
+    banCustomHours.addEventListener('input', renderBanPresets);
+
+    function setBanType(permanent) {
+      banIsPermanent = permanent;
+      banTypeTemp.classList.toggle('active', !permanent);
+      banTypePerm.classList.toggle('active', permanent);
+      banDurationField.style.display = permanent ? 'none' : '';
+    }
+    banTypeTemp.addEventListener('click', () => setBanType(false));
+    banTypePerm.addEventListener('click', () => setBanType(true));
+
+    function openBanModal(p, permanent) {
+      banTargetUser = p;
+      document.getElementById('ban-target-username').textContent = p.username;
+      banReasonEl.value = '';
+      banCustomHours.value = '';
+      banSelectedHours = 24;
+      banErrorEl.classList.remove('show');
+      setBanType(!!permanent);
+      renderBanPresets();
+      banBackdrop.classList.add('show');
+    }
+    function closeBanModal() { banBackdrop.classList.remove('show'); banTargetUser = null; }
+    document.getElementById('ban-modal-close').addEventListener('click', closeBanModal);
+    document.getElementById('ban-cancel').addEventListener('click', closeBanModal);
+    banBackdrop.addEventListener('click', (e) => { if (e.target === banBackdrop) closeBanModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && banBackdrop.classList.contains('show')) closeBanModal(); });
+
+    document.getElementById('ban-confirm').addEventListener('click', async () => {
+      if (!banTargetUser) return;
+      const reason = banReasonEl.value.trim();
+      const hours = banCustomHours.value ? Number(banCustomHours.value) : banSelectedHours;
+
+      if (!banIsPermanent && (!hours || hours <= 0)) {
+        banErrorEl.textContent = 'Choose a duration or enter custom hours.';
+        banErrorEl.classList.add('show');
+        return;
+      }
+
+      const confirmMsg = banIsPermanent
+        ? 'Permanently ban ' + banTargetUser.username + '? They will never be able to log in again unless unbanned.'
+        : 'Ban ' + banTargetUser.username + ' for ' + hours + ' hour(s)?';
+      if (!window.confirm(confirmMsg)) return;
+
+      const { error } = await window.QZAuth.client.rpc('admin_ban_user', {
+        p_user: banTargetUser.id,
+        p_hours: banIsPermanent ? null : hours,
+        p_permanent: banIsPermanent,
+        p_reason: reason || null
+      });
+      if (error) { banErrorEl.textContent = error.message; banErrorEl.classList.add('show'); return; }
+
+      const { data: refreshed } = await window.QZAuth.client.from('profiles').select('*').eq('id', banTargetUser.id).single();
+      if (refreshed) {
+        if (window.QZAdminView) window.QZAdminView.targetProfile = refreshed;
+        renderBanControls(refreshed);
+      }
+      closeBanModal();
+      if (window.qzToast) window.qzToast(banTargetUser.username + ' has been banned.');
+    });
+
+    async function doUnban(p) {
+      if (!window.confirm('Lift the ban on ' + p.username + '?')) return;
+      const { error } = await window.QZAuth.client.rpc('admin_unban_user', { p_user: p.id });
+      if (error) { window.alert('Could not unban: ' + error.message); return; }
+      const { data: refreshed } = await window.QZAuth.client.from('profiles').select('*').eq('id', p.id).single();
+      if (refreshed) {
+        if (window.QZAdminView) window.QZAdminView.targetProfile = refreshed;
+        renderBanControls(refreshed);
+      }
+      if (window.qzToast) window.qzToast(p.username + ' has been unbanned.');
+    }
+
+    if (window.QZAdminViewReady) {
+      window.QZAdminViewReady.then((view) => {
+        if (view && view.active) renderAdminControls(view);
+      });
+    }
   })();
 </script>
 </body>

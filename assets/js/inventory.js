@@ -125,6 +125,24 @@
     renderAll();
   }
 
+  // Admin-only: remove an item from the VIEWED account (viewUserId), not
+  // the signed-in admin's own inventory. Goes through
+  // admin_delete_inventory_item — SECURITY DEFINER, re-checks is_admin()
+  // itself — so this is only ever reachable in adminReadOnly mode anyway
+  // (no menu entry offers it otherwise), and would be rejected by the
+  // database even if called directly by a non-admin.
+  async function adminDeleteItem(item) {
+    if (!adminReadOnly || !client) return;
+    if (!window.confirm('Remove "' + item.name + '" from this account’s inventory? This cannot be undone.')) return;
+    const { error } = await client.rpc('admin_delete_inventory_item', { p_user: viewUserId, p_item_id: item.id });
+    if (error) { window.alert('Could not remove item: ' + error.message); return; }
+    ownedIds.delete(item.id);
+    delete acquiredAtById[item.id];
+    Object.keys(equipped).forEach((slot) => { if (equipped[slot] === item.id) delete equipped[slot]; });
+    renderAll();
+    if (window.qzToast) window.qzToast('Removed "' + item.name + '" from this account’s inventory.');
+  }
+
   // ---------------- context menu ----------------
   let menuEl = null;
   function closeMenu() {
@@ -145,6 +163,7 @@
     actions.forEach((a) => {
       const btn = document.createElement('button');
       btn.type = 'button';
+      if (a.danger) btn.className = 'danger';
       btn.textContent = a.label;
       btn.addEventListener('click', () => { closeMenu(); a.onClick(); });
       menuEl.appendChild(btn);
@@ -226,7 +245,10 @@
         tile.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           const actions = adminReadOnly
-            ? [{ label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }]
+            ? [
+                { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) },
+                { label: 'REMOVE ITEM', danger: true, onClick: () => adminDeleteItem(item) }
+              ]
             : [
                 { label: 'UNEQUIP', onClick: () => unequip(slotDef.key) },
                 { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }
@@ -321,7 +343,10 @@
       card.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         const actions = adminReadOnly
-          ? [{ label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) }]
+          ? [
+              { label: 'EXAMINE', onClick: () => openExamine(item, e.clientX, e.clientY) },
+              { label: 'REMOVE ITEM', danger: true, onClick: () => adminDeleteItem(item) }
+            ]
           : equippedNow
             ? [
                 { label: 'UNEQUIP', onClick: () => unequip(item.slot) },
