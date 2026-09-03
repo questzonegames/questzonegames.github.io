@@ -121,14 +121,13 @@
     pointer-events: none; user-select: none; -webkit-user-drag: none;
   }
   .avatar-equip-layer {
+    /* top/width are set inline by avatar-viewer.js from its single
+       EQUIP_POSITIONS table (gender-aware) — not here, so there's exactly
+       one place this data lives instead of three drifting copies */
     position: absolute; left: 50%; height: auto; transform: translateX(-50%);
     pointer-events: none; user-select: none; -webkit-user-drag: none;
     filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3));
   }
-  .avatar-equip-head-front { top: 2.2%; width: 13%; }
-  .avatar-equip-head-back  { top: 2.2%; width: 13%; }
-  .avatar-equip-head-left  { top: 1.8%; width: 12%; }
-  .avatar-equip-head-right { top: 1.8%; width: 12%; }
   .avatar-arrow {
     position: absolute; top: 50%; z-index: 3; width: 34px; height: 34px;
     display: flex; align-items: center; justify-content: center;

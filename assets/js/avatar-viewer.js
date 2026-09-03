@@ -48,6 +48,35 @@
   // one body that's actually real (male-normal), never a mislabeled one.
   const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true, 'male-dark-tanned': true };
 
+  // Single source of truth for where each equip layer sits on the body,
+  // as a percentage of the shared avatar box (top = % of box height,
+  // width = % of box width — same units the CSS `top`/`width` properties
+  // use). This used to be hand-duplicated as CSS in customise.html,
+  // inventory.html AND profile/index.html; they'd already drifted out of
+  // sync (profile/index.html's .avatar-sprite padding didn't match the
+  // other two, silently shifting where gear landed depending which page
+  // you were looking at). Now there's exactly one place this lives.
+  //
+  // Keyed by gender because a differently-proportioned body needs its own
+  // numbers, not a shared guess — 'male' is real today; add a 'female' key
+  // here once that base model exists and every item worn on it will just
+  // pick up correct placement automatically, no per-page hunting required.
+  const EQUIP_POSITIONS = {
+    male: {
+      head: {
+        front: { top: 2.2, width: 13 },
+        back:  { top: 2.2, width: 13 },
+        left:  { top: 1.8, width: 12 },
+        right: { top: 1.8, width: 12 }
+      }
+    }
+  };
+  function equipPosition(gender, slotKey, pose) {
+    const g = EQUIP_POSITIONS[gender] || EQUIP_POSITIONS.male;
+    const slot = g[slotKey] || EQUIP_POSITIONS.male[slotKey];
+    return (slot && slot[pose]) || null;
+  }
+
   function baseSrc(pose, gender, skinColour) {
     const key = (gender || 'male') + '-' + (skinColour || 'normal');
     if (key === 'male-normal') return BASE_DIR + 'avatar-' + pose + '.png';
@@ -287,6 +316,8 @@
         // via the more specific class when a single placement doesn't
         // fit every angle (e.g. side views needing a narrower crown)
         img.className = 'avatar-equip-layer avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
+        const pos = equipPosition(currentGender, slotKey, pose);
+        if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
         img.src = views[pose];
         img.alt = '';
         img.setAttribute('aria-hidden', 'true');
@@ -331,6 +362,16 @@
         const pose = POSES[i];
         img.dataset.broken = '';
         img.src = baseSrc(pose, currentGender, currentSkinColour);
+      });
+      // any already-equipped gear needs repositioning too — a body swap
+      // (e.g. switching Gender on the Customise screen) can change which
+      // EQUIP_POSITIONS numbers apply, and worn items shouldn't keep
+      // sitting at the previous body's placement
+      Object.keys(equipLayers).forEach((slotKey) => {
+        equipLayers[slotKey].forEach((img, i) => {
+          const pos = equipPosition(currentGender, slotKey, POSES[i]);
+          if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
+        });
       });
     }
 

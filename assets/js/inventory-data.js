@@ -35,6 +35,15 @@
       name: 'Admin Crown',
       slot: 'head',
       icon: '👑',
+      // Fully encloses the scalp, so any hairstyle would clip through it —
+      // avatar-viewer.js hides the current hair layer whenever the
+      // equipped head item sets this, rather than trying to render a
+      // crown mesh that fits every hairstyle's shape. See its own comment
+      // above setHairstyle for the full mechanism (not built yet — no
+      // hairstyle art exists to hide). Leave this false/omitted on a head
+      // item that doesn't cover the hair (a circlet, glasses, a hairpin),
+      // so it keeps layering on top of hair normally.
+      hidesHair: true,
       views: {
         front: '../assets/img/equipment/head/admin-crown-front.png',
         right: '../assets/img/equipment/head/admin-crown-right.png',
