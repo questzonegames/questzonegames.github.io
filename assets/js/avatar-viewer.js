@@ -46,7 +46,7 @@
   // fallback path should never actually be reachable for gender:'female'
   // in practice — but if it ever is, it still only ever resolves to the
   // one body that's actually real (male-normal), never a mislabeled one.
-  const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true };
+  const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true, 'male-dark-tanned': true };
 
   function baseSrc(pose, gender, skinColour) {
     const key = (gender || 'male') + '-' + (skinColour || 'normal');
