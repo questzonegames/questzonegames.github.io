@@ -1,19 +1,20 @@
 // ===== Quest Zone — Inventory / Armory page controller =====
 //
-// Single source of truth for equipped items (`equipped`), persisted to
-// localStorage so it survives reloads/navigation. Worn Equipment, the
-// Inventory grid, and the avatar's loadout chips are all just renders of
-// this one state object — nothing keeps its own separate copy.
+// Single source of truth for what an account owns and has equipped is
+// Supabase now (inventory_items / equipped_items, both RLS-scoped to
+// auth.uid() — see supabase/schema.sql), not localStorage. Worn
+// Equipment, the Inventory grid, and the avatar's on-body art are all
+// just renders of whatever those two tables currently say for the
+// logged-in account; nothing here keeps a separate copy, and nothing
+// renders at all until a real session is confirmed.
 //
-// Data comes from window.QZ_INVENTORY / QZ_EQUIPMENT_SLOTS / QZ_DEFAULT_EQUIPPED
-// (assets/js/inventory-data.js), a stand-in for a future profile.inventory /
-// profile.equippedItems from real account data.
+// window.QZ_ITEM_CATALOG (assets/js/inventory-data.js) is reference data
+// only — every item that CAN exist, not what this account owns.
 (function () {
-  const STORAGE_KEY = 'qz_equipped_items';
   const PAGE_SIZE = 6;
 
   const SLOTS = window.QZ_EQUIPMENT_SLOTS || [];
-  const ITEMS = window.QZ_INVENTORY || [];
+  const CATALOG = window.QZ_ITEM_CATALOG || [];
   const SLOT_LABEL = {};
   SLOTS.forEach((s) => { SLOT_LABEL[s.key] = s.label; });
 
@@ -52,42 +53,45 @@
     return '<svg class="worn-slot-empty-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' + (SLOT_SILHOUETTE[slotKey] || '') + '</svg>';
   }
 
-  const itemsById = {};
-  ITEMS.forEach((it) => { itemsById[it.id] = it; });
+  const catalogById = {};
+  CATALOG.forEach((it) => { catalogById[it.id] = it; });
 
-  let equipped = loadEquipped();
+  let client = null;
+  let uid = null;
+  let ownedIds = new Set();       // item ids this account owns (inventory_items)
+  let acquiredAtById = {};        // item id -> inventory_items.acquired_at (ISO string)
+  let equipped = {};              // slotKey -> itemId, ONLY for slots with a row (equipped_items)
   let activeFilter = 'all';
   let searchTerm = '';
   let currentPage = 1;
   let avatar = null;
 
-  function loadEquipped() {
-    let stored = null;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) stored = JSON.parse(raw);
-    } catch (_) {}
-    const base = Object.assign({}, window.QZ_DEFAULT_EQUIPPED || {});
-    if (!stored) return base;
-    // drop any stored id that no longer exists in the current catalog
-    // (e.g. an older demo item id from before a data reset) instead of
-    // leaving a dangling reference that renders nothing
-    Object.keys(base).forEach((slotKey) => {
-      const id = stored[slotKey];
-      base[slotKey] = id && itemsById[id] ? id : null;
-    });
-    return base;
-  }
-  function saveEquipped() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(equipped)); } catch (_) {}
+  function ownedItems() {
+    return CATALOG.filter((it) => ownedIds.has(it.id));
   }
 
+  // "8:37 PM on 03/09/2026" — UK date order, UTC, 12-hour clock. Reads
+  // the actual acquired_at stored on the inventory row, not "now".
+  function formatAcquired(isoString) {
+    if (!isoString) return null;
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return null;
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    let hours = d.getUTCHours();
+    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return hours + ':' + minutes + ' ' + ampm + ' on ' + day + '/' + month + '/' + year;
+  }
   function isEquipped(itemId) {
     return Object.keys(equipped).some((slot) => equipped[slot] === itemId);
   }
   function equippedItemFor(slotKey) {
     const id = equipped[slotKey];
-    return id ? itemsById[id] : null;
+    return id ? catalogById[id] : null;
   }
   function expandedEquipped() {
     const out = {};
@@ -95,17 +99,25 @@
     return out;
   }
 
-  function equip(itemId) {
-    const item = itemsById[itemId];
-    if (!item) return;
+  async function equip(itemId) {
+    const item = catalogById[itemId];
+    if (!item || !ownedIds.has(itemId) || !client) return;
+    const { error } = await client
+      .from('equipped_items')
+      .upsert({ user_id: uid, slot: item.slot, item_id: itemId }, { onConflict: 'user_id,slot' });
+    if (error) { console.warn('Quest Zone: could not equip', error); return; }
     equipped[item.slot] = itemId;
-    saveEquipped();
     renderAll();
   }
-  function unequip(slotKey) {
-    if (!equipped[slotKey]) return;
-    equipped[slotKey] = null;
-    saveEquipped();
+  async function unequip(slotKey) {
+    if (!equipped[slotKey] || !client) return;
+    const { error } = await client
+      .from('equipped_items')
+      .delete()
+      .eq('user_id', uid)
+      .eq('slot', slotKey);
+    if (error) { console.warn('Quest Zone: could not unequip', error); return; }
+    delete equipped[slotKey];
     renderAll();
   }
 
@@ -232,7 +244,7 @@
   }
 
   function filteredItems() {
-    return ITEMS.filter((item) => (activeFilter === 'all' || item.slot === activeFilter) && itemMatchesSearch(item, searchTerm));
+    return ownedItems().filter((item) => (activeFilter === 'all' || item.slot === activeFilter) && itemMatchesSearch(item, searchTerm));
   }
 
   function renderFilters() {
@@ -256,10 +268,11 @@
     });
   }
 
-  // total page count for the pagination UI. Kept at a minimum of 5 while
-  // the demo catalog is tiny, matching the "Page 1-5 ..." control the
-  // eventual, much larger real inventory will actually need — the extra
-  // pages just render as empty cells rather than being hidden entirely.
+  // total page count for the pagination UI. Kept at a minimum of 5 so the
+  // "Page 1-5 ..." control is always there the way a much fuller inventory
+  // will actually need — the extra pages just render as empty cells
+  // rather than being hidden entirely when an account owns little or
+  // nothing yet.
   function totalPageCount(items) {
     return Math.max(5, Math.ceil(items.length / PAGE_SIZE));
   }
@@ -285,15 +298,17 @@
       }
 
       const equippedNow = isEquipped(item.id);
+      const slotLabel = (SLOT_LABEL[item.slot] || item.slot) + ' Slot';
+      const acquired = formatAcquired(acquiredAtById[item.id]);
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'inv-card' + (equippedNow ? ' equipped' : '');
-      card.title = item.name + '\n' + (SLOT_LABEL[item.slot] || item.slot);
+      card.title = item.name + '\n' + slotLabel + (acquired ? '\nDate acquired: ' + acquired : '');
       const thumb = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
       card.innerHTML =
         '<span class="inv-card-icon">' + thumb + '</span>' +
         '<span class="inv-card-name">' + item.name + '</span>' +
-        '<span class="inv-card-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</span>' +
+        '<span class="inv-card-slot">' + slotLabel + '</span>' +
         (equippedNow ? '<span class="inv-card-tag">Equipped</span>' : '');
 
       card.addEventListener('contextmenu', (e) => {
@@ -411,8 +426,73 @@
     if (avatar) avatar.setAvatarEquipment(expandedEquipped());
   }
 
-  // ---------------- init ----------------
-  function init() {
+  // ---------------- gating + data load ----------------
+  function setState(html) {
+    const stateEl = document.getElementById('inventory-state');
+    const gridEl = document.getElementById('armory-grid');
+    if (stateEl) { stateEl.innerHTML = html; stateEl.hidden = false; }
+    if (gridEl) gridEl.hidden = true;
+  }
+
+  async function loadAccountData() {
+    const [invRes, eqRes] = await Promise.all([
+      client.from('inventory_items').select('item_id,acquired_at'),
+      client.from('equipped_items').select('slot,item_id')
+    ]);
+    if (invRes.error) { setState('<div class="icon">⚠️</div>Could not load your inventory: ' + invRes.error.message); return false; }
+    if (eqRes.error) { setState('<div class="icon">⚠️</div>Could not load your equipment: ' + eqRes.error.message); return false; }
+
+    ownedIds = new Set((invRes.data || []).map((r) => r.item_id));
+    acquiredAtById = {};
+    (invRes.data || []).forEach((r) => { acquiredAtById[r.item_id] = r.acquired_at; });
+    equipped = {};
+    (eqRes.data || []).forEach((r) => { if (r.item_id) equipped[r.slot] = r.item_id; });
+    return true;
+  }
+
+  function mountAvatar() {
+    const avatarContainer = document.getElementById('armory-avatar-3d');
+    if (avatarContainer && window.QZAvatarViewer) {
+      avatar = window.QZAvatarViewer.mount(avatarContainer);
+      window.qzAvatar = avatar;
+    }
+    const arrowLeft = document.getElementById('armory-arrow-left');
+    const arrowRight = document.getElementById('armory-arrow-right');
+    if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
+    if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
+
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted && avatarContainer && window.QZAvatarViewer && !avatarContainer.querySelector('img')) {
+        avatar = window.QZAvatarViewer.mount(avatarContainer);
+        window.qzAvatar = avatar;
+        if (avatar) avatar.setAvatarEquipment(expandedEquipped());
+      }
+    });
+  }
+
+  async function init() {
+    if (!window.QZAuth || !window.QZAuth.configured) {
+      setState('<div class="icon">⚠️</div>Accounts aren’t configured on this deployment yet.');
+      return;
+    }
+    const session = await window.QZAuth.getSession();
+    if (!session) {
+      setState('<div class="icon">🔒</div>Log in to view your Inventory.<br><br><a class="btn btn-chrome-blue" href="../login.html">Log In</a>');
+      return;
+    }
+
+    client = window.QZAuth.client;
+    uid = session.user.id;
+
+    const profile = await window.QZAuth.getProfile();
+    const nameEl = document.getElementById('armory-username');
+    if (nameEl && profile) nameEl.textContent = profile.username;
+
+    const ok = await loadAccountData();
+    if (!ok) return;
+
+    mountAvatar();
+
     const searchInput = document.getElementById('inventory-search');
     if (searchInput) {
       searchInput.addEventListener('input', () => {
@@ -423,27 +503,13 @@
       });
     }
 
-    const avatarContainer = document.getElementById('armory-avatar-3d');
-    if (avatarContainer && window.QZAvatarViewer) {
-      avatar = window.QZAvatarViewer.mount(avatarContainer);
-      window.qzAvatar = avatar;
-    }
-
-    const arrowLeft = document.getElementById('armory-arrow-left');
-    const arrowRight = document.getElementById('armory-arrow-right');
-    if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
-    if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
-
     renderFilters();
     renderAll();
 
-    window.addEventListener('pageshow', (e) => {
-      if (e.persisted && avatarContainer && window.QZAvatarViewer && !avatarContainer.querySelector('img')) {
-        avatar = window.QZAvatarViewer.mount(avatarContainer);
-        window.qzAvatar = avatar;
-        renderAll();
-      }
-    });
+    const stateEl = document.getElementById('inventory-state');
+    const gridEl = document.getElementById('armory-grid');
+    if (stateEl) stateEl.hidden = true;
+    if (gridEl) gridEl.hidden = false;
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

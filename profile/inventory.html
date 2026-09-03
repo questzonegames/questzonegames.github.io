@@ -67,6 +67,13 @@
     opacity: 0.9;
   }
 
+  .inv-state {
+    max-width: 480px; margin: 30px auto; text-align: center;
+    color: var(--text-dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .inv-state .icon { font-size: 32px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
+  .inv-state .btn { margin-top: 14px; }
+
   /* ---------- three-column layout ---------- */
   .armory-grid {
     display: grid;
@@ -74,6 +81,10 @@
     gap: clamp(14px, 2vw, 22px);
     align-items: stretch;
   }
+  /* author-origin "display: grid" above would otherwise outrank the
+     browser's own [hidden]{display:none} default regardless of the
+     attribute being set — this rule just needs to out-specificity it */
+  .armory-grid[hidden] { display: none; }
 
   /* ---- avatar column ---- */
   .armory-avatar-col { display: flex; flex-direction: column; align-items: center; }
@@ -502,7 +513,9 @@
         <span class="armory-top-spacer"></span>
       </div>
 
-      <div class="armory-grid">
+      <div id="inventory-state" class="inv-state">Loading your inventory…</div>
+
+      <div class="armory-grid" id="armory-grid" hidden>
 
         <!-- Avatar -->
         <div class="armory-avatar-col">

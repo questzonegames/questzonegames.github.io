@@ -1,14 +1,14 @@
-// ===== Quest Zone — demo inventory data =====
+// ===== Quest Zone — item catalog =====
 //
-// Temporary local dataset standing in for real account data
-// (profile.inventory / profile.equippedItems) until accounts/Supabase
-// are wired up. Slot keys match the avatar viewer's equipment-anchor
-// names, so this same shape is what a real backend would eventually
-// hand to setAvatarEquipment().
+// This is reference data only — every item that CAN exist in the game,
+// not what any particular account owns. Ownership and what's equipped
+// now live in Supabase (inventory_items / equipped_items, both governed
+// by RLS — see supabase/schema.sql and assets/js/inventory.js), which is
+// why a brand new account correctly starts with an empty inventory: it
+// has zero rows in those tables regardless of how many items exist here.
 //
-//   window.QZ_EQUIPMENT_SLOTS  — the 10 canonical slots, in display order
-//   window.QZ_INVENTORY        — every item the (demo) player owns
-//   window.QZ_DEFAULT_EQUIPPED — which item id starts equipped per slot
+//   window.QZ_EQUIPMENT_SLOTS — the 10 canonical slots, in display order
+//   window.QZ_ITEM_CATALOG    — every item definition that exists
 //
 // An item's `views` (front/right/back/left image paths) is what makes it
 // actually appear on the avatar, worn correctly at every angle — see
@@ -44,21 +44,6 @@
     }
   ];
 
-  // nothing equipped by default — the avatar opens bare-headed
-  const DEFAULT_EQUIPPED = {
-    head: null,
-    necklace: null,
-    body: null,
-    legs: null,
-    boots: null,
-    gloves: null,
-    back: null,
-    mainHand: null,
-    offHand: null,
-    accessory: null
-  };
-
   window.QZ_EQUIPMENT_SLOTS = SLOTS;
-  window.QZ_INVENTORY = ITEMS;
-  window.QZ_DEFAULT_EQUIPPED = DEFAULT_EQUIPPED;
+  window.QZ_ITEM_CATALOG = ITEMS;
 })();

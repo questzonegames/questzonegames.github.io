@@ -202,6 +202,47 @@
     user-select: none;
     -webkit-user-drag: none;
   }
+  /* Equipped-item art (currently just the head slot) — sized and
+     positioned independently of the base sprite's object-fit box so it
+     can sit right on the head instead of being scaled to fill the whole
+     avatar box. Same values as the Inventory page's avatar (see
+     profile/inventory.html) so gear looks identical wherever the avatar
+     is shown. */
+  .avatar-equip-layer {
+    position: absolute;
+    left: 50%;
+    height: auto;
+    transform: translateX(-50%);
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3));
+  }
+  .avatar-equip-head-front { top: 2.2%; width: 13%; }
+  .avatar-equip-head-back  { top: 2.2%; width: 13%; }
+  .avatar-equip-head-left  { top: 1.8%; width: 12%; }
+  .avatar-equip-head-right { top: 1.8%; width: 12%; }
+
+  .avatar-loadout {
+    position: absolute;
+    left: 50%;
+    bottom: 4%;
+    z-index: 3;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .avatar-loadout-chip {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    border-radius: 50%;
+    background: rgba(6,10,20,0.75);
+    border: 1px solid rgba(140,195,255,0.45);
+    box-shadow: 0 0 8px rgba(70,140,255,0.35);
+  }
+
   /* ---- left/right pose-rotation arrows ---- */
   .avatar-arrow {
     position: absolute;
@@ -351,9 +392,11 @@
   .tile-pinned { justify-content: flex-start; }
 
   /* ---- pinned achievements: 7-slot showcase ----
-     One slot per pin (populated from PINNED_ACHIEVEMENTS_DATA — see the
-     script at the bottom of this page). Each slot is just an <img> plus
-     a custom tooltip; the artwork already carries its own frame/glow, so
+     Always 7 slots, populated from pinned_achievements/achievements (see
+     the script at the bottom of this page); an empty slot renders as a
+     hollow outline instead of being skipped. A filled slot is just an
+     <img> plus a custom tooltip; the artwork already carries its own
+     frame/glow, so
      no extra decorative ring is drawn around it. */
   .pinned-badges {
     display: flex;
@@ -403,6 +446,16 @@
   .pin-slot.pin-slot-locked img { filter: grayscale(0.85) brightness(0.55) saturate(0.35); }
   .pin-slot.pin-slot-locked:hover img { filter: grayscale(0.75) brightness(0.6) saturate(0.4) drop-shadow(0 0 4px rgba(110,130,160,0.3)); }
   .pin-slot.pin-slot-locked:hover::after { opacity: 0; }
+
+  /* nothing pinned in this slot — hollow ring, no glow, still shows the
+     "No pinned achievement" tooltip on hover */
+  .pin-slot.pin-slot-empty { cursor: default; }
+  .pin-slot-empty-icon {
+    width: 62%; height: 62%;
+    color: rgba(140,170,215,0.32);
+    filter: drop-shadow(0 0 3px rgba(90,150,255,0.12));
+  }
+  .pin-slot.pin-slot-empty:hover::after { opacity: 0; }
 
   /* while one pin is being inspected (achievement pop-out open), its
      siblings dim to make the detached icon read clearly */
@@ -547,7 +600,7 @@
             <a href="achievements.html" class="tile tile-pinned bezel-sm" id="pinned-achievements-tile" aria-label="Open your achievements">
               <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-label">Pinned Achievements</span>
-              <div class="pinned-badges" id="pinned-achievements-list"><!-- rendered from PINNED_ACHIEVEMENTS_DATA --></div>
+              <div class="pinned-badges" id="pinned-achievements-list"><!-- 7 slots, rendered from pinned_achievements/achievements --></div>
             </a>
           </div>
 
@@ -616,6 +669,7 @@
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
 <script src="../assets/js/achievement-inspection.js"></script>
+<script src="../assets/js/inventory-data.js"></script>
 <script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script type="module">
   // Mount the avatar viewer into the existing avatar-stage box. Kept as
@@ -629,12 +683,36 @@
     window.qzAvatar = window.QZAvatarViewer.mount(container);
   }
 
+  // Whatever this account currently has equipped (from the Inventory
+  // page, or anywhere else that writes equipped_items) shows up here too
+  // — the avatar always renders the real, current equipped_items rows,
+  // not a snapshot from whenever this page happened to load.
+  async function applyRealEquipment() {
+    if (!window.qzAvatar || !window.QZAuth || !window.QZAuth.client) return;
+    const session = await window.QZAuth.getSession();
+    if (!session) return;
+    const { data, error } = await window.QZAuth.client
+      .from('equipped_items')
+      .select('slot,item_id')
+      .eq('user_id', session.user.id);
+    if (error || !data) return;
+    const catalogById = {};
+    (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+    const equipped = {};
+    data.forEach((row) => {
+      if (row.item_id && catalogById[row.item_id]) equipped[row.slot] = catalogById[row.item_id];
+    });
+    window.qzAvatar.setAvatarEquipment(equipped);
+  }
+  applyRealEquipment();
+
   // A bfcache-restored page (browser back/forward) skips re-running this
   // script, but the previous load's `pagehide` already tore the viewer
   // down — re-mount so the avatar doesn't come back broken/blank.
   window.addEventListener('pageshow', (e) => {
     if (e.persisted && container && window.QZAvatarViewer && !container.querySelector('img')) {
       window.qzAvatar = window.QZAvatarViewer.mount(container);
+      applyRealEquipment();
     }
   });
 
@@ -659,6 +737,8 @@
       if (!profile) return;
       const nameEl = document.getElementById('profile-username');
       if (nameEl) nameEl.textContent = profile.username;
+      const qpEl = document.getElementById('quest-points-value');
+      if (qpEl) qpEl.textContent = Number(profile.quest_points || 0).toLocaleString();
       const banner = document.getElementById('preview-banner');
       if (banner) banner.style.display = 'none';
     }
@@ -667,9 +747,6 @@
 </script>
 <script>
   // Scatter a few faint static stars inside the avatar stage for depth.
-  // Placeholder data below stands in for real account fields until
-  // accounts/Supabase are wired up: profile-username, quest-points-value,
-  // pinned-achievements-list, and the avatar figure itself.
   (function () {
     const stage = document.getElementById('avatar-stage');
     for (let i = 0; i < 14; i++) {
@@ -686,64 +763,104 @@
   })();
 
   // ---- pinned achievements: 7-slot showcase ----
-  // Data-driven so a future account system can just swap this array for
-  // whatever the player actually has pinned — nothing else on the page
-  // needs to change. Shape matches window.QZAchievementInspection's
-  // expected achievement object (see assets/js/achievement-inspection.js).
+  // Always exactly 7 slots, whether or not anything is pinned in them —
+  // an empty slot shows a hollow silhouette with a "No pinned
+  // achievement" tooltip rather than being skipped. Pin data comes from
+  // pinned_achievements (slot 1-7) joined against the achievements
+  // catalog; both are readable for ANY account (not just your own — see
+  // supabase/schema.sql), since pinned achievements are meant to be
+  // showable on a player's public profile, unlike private stats like XP.
+  // Shape matches window.QZAchievementInspection's expected achievement
+  // object (see assets/js/achievement-inspection.js).
   (function () {
-    const PINNED_ACHIEVEMENTS_DATA = [
-      { id: 'jack-of-all-trades-locked',   name: 'Jack of All Trades', tier: 'Locked',   description: 'You have not completed this achievement.',      icon: '../assets/img/achievements/jack-of-all-trades-locked.png' },
-      { id: 'jack-of-all-trades-bronze',   name: 'Jack of All Trades', tier: 'Bronze',   description: 'Reach a total level of 100 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-bronze.png' },
-      { id: 'jack-of-all-trades-silver',   name: 'Jack of All Trades', tier: 'Silver',   description: 'Reach a total level of 250 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-silver.png' },
-      { id: 'jack-of-all-trades-gold',     name: 'Jack of All Trades', tier: 'Gold',     description: 'Reach a total level of 500 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-gold.png' },
-      { id: 'jack-of-all-trades-platinum', name: 'Jack of All Trades', tier: 'Platinum', description: 'Reach a total level of 750 across all games.',    icon: '../assets/img/achievements/jack-of-all-trades-platinum.png' },
-      { id: 'jack-of-all-trades-diamond',  name: 'Jack of All Trades', tier: 'Diamond',  description: 'Reach a total level of 1,000 across all games.',  icon: '../assets/img/achievements/jack-of-all-trades-diamond.png' },
-      { id: 'jack-of-all-trades-mythic',   name: 'Jack of All Trades', tier: 'Mythic',   description: 'Reach a total level of 1,500 across all games.',  icon: '../assets/img/achievements/jack-of-all-trades-mythic.png' }
-    ];
     const PIN_SLOT_COUNT = 7;
-
     const list = document.getElementById('pinned-achievements-list');
-    if (list) {
-      for (let i = 0; i < PIN_SLOT_COUNT; i++) {
-        const data = PINNED_ACHIEVEMENTS_DATA[i];
-        const slot = document.createElement('span');
-        slot.className = 'pin-slot' + (data && data.tier === 'Locked' ? ' pin-slot-locked' : '');
-        if (data) {
-          const label = data.name + ' (' + data.tier + ')';
+    if (!list) return;
 
-          const img = document.createElement('img');
-          img.src = data.icon;
-          img.alt = '';
-          img.loading = 'lazy';
-          slot.appendChild(img);
+    function renderEmptySlot() {
+      const slot = document.createElement('span');
+      slot.className = 'pin-slot pin-slot-empty';
+      slot.innerHTML = '<svg class="pin-slot-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
+      const tooltip = document.createElement('span');
+      tooltip.className = 'pin-tooltip';
+      tooltip.textContent = 'No pinned achievement';
+      slot.appendChild(tooltip);
+      slot.tabIndex = 0;
+      slot.setAttribute('aria-label', 'No pinned achievement');
+      return slot;
+    }
 
-          const tooltip = document.createElement('span');
-          tooltip.className = 'pin-tooltip';
-          tooltip.textContent = label;
-          slot.appendChild(tooltip);
+    function renderFilledSlot(data) {
+      const slot = document.createElement('span');
+      slot.className = 'pin-slot' + (data.tier === 'Locked' ? ' pin-slot-locked' : '');
+      const label = data.name + ' (' + data.tier + ')';
 
-          // keyboard-operable without nesting a <button> inside the
-          // tile's own <a> (invalid HTML) — standard ARIA button pattern
-          slot.tabIndex = 0;
-          slot.setAttribute('role', 'button');
-          slot.setAttribute('aria-label', 'Inspect achievement: ' + label);
+      const img = document.createElement('img');
+      img.src = data.icon;
+      img.alt = '';
+      img.loading = 'lazy';
+      slot.appendChild(img);
 
-          // clicking an individual icon opens its inspection pop-out —
-          // it must NOT fall through to the tile's own achievements.html
-          // link, so stop it right here.
-          const openInspection = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            window.QZAchievementInspection.open(data, slot);
-          };
-          slot.addEventListener('click', openInspection);
-          slot.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') openInspection(e);
-          });
+      const tooltip = document.createElement('span');
+      tooltip.className = 'pin-tooltip';
+      tooltip.textContent = label;
+      slot.appendChild(tooltip);
+
+      // keyboard-operable without nesting a <button> inside the tile's
+      // own <a> (invalid HTML) — standard ARIA button pattern
+      slot.tabIndex = 0;
+      slot.setAttribute('role', 'button');
+      slot.setAttribute('aria-label', 'Inspect achievement: ' + label);
+
+      // clicking an individual icon opens its inspection pop-out — it
+      // must NOT fall through to the tile's own achievements.html link,
+      // so stop it right here.
+      const openInspection = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.QZAchievementInspection.open(data, slot);
+      };
+      slot.addEventListener('click', openInspection);
+      slot.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') openInspection(e);
+      });
+      return slot;
+    }
+
+    async function loadPinnedForCurrentUser() {
+      const pinnedBySlot = {};
+      if (window.QZAuth && window.QZAuth.client) {
+        const session = await window.QZAuth.getSession();
+        if (session) {
+          const { data, error } = await window.QZAuth.client
+            .from('pinned_achievements')
+            .select('slot, achievements(achievement_id, name, tier, description, icon)')
+            .eq('user_id', session.user.id);
+          if (!error && data) {
+            data.forEach((row) => { if (row.achievements) pinnedBySlot[row.slot] = row.achievements; });
+          }
         }
-        list.appendChild(slot);
+      }
+      return pinnedBySlot;
+    }
+
+    async function render() {
+      const pinnedBySlot = await loadPinnedForCurrentUser();
+      list.innerHTML = '';
+      for (let slotNum = 1; slotNum <= PIN_SLOT_COUNT; slotNum++) {
+        const a = pinnedBySlot[slotNum];
+        if (a) {
+          list.appendChild(renderFilledSlot({
+            id: a.achievement_id, name: a.name, tier: a.tier || '',
+            description: a.description || '', icon: a.icon || ''
+          }));
+        } else {
+          list.appendChild(renderEmptySlot());
+        }
       }
     }
+
+    render();
   })();
 
   // ---- interactive tiles: subtle 3D tilt, cursor-follow light, and a

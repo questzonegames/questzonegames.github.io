@@ -1,14 +1,22 @@
 -- ============================================================================
 -- Quest Zone — accounts, XP/leveling, inventory schema
 -- ============================================================================
--- Run this ONCE in the Supabase SQL Editor (Project → SQL Editor → New query
--- → paste this whole file → Run) on a fresh project. It is safe to re-run:
--- every statement is guarded with IF NOT EXISTS / OR REPLACE / DROP-then-
--- CREATE for policies, so re-running just re-applies the same end state.
+-- This file is kept as a full, current bootstrap reference — running it on a
+-- fresh project (Project → SQL Editor → New query → paste this whole file →
+-- Run) still works, and is safe to re-run: every statement is guarded with
+-- IF NOT EXISTS / OR REPLACE / DROP-then-CREATE for policies.
 --
--- After running this once, make YOUR OWN account an admin (see the very
--- bottom of this file for the exact command — run it AFTER you've signed up
--- through the real Quest Zone signup form).
+-- For THIS project, schema changes as of 03/09/2026 are pushed via the
+-- Supabase CLI (`supabase db push`, linked to project cbwlhrymbciihpkfjzmd)
+-- instead of pasting into the SQL Editor by hand — see supabase/migrations/.
+-- Everything in this file up to that date matches the migration baseline in
+-- supabase/migrations/20260903004123_initial_schema.sql. Going forward, new
+-- changes land as new files under supabase/migrations/ AND get folded back
+-- into this file, so this stays an accurate single-file snapshot too.
+--
+-- After running this once on a fresh project, make YOUR OWN account an admin
+-- (see the very bottom of this file for the exact command — run it AFTER
+-- you've signed up through the real Quest Zone signup form).
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -21,11 +29,63 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- a fresh account starts at 0 — added as a separate ALTER so re-running
+-- this file against a project that already has a profiles table (created
+-- before this column existed) still picks it up
+alter table public.profiles add column if not exists quest_points integer not null default 0;
+
 -- usernames are unique, case-insensitively ("Alex" and "alex" collide)
 create unique index if not exists profiles_username_lower_idx
   on public.profiles (lower(username));
 
 alter table public.profiles enable row level security;
+
+-- ----------------------------------------------------------------------------
+-- games — canonical registry of every "Total Level" game slot. New-account
+-- signup seeds one game_progress row per row in here (see handle_new_user
+-- below), and total_level() sums across this table rather than a hardcoded
+-- count, so both automatically pick up new games the moment a row is added
+-- here — no code change and no per-account backfill needed.
+-- ----------------------------------------------------------------------------
+create table if not exists public.games (
+  game_key text primary key,
+  name text not null,
+  sort_order int not null
+);
+alter table public.games enable row level security;
+drop policy if exists "games_select_all" on public.games;
+create policy "games_select_all" on public.games for select using (true);
+
+insert into public.games (game_key, name, sort_order) values
+  ('space-snake', 'Space Snake', 1),
+  ('total-level-2', 'Total Level Game 02', 2),
+  ('total-level-3', 'Total Level Game 03', 3),
+  ('total-level-4', 'Total Level Game 04', 4),
+  ('total-level-5', 'Total Level Game 05', 5),
+  ('total-level-6', 'Total Level Game 06', 6),
+  ('total-level-7', 'Total Level Game 07', 7),
+  ('total-level-8', 'Total Level Game 08', 8),
+  ('total-level-9', 'Total Level Game 09', 9),
+  ('total-level-10', 'Total Level Game 10', 10),
+  ('total-level-11', 'Total Level Game 11', 11),
+  ('total-level-12', 'Total Level Game 12', 12),
+  ('total-level-13', 'Total Level Game 13', 13),
+  ('total-level-14', 'Total Level Game 14', 14),
+  ('total-level-15', 'Total Level Game 15', 15),
+  ('total-level-16', 'Total Level Game 16', 16),
+  ('total-level-17', 'Total Level Game 17', 17),
+  ('total-level-18', 'Total Level Game 18', 18),
+  ('total-level-19', 'Total Level Game 19', 19),
+  ('total-level-20', 'Total Level Game 20', 20),
+  ('total-level-21', 'Total Level Game 21', 21),
+  ('total-level-22', 'Total Level Game 22', 22),
+  ('total-level-23', 'Total Level Game 23', 23),
+  ('total-level-24', 'Total Level Game 24', 24)
+on conflict (game_key) do nothing;
+-- Renaming a placeholder to a real game later: just
+--   update public.games set game_key = 'real-slug', name = 'Real Name'
+--   where game_key = 'total-level-N';
+-- existing accounts' game_progress rows follow via the foreign key.
 
 -- ----------------------------------------------------------------------------
 -- is_admin() — SECURITY DEFINER helper so admin-read policies don't recurse
@@ -62,10 +122,15 @@ create policy "profiles_update_own"
 -- directly by clients — there is deliberately no insert policy for them.
 
 -- ----------------------------------------------------------------------------
--- auto-create the profile row when someone signs up, from the username
--- passed in as auth signUp(...) metadata. If the username is taken, this
--- raises a friendly error and the whole signup is rolled back (no orphaned
--- auth.users row left behind).
+-- auto-create everything a fresh account needs, together, the moment
+-- signup completes: the profile row (username from auth signUp(...)
+-- metadata; quest_points/is_admin default to 0/false from the table
+-- itself) and one game_progress row per game currently in public.games,
+-- all starting at level 1 / 0 XP. inventory_items/equipped_items are
+-- deliberately left with zero rows — "owns nothing, has nothing
+-- equipped" IS the empty set, nothing to insert.
+-- If the username is taken, this raises a friendly error and the whole
+-- signup is rolled back (no orphaned auth.users row left behind).
 -- ----------------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger
@@ -76,6 +141,11 @@ as $$
 begin
   insert into public.profiles (id, username)
   values (new.id, new.raw_user_meta_data->>'username');
+
+  insert into public.game_progress (user_id, game_key, xp, level)
+  select new.id, g.game_key, 0, 1
+  from public.games g;
+
   return new;
 exception
   when unique_violation then
@@ -122,6 +192,19 @@ create table if not exists public.game_progress (
   updated_at timestamptz not null default now(),
   primary key (user_id, game_key)
 );
+
+-- game_key follows public.games(game_key): renaming a placeholder to a
+-- real game's slug (see the games table above) cascades into every
+-- account's existing progress row instead of orphaning it
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'game_progress_game_key_fkey') then
+    alter table public.game_progress
+      add constraint game_progress_game_key_fkey
+      foreign key (game_key) references public.games(game_key)
+      on update cascade on delete cascade;
+  end if;
+end $$;
 
 alter table public.game_progress enable row level security;
 
@@ -174,6 +257,24 @@ begin
   return lvl;
 end;
 $$;
+
+-- ----------------------------------------------------------------------------
+-- total_level() — every game not yet played by p_user still counts as
+-- level 1 (games's row count covers that baseline), so this is correct
+-- for a brand new account (count(games) * 1) AND stays correct the
+-- instant a new game is added to public.games, for every account,
+-- without touching game_progress at all.
+-- ----------------------------------------------------------------------------
+create or replace function public.total_level(p_user uuid)
+returns bigint
+language sql
+stable
+as $$
+  select (select count(*) from public.games)
+       + coalesce((select sum(gp.level - 1) from public.game_progress gp where gp.user_id = p_user), 0);
+$$;
+
+grant execute on function public.total_level(uuid) to authenticated, anon;
 
 -- ----------------------------------------------------------------------------
 -- award_xp() — the ONLY way a game's XP changes. Adds xp_to_add, caps the
@@ -276,6 +377,66 @@ create policy "equipped_update_own"
 drop policy if exists "equipped_delete_own" on public.equipped_items;
 create policy "equipped_delete_own"
   on public.equipped_items for delete
+  using (auth.uid() = user_id);
+
+-- ============================================================================
+-- achievements — catalog (public reference data, like games) + per-account
+-- unlocks + up to 7 pinned slots. A fresh account has zero rows in either
+-- of the per-account tables, which IS "zero unlocked / none pinned" —
+-- exactly like inventory_items, nothing needs seeding at signup.
+-- ============================================================================
+create table if not exists public.achievements (
+  achievement_id text primary key,
+  name text not null,
+  tier text,
+  description text,
+  icon text,
+  sort_order int
+);
+alter table public.achievements enable row level security;
+drop policy if exists "achievements_select_all" on public.achievements;
+create policy "achievements_select_all" on public.achievements for select using (true);
+
+create table if not exists public.unlocked_achievements (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  achievement_id text not null references public.achievements(achievement_id) on delete cascade,
+  unlocked_at timestamptz not null default now(),
+  primary key (user_id, achievement_id)
+);
+alter table public.unlocked_achievements enable row level security;
+drop policy if exists "unlocked_select_own_or_admin" on public.unlocked_achievements;
+create policy "unlocked_select_own_or_admin"
+  on public.unlocked_achievements for select
+  using (auth.uid() = user_id or public.is_admin());
+-- unlocking is meant to happen server-side (alongside award_xp, once a
+-- real trigger condition exists) — no client insert policy yet, deliberately.
+
+create table if not exists public.pinned_achievements (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  slot int not null check (slot between 1 and 7),
+  achievement_id text references public.achievements(achievement_id) on delete set null,
+  primary key (user_id, slot)
+);
+alter table public.pinned_achievements enable row level security;
+-- public read, unlike unlocked_achievements/game_progress/inventory:
+-- pinning IS showing off, so any signed-in-or-not visitor viewing a
+-- player's profile needs to see their 7 pinned slots, not just that
+-- player themselves or an admin.
+drop policy if exists "pinned_select_own_or_admin" on public.pinned_achievements;
+drop policy if exists "pinned_select_all" on public.pinned_achievements;
+create policy "pinned_select_all" on public.pinned_achievements for select using (true);
+drop policy if exists "pinned_insert_own" on public.pinned_achievements;
+create policy "pinned_insert_own"
+  on public.pinned_achievements for insert
+  with check (auth.uid() = user_id);
+drop policy if exists "pinned_update_own" on public.pinned_achievements;
+create policy "pinned_update_own"
+  on public.pinned_achievements for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+drop policy if exists "pinned_delete_own" on public.pinned_achievements;
+create policy "pinned_delete_own"
+  on public.pinned_achievements for delete
   using (auth.uid() = user_id);
 
 -- ============================================================================
