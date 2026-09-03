@@ -285,6 +285,16 @@
   .corner-brackets.sm i:nth-child(3) { border-radius: 0 0 0 11px; }
   .corner-brackets.sm i:nth-child(4) { border-radius: 0 0 11px 0; }
 
+  .profile-top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0 0 clamp(20px, 3vw, 34px);
+  }
+  .profile-top-side { flex: 0 0 auto; min-width: 118px; }
+  .profile-top-spacer { visibility: hidden; }
+  .profile-top .profile-heading { flex: 1 1 auto; margin: 0; }
+
   .profile-heading {
     display: flex;
     align-items: center;
@@ -757,12 +767,16 @@
 
     <div class="profile-frame bezel-lg" id="profile-frame-main">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
-      <h1 class="profile-heading"><span class="dash"></span>Profile<span class="dash"></span></h1>
+
+      <div class="profile-top">
+        <a href="customise.html" class="btn btn-chrome-dark profile-top-side" id="customise-btn" hidden>🎨 Customise</a>
+        <h1 class="profile-heading"><span class="dash"></span>Profile<span class="dash"></span></h1>
+        <span class="profile-top-side profile-top-spacer"></span>
+      </div>
 
       <div class="profile-grid">
         <!-- Avatar panel — later: real avatar render + equipped cosmetics -->
         <div class="avatar-panel">
-          <a href="customise.html" class="btn btn-chrome-dark" id="customise-btn" style="margin-bottom:14px;" hidden>🎨 Customise</a>
           <div class="avatar-stage bezel-sm" id="avatar-stage">
             <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
             <div class="avatar-3d" id="avatar-3d" role="img" aria-label="Your Quest Zone avatar — drag to rotate"></div>
