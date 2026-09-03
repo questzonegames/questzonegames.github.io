@@ -470,6 +470,12 @@
   .section-row.nav-row { grid-template-columns: repeat(3, 1fr); }
   .section-row.nav-row.nav-row-admin { grid-template-columns: repeat(4, 1fr); }
 
+  /* author-origin "display: flex" below would otherwise outrank the
+     browser's own [hidden]{display:none} default regardless of the
+     attribute being set — this rule just needs to out-specificity it.
+     Placed before .tile itself so it's unambiguous this exists purely to
+     win that cascade fight, not to style anything on its own. */
+  .tile[hidden] { display: none; }
   .tile {
     position: relative;
     display: flex;
