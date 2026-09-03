@@ -773,6 +773,7 @@
             </button>
           </div>
           <div class="avatar-name" id="profile-username">Username</div>
+          <a href="customise.html" class="btn btn-chrome-dark" id="customise-btn" style="margin-top:14px;" hidden>🎨 Customise</a>
         </div>
 
         <!-- Main sections — later: populated from account data -->
@@ -1174,6 +1175,8 @@
       const banner = document.getElementById('preview-banner');
       if (banner) banner.style.display = 'none';
       showAdminInventoryTile(profile.is_admin, null); // own profile — grant to self
+      const customiseBtn = document.getElementById('customise-btn');
+      if (customiseBtn) customiseBtn.hidden = false; // own profile only — never in admin-view (that's someone else's character)
     }
     loadRealProfile();
   })();

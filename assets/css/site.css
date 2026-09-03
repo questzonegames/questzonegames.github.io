@@ -153,6 +153,12 @@ img { max-width: 100%; display: block; }
   padding: 13px 24px;
 }
 
+/* author-origin "display: inline-flex" below would otherwise outrank the
+   browser's own [hidden]{display:none} default regardless of the
+   attribute being set — fixed once here, globally, rather than being
+   re-discovered and re-patched on every page that hides a .btn
+   conditionally (this exact bug has recurred several times per-page). */
+.btn[hidden] { display: none; }
 .btn {
   position: relative;
   overflow: hidden;
