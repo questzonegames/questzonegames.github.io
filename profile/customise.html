@@ -434,6 +434,7 @@
     if (!container || !window.QZAvatarViewer) return;
     avatar = window.QZAvatarViewer.mount(container);
     avatar.setBaseAppearance(current.gender, current.skin_colour);
+    avatar.setHairstyle(current.hair_style, current.hair_colour);
     document.getElementById('cc-arrow-left').addEventListener('click', () => avatar && avatar.prev());
     document.getElementById('cc-arrow-right').addEventListener('click', () => avatar && avatar.next());
 
