@@ -5,7 +5,7 @@
       "name": "questzone-preview",
       "runtimeExecutable": "powershell",
       "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".claude/serve.ps1"],
-      "port": 8420
+      "port": 8421
     }
   ]
 }
