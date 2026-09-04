@@ -521,10 +521,12 @@
     if (!avatar || !avatar.setBaseAppearance || !client || !viewUserId) return;
     const { data: custom } = await client
       .from('avatar_customization')
-      .select('gender, skin_colour')
+      .select('gender, skin_colour, hair_style, hair_colour')
       .eq('user_id', viewUserId)
       .single();
-    if (custom) avatar.setBaseAppearance(custom.gender, custom.skin_colour);
+    if (!custom) return;
+    avatar.setBaseAppearance(custom.gender, custom.skin_colour);
+    if (avatar.setHairstyle) avatar.setHairstyle(custom.hair_style, custom.hair_colour);
   }
 
   function mountAvatar() {

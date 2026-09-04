@@ -1141,10 +1141,13 @@
     if (window.qzAvatar.setBaseAppearance) {
       const { data: custom } = await window.QZAuth.client
         .from('avatar_customization')
-        .select('gender, skin_colour')
+        .select('gender, skin_colour, hair_style, hair_colour')
         .eq('user_id', targetUserId)
         .single();
-      if (custom) window.qzAvatar.setBaseAppearance(custom.gender, custom.skin_colour);
+      if (custom) {
+        window.qzAvatar.setBaseAppearance(custom.gender, custom.skin_colour);
+        if (window.qzAvatar.setHairstyle) window.qzAvatar.setHairstyle(custom.hair_style, custom.hair_colour);
+      }
     }
   }
   applyRealEquipment();

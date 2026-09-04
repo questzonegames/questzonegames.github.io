@@ -17,13 +17,17 @@
   ];
 
   // keyed by gender — each gender's own hairstyle list, since a hairstyle
-  // asset is drawn for one body type, not shared across both
+  // asset is drawn for one body type, not shared across both. 'none' is
+  // real for both genders on day one (it's just the bald base itself —
+  // zero art needed); everything past that needs actual per-gender art
+  // (see AVAILABLE_HAIRSTYLES in avatar-viewer.js) before it belongs here.
   const HAIRSTYLES = {
     male: [
-      { key: 'default', label: 'Default' }
+      { key: 'none', label: 'Bald' },
+      { key: 'short-spiky', label: 'Short Spiky' }
     ],
     female: [
-      { key: 'default', label: 'Default' }
+      { key: 'none', label: 'Bald' }
     ]
   };
 
@@ -36,8 +40,18 @@
     ]
   };
 
+  // Applies to whichever hairstyle is selected (a hairstyle asset is
+  // rendered once, in one colour, then recoloured per this list the same
+  // way skin tones are — see avatar-viewer.js / RecolorHairLayer). Real
+  // for every hairstyle including 'none' (where it's simply unused).
   const HAIR_COLOURS = [
-    { key: 'default', label: 'Default' }
+    { key: 'black', label: 'Black' },
+    { key: 'dark-brown', label: 'Dark Brown' },
+    { key: 'light-brown', label: 'Light Brown' },
+    { key: 'blonde', label: 'Blonde' },
+    { key: 'white', label: 'White' },
+    { key: 'ginger', label: 'Ginger' },
+    { key: 'grey', label: 'Grey' }
   ];
 
   const BEARD_COLOURS = [

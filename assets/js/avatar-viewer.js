@@ -48,6 +48,30 @@
   // one body that's actually real (male-normal), never a mislabeled one.
   const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true, 'male-dark-tanned': true };
 
+  // Hair is its own layer (front/back/left/right, transparent everywhere
+  // else — no skin, no clothes baked in) composited on top of the bald
+  // base rather than baked into it, specifically so it can be hidden
+  // outright when headwear that encloses the scalp is worn (see
+  // hidesHair in inventory-data.js and the headHidesHair handling in
+  // setAvatarEquipment below) instead of trying to sculpt one hat mesh
+  // that fits every hairstyle's silhouette.
+  //
+  // Every hair file shares its pose's exact canvas size with the base
+  // body art (see the alignment work that produced them) — so it can
+  // reuse the SAME 'avatar-sprite' class/positioning as the base sprite
+  // and land in the right place with no separate per-item position data,
+  // unlike a small equip layer (EQUIP_POSITIONS) which only covers a
+  // fraction of the frame.
+  const HAIR_DIR = '../assets/img/hair/';
+  const AVAILABLE_HAIRSTYLES = { 'male-short-spiky': true };
+  function hairSrc(pose, gender, hairStyle, hairColour) {
+    const style = hairStyle || 'none';
+    if (style === 'none') return null;
+    const key = (gender || 'male') + '-' + style;
+    if (!AVAILABLE_HAIRSTYLES[key]) return null;
+    return HAIR_DIR + 'hair-' + style + '-' + (hairColour || 'dark-brown') + '-' + pose + '.png';
+  }
+
   // Single source of truth for where each equip layer sits on the body,
   // as a percentage of the shared avatar box (top = % of box height,
   // width = % of box width — same units the CSS `top`/`width` properties
@@ -116,6 +140,9 @@
     container.classList.add('avatar-3d');
     let currentGender = 'male';
     let currentSkinColour = 'default';
+    let currentHairStyle = 'none';
+    let currentHairColour = 'dark-brown';
+    let hairHiddenByHeadwear = false;
     const imgs = defaultFrames().map((f) => {
       const img = document.createElement('img');
       img.className = 'avatar-sprite';
@@ -133,6 +160,26 @@
       return img;
     });
     imgs[0].style.opacity = '1'; // show the front frame immediately, before the first tick
+
+    // Hair layer — same 4-image crossfade as the base body, painted right
+    // on top of it (DOM order below equip layers, so a headwear item that
+    // doesn't set hidesHair still draws over hair rather than under it).
+    // Starts with no src at all (Bald/"none" needs zero art, zero requests).
+    const hairImgs = POSES.map(() => {
+      const img = document.createElement('img');
+      img.className = 'avatar-sprite avatar-hair-layer';
+      img.alt = '';
+      img.setAttribute('aria-hidden', 'true');
+      img.decoding = 'async';
+      img.draggable = false;
+      img.style.opacity = '0';
+      img.addEventListener('error', () => {
+        img.dataset.broken = 'true';
+        img.style.opacity = '0';
+      });
+      container.appendChild(img);
+      return img;
+    });
 
     // Equipped-item indicator: for slots whose item has real per-direction
     // art (item.views), that art is layered on top of the base avatar as
@@ -168,6 +215,17 @@
       imgs.forEach((img, i) => {
         if (i === seg) img.style.opacity = img.dataset.broken ? '0' : String(1 - bOpacity);
         else if (i === (seg + 1) % 4) img.style.opacity = img.dataset.broken ? '0' : String(bOpacity);
+        else img.style.opacity = '0';
+      });
+
+      // hair rides the same seg/opacity crossfade as the base body, but is
+      // forced fully transparent whenever the equipped head item hides it
+      // (see setAvatarEquipment) — headwear that covers the scalp means
+      // there's nothing to clip, because hair simply isn't drawn under it
+      hairImgs.forEach((img, i) => {
+        if (hairHiddenByHeadwear || img.dataset.broken) { img.style.opacity = '0'; return; }
+        if (i === seg) img.style.opacity = String(1 - bOpacity);
+        else if (i === (seg + 1) % 4) img.style.opacity = String(bOpacity);
         else img.style.opacity = '0';
       });
 
@@ -347,7 +405,28 @@
         chip.title = item.name || '';
         loadout.appendChild(chip);
       });
+      hairHiddenByHeadwear = !!(items.head && items.head.hidesHair);
       render(); // reflect the change immediately, don't wait for the next tick
+    }
+
+    // Swap which hairstyle/colour the 4 hair frames point at. Independent
+    // of setBaseAppearance (skin tone) but resolved against the SAME
+    // currentGender, since hair art is per-gender too — a Gender switch
+    // (see setBaseAppearance below) re-resolves whatever hairstyle is
+    // already selected rather than leaving it pointed at the old body's art.
+    function refreshHair() {
+      POSES.forEach((pose, i) => {
+        const img = hairImgs[i];
+        const src = hairSrc(pose, currentGender, currentHairStyle, currentHairColour);
+        img.dataset.broken = '';
+        if (!src) { img.removeAttribute('src'); img.dataset.broken = 'true'; return; }
+        img.src = src;
+      });
+    }
+    function setHairstyle(hairStyle, hairColour) {
+      currentHairStyle = hairStyle || 'none';
+      currentHairColour = hairColour || 'dark-brown';
+      refreshHair();
     }
 
     // Swap which body art the 4 base sprites point at — e.g. after loading
@@ -373,6 +452,9 @@
           if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
         });
       });
+      // and the current hairstyle, if any, needs its art path re-resolved
+      // against the new gender too
+      refreshHair();
     }
 
     function destroy() {
@@ -385,6 +467,7 @@
       container.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('pointerup', onPointerUp);
       imgs.forEach((img) => img.remove());
+      hairImgs.forEach((img) => img.remove());
       Object.keys(equipLayers).forEach(clearEquipLayer);
       loadout.remove();
       container.classList.remove('dragging');
@@ -392,7 +475,7 @@
 
     window.addEventListener('pagehide', destroy, { once: true });
 
-    return { destroy, setAvatarEquipment, setBaseAppearance, next, prev };
+    return { destroy, setAvatarEquipment, setBaseAppearance, setHairstyle, next, prev };
   }
 
   window.QZAvatarViewer = { mount };

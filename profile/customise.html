@@ -372,9 +372,14 @@
     const hairList = OPTS.hairstyles[gender] || [];
     const beardList = OPTS.beards[gender] || [];
     const skinList = OPTS.skinColours[gender] || [];
-    if (!hairList.some((o) => o.key === current.hair_style)) current.hair_style = hairList[0] ? hairList[0].key : 'default';
+    if (!hairList.some((o) => o.key === current.hair_style)) current.hair_style = hairList[0] ? hairList[0].key : 'none';
     if (!beardList.some((o) => o.key === current.beard_style)) current.beard_style = beardList[0] ? beardList[0].key : 'none';
     if (!skinList.some((o) => o.key === current.skin_colour)) current.skin_colour = skinList[0] ? skinList[0].key : 'default';
+    // hair/beard colour lists aren't gender-keyed, but need the same
+    // "never stale" treatment — a saved 'default' from before real colours
+    // existed would otherwise silently fail to resolve to any actual file
+    if (!OPTS.hairColours.some((o) => o.key === current.hair_colour)) current.hair_colour = OPTS.hairColours[0] ? OPTS.hairColours[0].key : 'default';
+    if (!OPTS.beardColours.some((o) => o.key === current.beard_colour)) current.beard_colour = OPTS.beardColours[0] ? OPTS.beardColours[0].key : 'default';
   }
 
   function renderAll() {
@@ -418,7 +423,10 @@
       genderRoot.appendChild(btn);
     });
 
-    if (avatar) avatar.setBaseAppearance(current.gender, current.skin_colour);
+    if (avatar) {
+      avatar.setBaseAppearance(current.gender, current.skin_colour);
+      avatar.setHairstyle(current.hair_style, current.hair_colour);
+    }
   }
 
   async function mountAvatar() {
