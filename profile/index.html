@@ -109,15 +109,21 @@
     max-height: 320px; overflow-y: auto; padding-right: 4px;
   }
   .admin-skill-row {
-    display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center;
-    padding: 7px 10px; border-radius: 7px;
+    display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px; align-items: center;
+    min-height: 44px;
+    padding: 6px 10px; border-radius: 7px;
     background: rgba(255,255,255,0.03); border: 1px solid rgba(120,160,220,0.15);
     font-size: 11.5px;
   }
-  .admin-skill-row .nm { color: var(--text); }
-  .admin-skill-row .lvl { font-family: 'Orbitron', sans-serif; color: var(--blue-light); white-space: nowrap; }
+  .admin-skill-row .nm-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .admin-skill-row .nm-group img.skill-icon {
+    width: 34px; height: 34px; object-fit: contain; flex-shrink: 0;
+  }
+  .admin-skill-row .nm { color: var(--text); margin-left: 2px; }
+  .admin-skill-row .field-group { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .admin-skill-row .field-group label { color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.03em; }
   .admin-skill-row input[type="number"] {
-    width: 110px; padding: 5px 8px; border-radius: 6px;
+    width: 90px; padding: 5px 8px; border-radius: 6px;
     border: 1px solid rgba(120,160,220,0.35); background: rgba(4,8,16,0.7);
     color: var(--text); font-size: 11.5px; font-variant-numeric: tabular-nums;
   }
@@ -937,6 +943,7 @@
 <script src="../assets/js/qz-config.js"></script>
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/qz-xp.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
 <script src="../assets/js/achievement-inspection.js"></script>
@@ -1439,6 +1446,12 @@
       }
     }
 
+    // Only skills with real art show an icon here — keyed by game_key,
+    // same map shape as profile/skills.html's SKILL_ICONS.
+    const ADMIN_SKILL_ICONS = {
+      intelligence: '../assets/img/skills/intelligence.png'
+    };
+
     async function renderSkills(targetId) {
       const listEl = document.getElementById('admin-skills-list');
       const c = window.QZAuth.client;
@@ -1454,31 +1467,67 @@
       games.forEach((g) => {
         const row = progressByGame[g.game_key] || { xp: 0, level: 1 };
         const xp = Number(row.xp || 0);
-        const disp = window.QZXp ? window.QZXp.displayLevel(xp) : { base: row.level, isVirtual: false, virtual: row.level };
-        const lvlText = disp.isVirtual ? disp.base + ' (Virtual ' + disp.virtual + ')' : String(disp.base);
+        const level = window.QZXp ? window.QZXp.levelForXp(xp) : row.level;
+        const iconSrc = ADMIN_SKILL_ICONS[g.game_key];
 
         const el = document.createElement('div');
         el.className = 'admin-skill-row';
-        el.innerHTML =
-          '<span class="nm">' + escapeAdminHtml(g.name) + '</span>' +
-          '<span class="lvl">Lv ' + lvlText + '</span>';
 
-        const input = document.createElement('input');
-        input.type = 'number'; input.min = '0'; input.max = '2147483647'; input.step = '1';
-        input.value = xp;
+        const nmGroup = document.createElement('div');
+        nmGroup.className = 'nm-group';
+        nmGroup.innerHTML =
+          (iconSrc ? '<img class="skill-icon" src="' + iconSrc + '" alt="">' : '') +
+          '<span class="nm">' + escapeAdminHtml(g.name) + '</span>';
 
-        const btn = document.createElement('button');
-        btn.type = 'button'; btn.textContent = 'Set XP';
-        btn.addEventListener('click', () => setSkillXp(targetId, g.game_key, input));
+        const levelInput = document.createElement('input');
+        levelInput.type = 'number'; levelInput.min = '1'; levelInput.step = '1';
+        levelInput.value = level;
+        const levelGroup = document.createElement('span');
+        levelGroup.className = 'field-group';
+        levelGroup.innerHTML = '<label>Level</label>';
+        levelGroup.appendChild(levelInput);
 
-        el.appendChild(input);
-        el.appendChild(btn);
+        const xpInput = document.createElement('input');
+        xpInput.type = 'number'; xpInput.min = '0'; xpInput.max = '2147483647'; xpInput.step = '1';
+        xpInput.value = xp;
+        const xpGroup = document.createElement('span');
+        xpGroup.className = 'field-group';
+        xpGroup.innerHTML = '<label>XP</label>';
+        xpGroup.appendChild(xpInput);
+
+        // live, two-way: editing either field instantly recalculates the
+        // other via the same OSRS formula used everywhere else on the site
+        levelInput.addEventListener('input', () => {
+          const lvl = Number(levelInput.value);
+          if (!isNaN(lvl) && lvl >= 1 && window.QZXp) {
+            xpInput.value = window.QZXp.xpForLevel(lvl);
+          }
+        });
+        xpInput.addEventListener('input', () => {
+          const val = Number(xpInput.value);
+          if (!isNaN(val) && val >= 0 && window.QZXp) {
+            levelInput.value = window.QZXp.levelForXp(val);
+          }
+        });
+
+        const setLevelBtn = document.createElement('button');
+        setLevelBtn.type = 'button'; setLevelBtn.textContent = 'Set Level';
+        setLevelBtn.addEventListener('click', () => setSkillLevel(targetId, g.game_key, levelInput));
+
+        const setXpBtn = document.createElement('button');
+        setXpBtn.type = 'button'; setXpBtn.textContent = 'Set XP';
+        setXpBtn.addEventListener('click', () => setSkillXp(targetId, g.game_key, xpInput));
+
+        el.appendChild(nmGroup);
+        el.appendChild(levelGroup);
+        el.appendChild(setLevelBtn);
+        el.appendChild(xpGroup);
+        el.appendChild(setXpBtn);
         listEl.appendChild(el);
       });
     }
 
-    async function setSkillXp(targetId, gameKey, input) {
-      const newXp = Number(input.value);
+    async function applySkillXp(targetId, gameKey, newXp) {
       if (isNaN(newXp) || newXp < 0) { window.alert('Enter a valid XP amount (0 or higher).'); return; }
       const { error } = await window.QZAuth.client.rpc('admin_set_game_xp', { p_user: targetId, p_game_key: gameKey, p_xp: newXp });
       if (error) { window.alert('Could not set XP: ' + error.message); return; }
@@ -1486,6 +1535,16 @@
       await renderSkills(targetId);
       await renderAchievements(targetId); // a stat drop may have made some no longer earned
       if (window.QZRenderPinned) window.QZRenderPinned(); // a pinned one might have just been unpinned
+    }
+
+    async function setSkillXp(targetId, gameKey, input) {
+      await applySkillXp(targetId, gameKey, Number(input.value));
+    }
+
+    async function setSkillLevel(targetId, gameKey, input) {
+      const lvl = Number(input.value);
+      if (isNaN(lvl) || lvl < 1) { window.alert('Enter a valid level (1 or higher).'); return; }
+      await applySkillXp(targetId, gameKey, window.QZXp ? window.QZXp.xpForLevel(lvl) : 0);
     }
 
     async function renderAchievements(targetId) {
