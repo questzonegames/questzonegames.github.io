@@ -115,24 +115,25 @@
       category: 'total-level'
     }));
 
-    // Slot 01 is a real, live game — swap the placeholder for Space
-    // Snake (existing route, no duplicate page). Slots 02-24 stay
-    // untouched placeholders.
+    // Slots 01-02 are real, live games — only their homepage placement is
+    // swapped here (Anagram Quest first, Space Snake second); the games
+    // themselves, their routes, and their own pages are untouched. Slots
+    // 03-24 stay untouched placeholders.
     TOTAL_LEVEL_GAMES[0] = {
-      id: 'space-snake',
+      id: 'anagram-quest',
       number: '01',
-      title: 'Space Snake',
-      image: 'assets/img/space-snake-thumb.png',
-      route: 'games/space-snake/',
+      title: 'Anagram Quest',
+      image: 'assets/img/anagram-quest-thumb.svg',
+      route: 'games/anagram-quest/',
       status: 'active',
       category: 'total-level'
     };
     TOTAL_LEVEL_GAMES[1] = {
-      id: 'anagram-quest',
+      id: 'space-snake',
       number: '02',
-      title: 'Anagram Quest',
-      image: 'assets/img/anagram-quest-thumb.svg',
-      route: 'games/anagram-quest/',
+      title: 'Space Snake',
+      image: 'assets/img/space-snake-thumb.png',
+      route: 'games/space-snake/',
       status: 'active',
       category: 'total-level'
     };
