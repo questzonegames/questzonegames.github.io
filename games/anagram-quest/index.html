@@ -145,7 +145,6 @@
   .stat-row { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
   .stat { text-align: left; }
   .stat .label { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 4px; }
-  .skill-icon { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
   .stat .value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 20px; color: var(--gold); }
 
   .rule-item { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
@@ -160,6 +159,11 @@
   /* ---- Round screens ---- */
   .round-label { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--gold); text-align: center; font-size: clamp(20px, 4vw, 30px); margin: 4px 0; }
   .round-sub { text-align: center; font-weight: 700; margin: 0 0 20px; }
+  .sel-timer-label {
+    text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 900;
+    color: var(--gold); letter-spacing: 0.06em; font-size: clamp(13px, 3vw, 16px);
+    margin: 4px 0 10px;
+  }
 
   .slots-row { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
   .slots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -242,6 +246,10 @@
   .points-earned { text-align: center; margin-top: 6px; }
   .points-earned .label { color: var(--gold); font-weight: 700; }
   .points-earned .value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(24px, 6vw, 34px); }
+  .result-subtext { text-align: center; color: var(--green); font-weight: 700; font-size: 14px; margin-top: 6px; min-height: 18px; }
+  .result-answers { text-align: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(120,160,220,0.25); }
+  .result-answers-label { color: var(--cyan); font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .result-answers-list { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(16px, 3.5vw, 22px); color: #fff; letter-spacing: 0.03em; }
 
   /* ---- Game over ---- */
   .final-score-line { text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(22px, 5vw, 32px); margin: 18px 0; }
@@ -283,11 +291,12 @@
           <div class="stat-row">
             <div class="stat"><div class="label">High Score</div><div class="value" id="lobby-highscore">0</div></div>
             <div class="stat"><div class="label">Games Played</div><div class="value" id="lobby-gamesplayed">0</div></div>
-            <div class="stat">
-              <div class="label"><img src="../../assets/img/skills/intelligence.png" alt="" class="skill-icon"> Intelligence</div>
-              <div class="value" id="lobby-level">1/99</div>
-            </div>
           </div>
+          <!-- Same reusable Intelligence skill card as Profile -> Skills
+               (assets/js/skill-card.js) — same icon, name, level, hover
+               tooltip, and underlying games/game_progress data. Mounted/
+               refreshed in anagram-quest.js's updateFooterStats(). -->
+          <div id="lobby-skillcard-slot" style="margin-top:14px;max-width:260px;"></div>
         </div>
         <div class="rules-card panel" style="margin-bottom:0;">
           <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
@@ -318,9 +327,18 @@
 
       <div class="slots-row">
         <div class="slots" id="sel-slots"></div>
-        <button class="backspace-btn" id="sel-backspace"><span class="x">&#10060;</span> Backspace</button>
       </div>
       <div class="tiles-row" id="sel-tiles"></div>
+
+      <!-- V/C selection timer — a separate 10-second countdown, distinct
+           from the 40-second word-building timer on the ACTIVE screen.
+           Letters generated here are permanent; there is no Backspace
+           during this phase (see anagram-quest.js pressVC()). -->
+      <div class="sel-timer-label">SELECT YOUR LETTERS</div>
+      <div class="timer-row" style="margin-bottom:14px;">
+        <div class="timer-ring" id="sel-timer-ring" style="--pct:100;"><span class="ring-fg"></span><span class="timer-num" id="sel-timer-num">10</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-dim);font-size:12.5px;margin:-8px 0 18px;">Time left: <span id="sel-timer-text">10</span></div>
 
       <div class="vc-row">
         <button class="btn vc-btn" id="btn-vowel">V</button>
@@ -371,11 +389,20 @@
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="result-word-box">
         <div class="result-word-label" id="result-label">You submitted a 6 letter word:</div>
-        <div class="result-word"><span id="result-word">PLANET</span><span id="result-icon" class="tick">&#10003;</span></div>
+        <!-- exactly ONE icon element, reused every round — see endRound()
+             in anagram-quest.js. Never create a second one. -->
+        <div class="result-word"><span id="result-word"></span><span id="result-icon"></span></div>
+        <div class="result-subtext" id="result-subtext"></div>
       </div>
       <div class="points-earned">
         <div class="label" id="result-points-label">Points earned:</div>
         <div class="value" id="result-points">6 POINTS</div>
+      </div>
+      <!-- Round 5 only: always shows every valid 9-letter dictionary
+           answer for that rack, win or lose. -->
+      <div class="result-answers hidden" id="result-answers">
+        <div class="result-answers-label" id="result-answers-label">Correct answer:</div>
+        <div class="result-answers-list" id="result-answers-list"></div>
       </div>
       <button class="btn btn-gold" id="btn-next-round" style="max-width:320px;margin:22px auto 8px;display:block;">NEXT ROUND</button>
       <div style="text-align:center;color:var(--text-dim);font-size:12.5px;">Time left: <span id="result-timeleft">0</span></div>
@@ -410,6 +437,7 @@
 <script src="../../assets/js/qz-config.js"></script>
 <script src="../../assets/js/qz-auth.js"></script>
 <script src="../../assets/js/qz-xp.js"></script>
+<script src="../../assets/js/skill-card.js"></script>
 <script src="../../assets/js/site.js"></script>
 <script src="../../assets/js/stars-plain.js"></script>
 <script src="anagram-data.js"></script>

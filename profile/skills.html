@@ -102,6 +102,9 @@
   }
 
   /* ---- skill grid ---- */
+  /* Individual box styling (.qz-skillcard-box) and the hover tooltip
+     (#qz-skillcard-tooltip) come from assets/js/skill-card.js, shared with
+     the Anagram Quest lobby — only the grid layout itself lives here. */
   .skill-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -110,30 +113,6 @@
   @media (max-width: 560px) {
     .skill-grid { grid-template-columns: repeat(2, 1fr); }
   }
-  .skill-box {
-    position: relative;
-    min-height: 92px;
-    border-radius: 10px;
-    border: 1.5px solid rgba(110,150,220,0.35);
-    background: linear-gradient(180deg, rgba(14,20,38,0.85), rgba(6,10,20,0.9));
-    padding: 8px 10px;
-    display: flex; align-items: center;
-    cursor: default;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-  .skill-box:hover { border-color: var(--blue-light); box-shadow: 0 0 14px rgba(90,160,255,0.35); }
-  .skill-box .skill-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .skill-box .skill-id img { width: 68px; height: 68px; object-fit: contain; flex-shrink: 0; }
-  .skill-box .skill-name {
-    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12px;
-    letter-spacing: 0.03em; text-transform: uppercase; color: #eaf3ff;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .skill-box .skill-level {
-    position: absolute; right: 10px; bottom: 6px;
-    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 26px; color: var(--gold, #ffcf4d);
-  }
-  .skill-box .skill-level .of99 { color: var(--text-dim); font-weight: 700; font-size: 18px; }
 
   .total-level-bar {
     margin: 18px 0 22px;
@@ -142,19 +121,6 @@
     font-family: 'Orbitron', sans-serif; font-weight: 700; letter-spacing: 0.04em;
   }
   .total-level-bar .num { color: var(--blue-light); font-weight: 900; margin-left: 8px; }
-
-  /* ---- RuneScape-style hover tooltip ---- */
-  #skill-tooltip {
-    position: fixed; z-index: 500; pointer-events: none;
-    background: rgba(6,10,20,0.96); border: 1.5px solid var(--blue-light);
-    border-radius: 8px; padding: 10px 13px; font-size: 12.5px; line-height: 1.7;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.6), 0 0 14px rgba(90,160,255,0.3);
-    white-space: nowrap; opacity: 0; transform: translateY(4px);
-    transition: opacity 0.1s ease, transform 0.1s ease;
-  }
-  #skill-tooltip.show { opacity: 1; transform: translateY(0); }
-  #skill-tooltip .t-name { font-family: 'Orbitron', sans-serif; font-weight: 900; color: #ffcf4d; margin-bottom: 4px; }
-  #skill-tooltip .t-row span:first-child { color: var(--text-dim); margin-right: 8px; }
 </style>
 </head>
 <body>
@@ -215,8 +181,6 @@
   </div>
 </main>
 
-<div id="skill-tooltip"></div>
-
 <footer class="site-footer">
   <div class="container">
     <div class="footer-bottom">
@@ -236,6 +200,7 @@
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
 <script src="../assets/js/avatar-viewer.js"></script>
+<script src="../assets/js/skill-card.js"></script>
 <script>
 (function () {
   // Skill icons — keyed by games.game_key. A game_key with no entry here
@@ -277,33 +242,6 @@
     }
   }
 
-  // ---- tooltip ----
-  const tooltip = document.getElementById('skill-tooltip');
-  function showTooltip(e, skill) {
-    const xpForNext = window.QZXp ? window.QZXp.xpForLevel(skill.level + 1) : null;
-    const remaining = xpForNext === null ? null : Math.max(0, xpForNext - skill.xp);
-    tooltip.innerHTML =
-      '<div class="t-name">' + escapeHtml(skill.name) + '</div>' +
-      '<div class="t-row"><span>Current Level:</span>' + skill.level + '/99</div>' +
-      '<div class="t-row"><span>Current XP:</span>' + skill.xp.toLocaleString() + '</div>' +
-      '<div class="t-row"><span>XP Remaining:</span>' + (remaining === null ? '—' : remaining.toLocaleString()) + '</div>';
-    tooltip.classList.add('show');
-    positionTooltip(e);
-  }
-  function positionTooltip(e) {
-    const pad = 16;
-    let x = e.clientX + pad, y = e.clientY + pad;
-    const rect = tooltip.getBoundingClientRect();
-    if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - pad;
-    if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - pad;
-    tooltip.style.left = x + 'px';
-    tooltip.style.top = y + 'px';
-  }
-  function hideTooltip() { tooltip.classList.remove('show'); }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-
   // Visual grid size is fixed at 24 — independent of how many real skills
   // exist in public.games right now (currently just Intelligence). Real
   // skills fill the first boxes; the rest render as plain, non-interactive
@@ -311,25 +249,23 @@
   // actually added to the backend.
   const TOTAL_SKILL_SLOTS = 24;
 
+  // Real skill boxes use the exact same component (markup, styling, hover
+  // tooltip) as the Anagram Quest lobby's Intelligence card — see
+  // assets/js/skill-card.js. One implementation, two pages.
   function renderSkillBox(skill) {
-    const box = document.createElement('div');
-    const hasIcon = !!SKILL_ICONS[skill.game_key];
-    box.className = 'skill-box' + (hasIcon ? ' named' : '');
-    box.innerHTML =
-      (hasIcon
-        ? '<div class="skill-id"><img src="' + SKILL_ICONS[skill.game_key] + '" alt=""><span class="skill-name">' + escapeHtml(skill.name) + '</span></div>'
-        : '') +
-      '<span class="skill-level">' + skill.level + '<span class="of99">/99</span></span>';
-    box.addEventListener('mouseenter', (e) => showTooltip(e, skill));
-    box.addEventListener('mousemove', positionTooltip);
-    box.addEventListener('mouseleave', hideTooltip);
-    return box;
+    return window.QZSkillCard.createBox({
+      game_key: skill.game_key,
+      name: skill.name,
+      xp: skill.xp,
+      level: skill.level,
+      iconSrc: SKILL_ICONS[skill.game_key] || null
+    });
   }
 
   function renderPlaceholderBox() {
     const box = document.createElement('div');
-    box.className = 'skill-box';
-    box.innerHTML = '<span class="skill-level">1<span class="of99">/99</span></span>';
+    box.className = 'qz-skillcard-box';
+    box.innerHTML = '<span class="qz-skillcard-level">1<span class="qz-skillcard-of99">/99</span></span>';
     return box;
   }
 

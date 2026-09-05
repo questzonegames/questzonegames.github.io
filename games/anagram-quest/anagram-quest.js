@@ -14,9 +14,12 @@
   const GAME_KEY = 'intelligence';
   const TOTAL_ROUNDS = 5;
   const ROUND_TIME_SECONDS = 40;
+  const VC_SELECT_TIME_SECONDS = 10; // separate, shorter countdown for letter selection (rounds 1-4)
   const MIN_WORD_LEN = 4;
   const MAX_WORD_LEN = 9;
   const RACK_SIZE = 9;
+  const VOWELS = 'AEIOU';
+  const isVowelLetter = (ch) => VOWELS.indexOf(ch) !== -1;
 
   // Centralised bonus-round scoring — tune balance here, nowhere else.
   const BONUS_BASE_POINTS = 10;
@@ -57,6 +60,27 @@
     if (!/^[A-Za-z]+$/.test(word)) return false; // no spaces/punctuation/numbers/hyphens
     return dictSet.has(word.toLowerCase());
   }
+  function normalizedSignature(word) {
+    return word.toUpperCase().split('').sort().join('');
+  }
+  // Round 5 accepts ANY genuine 9-letter dictionary word made from exactly
+  // the rack's letters, not just the one word the rack was generated from
+  // — this finds every one of them (letter-multiset match + real dictionary
+  // word) up front, once, when the bonus rack is created, so both
+  // validation and the post-round "correct answer(s)" reveal use the exact
+  // same list.
+  function computeAnagramSolutions(rackLetters) {
+    const target = rackLetters.slice().sort().join('').toUpperCase();
+    const solutions = [];
+    if (dictSet) {
+      dictSet.forEach((w) => {
+        if (w.length !== RACK_SIZE) return;
+        if (normalizedSignature(w) === target) solutions.push(w.toUpperCase());
+      });
+    }
+    solutions.sort();
+    return solutions;
+  }
 
   // ================= state =================
   const state = {
@@ -73,9 +97,12 @@
     bonusSolved: false,
     selecting: false,     // true while V/C picks are still being made (round timer not started)
     profile: null,        // { id, username, ... } or null for a guest
-    level: 1,
     highScore: 0,
     gamesPlayed: 0
+    // Intelligence level/XP is intentionally NOT cached here — the lobby's
+    // skill card (assets/js/skill-card.js) always fetches it fresh from
+    // public.game_progress itself, the same way profile/skills.html does,
+    // so there is exactly one source of truth and no stale duplicate.
   };
 
   // ================= DOM =================
@@ -100,12 +127,30 @@
     });
     const lobbyHs = document.getElementById('lobby-highscore');
     const lobbyGp = document.getElementById('lobby-gamesplayed');
-    const lobbyLvl = document.getElementById('lobby-level');
     const lobbyName = document.getElementById('lobby-username');
     if (lobbyHs) lobbyHs.textContent = state.highScore;
     if (lobbyGp) lobbyGp.textContent = state.gamesPlayed;
-    if (lobbyLvl) lobbyLvl.textContent = state.level + '/99';
     if (lobbyName) lobbyName.textContent = state.profile ? state.profile.username : 'Guest';
+    // Only actually re-fetch/re-mount the skill card while the lobby is the
+    // visible screen — updateFooterStats() also runs on every in-round
+    // transition, and there's no point re-querying game_progress then.
+    if (!screens.LOBBY.classList.contains('hidden')) mountIntelligenceCard();
+  }
+
+  // Same reusable component + same public.games/public.game_progress read
+  // as Profile -> Skills — see assets/js/skill-card.js. Always re-fetches
+  // fresh (never reuses a cached level), so it can never show a stale
+  // value after XP was just awarded.
+  function mountIntelligenceCard() {
+    const slot = document.getElementById('lobby-skillcard-slot');
+    if (!slot || !window.QZSkillCard) return;
+    window.QZSkillCard.mount(slot, {
+      client: window.QZAuth && window.QZAuth.client,
+      userId: state.profile ? state.profile.id : null,
+      gameKey: GAME_KEY,
+      iconSrc: '../../assets/img/skills/intelligence.png',
+      fallbackName: 'Intelligence'
+    });
   }
 
   // ================= account load/save =================
@@ -117,11 +162,9 @@
       if (!profile) { updateFooterStats(); return; }
 
       const client = window.QZAuth.client;
-      const [{ data: progressRow }, { data: statsRow }] = await Promise.all([
-        client.from('game_progress').select('level').eq('user_id', profile.id).eq('game_key', GAME_KEY).maybeSingle(),
-        client.from('game_stats').select('high_score,games_played').eq('user_id', profile.id).eq('game_key', GAME_KEY).maybeSingle()
-      ]);
-      state.level = (progressRow && progressRow.level) || 1;
+      const { data: statsRow } = await client
+        .from('game_stats').select('high_score,games_played')
+        .eq('user_id', profile.id).eq('game_key', GAME_KEY).maybeSingle();
       state.highScore = (statsRow && statsRow.high_score) || 0;
       state.gamesPlayed = (statsRow && statsRow.games_played) || 0;
     } catch (err) {
@@ -167,8 +210,11 @@
       if (error) { console.warn('Anagram Quest: could not save XP', error); return; }
       const row = Array.isArray(data) ? data[0] : data;
       if (row && window.QZXp) {
+        // `lvl` is derived straight from the RPC's own fresh response, not
+        // from any cached state — the lobby skill card will independently
+        // pick up the same new level next time it mounts (updateFooterStats
+        // below re-mounts it).
         const lvl = window.QZXp.displayLevel(row.xp);
-        state.level = lvl.base;
         goXpLine.textContent = '+' + finalScore.toLocaleString() + ' Intelligence XP (Level ' +
           lvl.base + (lvl.isVirtual ? ' · Virtual ' + lvl.virtual : '') + ')';
         updateFooterStats();
@@ -179,12 +225,18 @@
   }
 
   // ================= letter selection (rounds 1-4) =================
+  // generatedRack (state.rack) is immutable once a letter lands in it —
+  // there is no Backspace control anywhere on this screen, and nothing in
+  // this section ever pops or replaces an existing entry, only pushes new
+  // ones (manually via pressVC, or automatically via autoFillRack).
   const selSlotsEl = document.getElementById('sel-slots');
   const selTilesEl = document.getElementById('sel-tiles');
   const selRoundNumEl = document.getElementById('sel-round-num');
   const btnVowel = document.getElementById('btn-vowel');
   const btnConsonant = document.getElementById('btn-consonant');
-  const selBackspaceBtn = document.getElementById('sel-backspace');
+  const selTimerRing = document.getElementById('sel-timer-ring');
+  const selTimerNum = document.getElementById('sel-timer-num');
+  const selTimerText = document.getElementById('sel-timer-text');
 
   function renderSelectSlots() {
     selSlotsEl.innerHTML = '';
@@ -212,6 +264,87 @@
     renderSelectSlots();
     updateFooterStats();
     showScreen('SELECT');
+    startSelTimer();
+  }
+
+  // Wall-clock deadline, same pattern as the 40-second round timer — self-
+  // corrects instantly if the tab was throttled/backgrounded instead of
+  // leaving the countdown frozen.
+  function startSelTimer() {
+    state.selDeadline = Date.now() + VC_SELECT_TIME_SECONDS * 1000;
+    updateSelTimerUi(VC_SELECT_TIME_SECONDS);
+    clearInterval(state.selTimerId);
+    state.selTimerId = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((state.selDeadline - Date.now()) / 1000));
+      updateSelTimerUi(remaining);
+      if (remaining <= 0) { onSelTimerExpired(); }
+    }, 250);
+  }
+  function updateSelTimerUi(remaining) {
+    const pct = Math.max(0, (remaining / VC_SELECT_TIME_SECONDS) * 100);
+    if (selTimerRing) selTimerRing.style.setProperty('--pct', pct);
+    if (selTimerRing) selTimerRing.classList.toggle('warn', remaining <= 4);
+    if (selTimerNum) selTimerNum.textContent = remaining;
+    if (selTimerText) selTimerText.textContent = remaining;
+  }
+  // The 10 seconds ran out before all 9 letters were chosen manually —
+  // stop the countdown immediately, auto-complete the rack (preserving
+  // every letter already picked), then go straight into the 40-second
+  // word round.
+  function onSelTimerExpired() {
+    clearInterval(state.selTimerId);
+    state.selTimerId = null;
+    state.selecting = false;
+    btnVowel.disabled = true;
+    btnConsonant.disabled = true;
+    autoFillRack();
+    renderSelectSlots();
+    startActiveRound();
+  }
+
+  // Preserves every letter the player already picked — only ever ADDS the
+  // letters still missing, aiming for a 4-vowel/5-consonant or 3-vowel/
+  // 6-consonant final rack (picked at random between the two whenever both
+  // are still reachable), and always finishes at exactly RACK_SIZE letters.
+  function autoFillRack() {
+    const remaining = RACK_SIZE - state.rack.length;
+    if (remaining <= 0) return;
+    const vowels = state.rack.filter((t) => isVowelLetter(t.letter)).length;
+    const consonants = state.rack.length - vowels;
+
+    const targets = [{ v: 4, c: 5 }, { v: 3, c: 6 }];
+    if (Math.random() < 0.5) targets.reverse();
+    const chosen = targets.find((t) => t.v >= vowels && t.c >= consonants);
+
+    let needV, needC;
+    if (chosen) {
+      needV = chosen.v - vowels;
+      needC = chosen.c - consonants;
+    } else {
+      // Player's manual picks already overshoot both valid target ratios
+      // (e.g. 7 consonants + 1 vowel before timeout) — never discard
+      // anything already generated, just fill what's left with whichever
+      // type keeps the rack furthest from being consonant/vowel-starved.
+      const wantsMoreVowels = (4 - vowels) > 0 || (3 - vowels) > 0;
+      needV = wantsMoreVowels ? Math.min(remaining, Math.max(4 - vowels, 3 - vowels, 0)) : 0;
+      needC = remaining - needV;
+    }
+
+    const picks = [];
+    for (let i = 0; i < needV; i++) picks.push('V');
+    for (let i = 0; i < needC; i++) picks.push('C');
+    while (picks.length < remaining) picks.push('C'); // safety pad, should never trigger
+    picks.length = remaining;
+    // shuffle so auto-filled letters don't visibly land as "all vowels
+    // then all consonants" at the end of the rack
+    for (let i = picks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [picks[i], picks[j]] = [picks[j], picks[i]];
+    }
+    picks.forEach((type) => {
+      const letter = type === 'V' ? window.QZAnagramData.randomVowel() : window.QZAnagramData.randomConsonant();
+      state.rack.push({ letter, used: false });
+    });
   }
 
   function pressVC(type) {
@@ -221,17 +354,18 @@
     playSound('letter-pick');
     renderSelectSlots();
     if (state.rack.length >= RACK_SIZE) {
+      // manually finished before the 10s ran out — stop the countdown
+      // immediately, no auto-fill needed, brief glow/pause before play begins
+      clearInterval(state.selTimerId);
+      state.selTimerId = null;
       state.selecting = false;
       btnVowel.disabled = true;
       btnConsonant.disabled = true;
-      setTimeout(() => startActiveRound(), 350); // brief glow/pause before play begins
+      setTimeout(() => startActiveRound(), 350);
     }
   }
   btnVowel.addEventListener('click', () => pressVC('V'));
   btnConsonant.addEventListener('click', () => pressVC('C'));
-  selBackspaceBtn.addEventListener('click', () => {
-    if (state.selecting && state.rack.length > 0) { state.rack.pop(); renderSelectSlots(); }
-  });
 
   // ================= active round (build + submit) =================
   const activeSlotsEl = document.getElementById('active-slots');
@@ -391,24 +525,34 @@
     } while (letters.join('') === answer);
     state.bonusWord = answer;
     state.rack = letters.map((letter) => ({ letter, used: false }));
+    // Every genuine 9-letter dictionary word this exact rack can spell —
+    // guaranteed to include `answer` itself, but may include more. ANY of
+    // these counts as correct (see submitWord's bonus branch) and ALL of
+    // them are shown on the result screen afterwards, win or lose.
+    state.round5Solutions = computeAnagramSolutions(letters);
     startActiveRound();
   }
 
   // ================= round result =================
   const resultLabel = document.getElementById('result-label');
   const resultWord = document.getElementById('result-word');
-  const resultIcon = document.getElementById('result-icon');
+  const resultIcon = document.getElementById('result-icon'); // ONE element, reused every round — never create another
+  const resultSubtext = document.getElementById('result-subtext');
   const resultPointsLabel = document.getElementById('result-points-label');
   const resultPoints = document.getElementById('result-points');
   const resultTimeLeft = document.getElementById('result-timeleft');
+  const resultAnswers = document.getElementById('result-answers');
+  const resultAnswersLabel = document.getElementById('result-answers-label');
+  const resultAnswersList = document.getElementById('result-answers-list');
   const nextRoundBtn = document.getElementById('btn-next-round');
 
   function endRound(bonusCorrectWord) {
     clearInterval(state.timerId);
     const roundIndex = state.currentRound - 1;
+    const bonus = isBonusRound();
     let word, points, valid;
 
-    if (isBonusRound()) {
+    if (bonus) {
       if (bonusCorrectWord) {
         valid = true;
         word = bonusCorrectWord;
@@ -428,22 +572,38 @@
     state.roundScores[roundIndex] = points;
     state.totalScore += points;
 
+    // ---- word line + exactly one success/failure icon ----
     if (word) {
       resultLabel.textContent = 'You submitted a ' + word.length + ' letter word:';
-      resultWord.innerHTML = '<span>' + word.toUpperCase() + '</span>';
+      resultWord.textContent = word.toUpperCase();
     } else {
-      resultLabel.textContent = 'Time’s up — no valid word was submitted.';
-      resultWord.innerHTML = '<span>—</span>';
+      resultLabel.textContent = 'NO WORD SUBMITTED';
+      resultWord.textContent = '';
     }
-    const icon = document.createElement('span');
-    icon.className = valid ? 'tick' : 'cross';
-    icon.innerHTML = valid ? '&#10003;' : '&#10060;';
-    resultWord.appendChild(icon);
+    resultIcon.className = valid ? 'tick' : 'cross';
+    resultIcon.innerHTML = valid ? '&#10003;' : '&#10060;';
+    resultSubtext.textContent = valid ? 'That word is correct!' : '';
 
-    resultPointsLabel.textContent = valid ? 'Points earned:' : 'Points earned:';
+    resultPointsLabel.textContent = 'Points earned:';
     resultPoints.textContent = points + (points === 1 ? ' POINT' : ' POINTS');
     resultTimeLeft.textContent = Math.max(0, state.timeRemaining);
-    nextRoundBtn.textContent = isBonusRound() ? 'SEE FINAL SCORE' : 'NEXT ROUND';
+    nextRoundBtn.textContent = bonus ? 'SEE FINAL SCORE' : 'NEXT ROUND';
+
+    // ---- Round 5 only: always reveal every valid 9-letter answer for
+    // this exact rack, whether the player solved it, submitted something
+    // wrong, or ran out of time ----
+    if (bonus) {
+      const solutions = state.round5Solutions && state.round5Solutions.length
+        ? state.round5Solutions
+        : (state.bonusWord ? [state.bonusWord] : []);
+      resultAnswersLabel.textContent = solutions.length === 1 ? 'Correct answer:' : 'Correct answers:';
+      resultAnswersList.textContent = solutions.join(', ');
+      resultAnswers.classList.remove('hidden');
+    } else {
+      resultAnswers.classList.add('hidden');
+      resultAnswersList.textContent = '';
+    }
+
     updateFooterStats();
     showScreen('RESULT');
   }
@@ -519,10 +679,16 @@
   // Catch the round up immediately on regaining focus, rather than waiting
   // for the next (possibly still-throttled) interval tick.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden || screens.ACTIVE.classList.contains('hidden') || !state.roundDeadline) return;
-    state.timeRemaining = Math.max(0, Math.ceil((state.roundDeadline - Date.now()) / 1000));
-    updateTimerUi();
-    if (state.timeRemaining <= 0) { clearInterval(state.timerId); endRound(null); }
+    if (document.hidden) return;
+    if (!screens.ACTIVE.classList.contains('hidden') && state.roundDeadline) {
+      state.timeRemaining = Math.max(0, Math.ceil((state.roundDeadline - Date.now()) / 1000));
+      updateTimerUi();
+      if (state.timeRemaining <= 0) { clearInterval(state.timerId); endRound(null); }
+    } else if (!screens.SELECT.classList.contains('hidden') && state.selDeadline && state.selecting) {
+      const remaining = Math.max(0, Math.ceil((state.selDeadline - Date.now()) / 1000));
+      updateSelTimerUi(remaining);
+      if (remaining <= 0) onSelTimerExpired();
+    }
   });
 
   // ================= init =================
