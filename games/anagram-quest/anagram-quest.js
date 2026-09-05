@@ -3,6 +3,22 @@
 //   LOBBY -> LETTER_SELECTION -> ACTIVE_ROUND -> ROUND_RESULT -> (repeat x4)
 //   -> BONUS_ROUND (round 5, reuses ACTIVE_ROUND/ROUND_RESULT screens) -> GAME_OVER
 //
+// LETTER_SELECTION: 10s to pick V/C; generatedRack (state.rack) is
+// immutable the instant a letter lands in it — no Backspace exists on that
+// screen. Reaching 9 letters manually stops the countdown immediately;
+// letting it expire auto-fills the rest (see autoFillRack), preserving
+// every letter already picked.
+//
+// ACTIVE_ROUND (rounds 1-4): 30s (NORMAL_ROUND_SECONDS) to build a word.
+// Submitting only ever checks MECHANICAL rules (length, and — by
+// construction — only-rack-letters) and neutrally says "WORD SUBMITTED";
+// it never reveals whether the word is real, so nothing here can be
+// brute-forced. Submitting again simply replaces the latest candidate.
+// Real validity (isValidAnagramQuestWord: English dictionary OR a real
+// country/city, see geo-data.js) is decided once, at endRound(), against
+// only the LATEST submission. Round 5 is the one exception: it still
+// validates immediately and can end the round early.
+//
 // XP: Anagram Quest trains the "Intelligence" skill (see supabase/
 // migrations/20260905020000_intelligence_skill.sql) at exactly 1 XP per
 // point of the game's final score — awarded once per completed game,
@@ -13,8 +29,8 @@
 (function () {
   const GAME_KEY = 'intelligence';
   const TOTAL_ROUNDS = 5;
-  const ROUND_TIME_SECONDS = 40;
-  const VC_SELECT_TIME_SECONDS = 10; // separate, shorter countdown for letter selection (rounds 1-4)
+  const NORMAL_ROUND_SECONDS = 30; // Rounds 1-4 word-building timer (was 40s)
+  const VC_SELECT_TIME_SECONDS = 10; // separate, shorter countdown for letter selection (rounds 1-4) — unchanged
   const MIN_WORD_LEN = 4;
   const MAX_WORD_LEN = 9;
   const RACK_SIZE = 9;
@@ -60,26 +76,40 @@
     if (!/^[A-Za-z]+$/.test(word)) return false; // no spaces/punctuation/numbers/hyphens
     return dictSet.has(word.toLowerCase());
   }
+  // The ONE centralized word validator — every place in this file that
+  // needs to know "does this word count" (Rounds 1-4 at round end, Round 5
+  // immediately) calls this, never isValidEnglishWord alone, so English
+  // dictionary words, real countries and real cities are always judged
+  // identically everywhere.
+  function isValidAnagramQuestWord(word) {
+    return isValidEnglishWord(word) ||
+      (window.QZAnagramGeo && (window.QZAnagramGeo.isCountryName(word) || window.QZAnagramGeo.isCityName(word)));
+  }
   function normalizedSignature(word) {
     return word.toUpperCase().split('').sort().join('');
   }
-  // Round 5 accepts ANY genuine 9-letter dictionary word made from exactly
-  // the rack's letters, not just the one word the rack was generated from
-  // — this finds every one of them (letter-multiset match + real dictionary
-  // word) up front, once, when the bonus rack is created, so both
-  // validation and the post-round "correct answer(s)" reveal use the exact
-  // same list.
+  // Round 5 accepts ANY genuine 9-letter word made from exactly the rack's
+  // letters — an English dictionary word OR a real 9-letter country/city
+  // name — not just the one word the rack was generated from. This finds
+  // every one of them up front, once, when the bonus rack is created, so
+  // both validation and the post-round "correct answer(s)" reveal use the
+  // exact same list.
   function computeAnagramSolutions(rackLetters) {
     const target = rackLetters.slice().sort().join('').toUpperCase();
-    const solutions = [];
+    const solutions = new Set();
     if (dictSet) {
       dictSet.forEach((w) => {
         if (w.length !== RACK_SIZE) return;
-        if (normalizedSignature(w) === target) solutions.push(w.toUpperCase());
+        if (normalizedSignature(w) === target) solutions.add(w.toUpperCase());
       });
     }
-    solutions.sort();
-    return solutions;
+    if (window.QZAnagramGeo) {
+      window.QZAnagramGeo.COUNTRIES.concat(window.QZAnagramGeo.CITIES).forEach((w) => {
+        if (w.length !== RACK_SIZE) return;
+        if (normalizedSignature(w) === target) solutions.add(w.toUpperCase());
+      });
+    }
+    return Array.from(solutions).sort();
   }
 
   // ================= state =================
@@ -88,10 +118,15 @@
     currentRound: 0,
     rack: [],            // [{ letter, used }]
     currentWord: [],      // array of rack-tile refs, in selection order
-    submittedWord: null,  // last VALID submitted word string, or null
+    // Rounds 1-4: the LATEST mechanically-allowed submission (right length,
+    // built only from rack tiles) — NOT necessarily a real word. Validity
+    // is deliberately not known/shown until the round ends (see submitWord
+    // and endRound) so a player can't brute-force by watching for a "valid"
+    // reaction. Round 5 still validates immediately, per spec.
+    submittedWord: null,
     roundScores: [0, 0, 0, 0, 0],
     totalScore: 0,
-    timeRemaining: ROUND_TIME_SECONDS,
+    timeRemaining: NORMAL_ROUND_SECONDS,
     timerId: null,
     bonusWord: null,
     bonusSolved: false,
@@ -141,8 +176,12 @@
   // as Profile -> Skills — see assets/js/skill-card.js. Always re-fetches
   // fresh (never reuses a cached level), so it can never show a stale
   // value after XP was just awarded.
-  function mountIntelligenceCard() {
-    const slot = document.getElementById('lobby-skillcard-slot');
+  // Generic — used for the lobby's own card AND the mid-game/post-round
+  // slots (see items 6/7: those replace what used to be a circular avatar
+  // placeholder). Every call site is this ONE function; there is no second
+  // hand-copied Intelligence display anywhere in this file.
+  function mountSkillCard(containerId) {
+    const slot = document.getElementById(containerId);
     if (!slot || !window.QZSkillCard) return;
     window.QZSkillCard.mount(slot, {
       client: window.QZAuth && window.QZAuth.client,
@@ -152,14 +191,51 @@
       fallbackName: 'Intelligence'
     });
   }
+  function mountIntelligenceCard() { mountSkillCard('lobby-skillcard-slot'); }
+
+  // ================= player avatar (lobby only) =================
+  // Real, currently-equipped Quest Zone avatar — same renderer
+  // (assets/js/avatar-viewer.js) and same equipped_items/
+  // avatar_customization tables as Profile/Inventory. basePathPrefix:'../'
+  // because this page lives one directory deeper than profile/*.html,
+  // which is what avatar-viewer.js's asset paths assume by default;
+  // staticFront:true because this is a small, still, front-facing circle
+  // next to the username, not the full turntable viewer. No separate
+  // Anagram Quest avatar state exists anywhere — every value below comes
+  // straight from the same tables Profile/Inventory read.
+  let qzAvatar = null;
+  async function loadPlayerAvatar() {
+    const container = document.getElementById('lobby-avatar-3d');
+    if (!container || !window.QZAvatarViewer) return;
+    if (!qzAvatar) qzAvatar = window.QZAvatarViewer.mount(container, { basePathPrefix: '../', staticFront: true });
+    if (!qzAvatar || !state.profile || !window.QZAuth || !window.QZAuth.client) return;
+    try {
+      const client = window.QZAuth.client;
+      const [{ data: equipped }, { data: custom }] = await Promise.all([
+        client.from('equipped_items').select('slot,item_id').eq('user_id', state.profile.id),
+        client.from('avatar_customization').select('gender,skin_colour,hair_style,hair_colour').eq('user_id', state.profile.id).maybeSingle()
+      ]);
+      const catalogById = {};
+      (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+      const items = {};
+      (equipped || []).forEach((row) => { if (row.item_id && catalogById[row.item_id]) items[row.slot] = catalogById[row.item_id]; });
+      qzAvatar.setAvatarEquipment(items);
+      if (custom) {
+        qzAvatar.setBaseAppearance(custom.gender, custom.skin_colour);
+        qzAvatar.setHairstyle(custom.hair_style, custom.hair_colour);
+      }
+    } catch (err) {
+      console.warn('Anagram Quest: could not load player avatar', err);
+    }
+  }
 
   // ================= account load/save =================
   async function loadAccountData() {
-    if (!window.QZAuth || !window.QZAuth.client) { updateFooterStats(); return; }
+    if (!window.QZAuth || !window.QZAuth.client) { await loadPlayerAvatar(); updateFooterStats(); return; }
     try {
       const profile = await window.QZAuth.getProfile();
       state.profile = profile;
-      if (!profile) { updateFooterStats(); return; }
+      if (!profile) { await loadPlayerAvatar(); updateFooterStats(); return; }
 
       const client = window.QZAuth.client;
       const { data: statsRow } = await client
@@ -167,6 +243,7 @@
         .eq('user_id', profile.id).eq('game_key', GAME_KEY).maybeSingle();
       state.highScore = (statsRow && statsRow.high_score) || 0;
       state.gamesPlayed = (statsRow && statsRow.games_played) || 0;
+      await loadPlayerAvatar();
     } catch (err) {
       console.warn('Anagram Quest: could not load account data', err);
     }
@@ -265,9 +342,10 @@
     updateFooterStats();
     showScreen('SELECT');
     startSelTimer();
+    mountSkillCard('sel-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar (see item 6)
   }
 
-  // Wall-clock deadline, same pattern as the 40-second round timer — self-
+  // Wall-clock deadline, same pattern as the 30-second round timer — self-
   // corrects instantly if the tab was throttled/backgrounded instead of
   // leaving the countdown frozen.
   function startSelTimer() {
@@ -289,7 +367,7 @@
   }
   // The 10 seconds ran out before all 9 letters were chosen manually —
   // stop the countdown immediately, auto-complete the rack (preserving
-  // every letter already picked), then go straight into the 40-second
+  // every letter already picked), then go straight into the 30-second
   // word round.
   function onSelTimerExpired() {
     clearInterval(state.selTimerId);
@@ -403,9 +481,13 @@
       activeSlotsEl.appendChild(d);
     }
   }
-  function setMsg(text, ok) {
+  // status: true (green — bonus round correct), false (red — rejected/
+  // invalid), or 'neutral' (cyan — a normal-round submission was accepted
+  // MECHANICALLY; deliberately says nothing about whether it will score).
+  function setMsg(text, status) {
     activeMsg.textContent = text || ' ';
-    activeMsg.classList.toggle('ok', !!ok);
+    activeMsg.classList.toggle('ok', status === true);
+    activeMsg.classList.toggle('neutral', status === 'neutral');
   }
   function updateLockedLabel() {
     activeLocked.textContent = state.submittedWord ? ('Current answer: ' + state.submittedWord) : ' ';
@@ -435,15 +517,18 @@
   function submitWord() {
     const word = currentWordString();
 
+    // Round 5 is explicitly exempt from the hidden-validation rule below
+    // (item 37) — it still validates and can end the round immediately.
     if (isBonusRound()) {
       if (word.length !== RACK_SIZE) { setMsg('You must use all 9 letters.', false); playSound('invalid'); return; }
-      if (!isValidEnglishWord(word)) { setMsg('Not a valid English word.', false); playSound('invalid'); return; }
+      if (!isValidAnagramQuestWord(word)) { setMsg('Not accepted.', false); playSound('invalid'); return; }
       // exact-anagram check: must use precisely the rack's letters (this
-      // also transparently accepts an alternate genuine 9-letter word made
-      // from the same letters, per spec, since it's a pure multiset compare)
+      // also transparently accepts an alternate genuine 9-letter word — or
+      // a real 9-letter place name — made from the same letters, per spec,
+      // since it's a pure multiset compare)
       const rackSorted = state.rack.map((t) => t.letter).sort().join('');
       if (word.toUpperCase().split('').sort().join('') !== rackSorted) {
-        setMsg('Not a valid English word.', false); playSound('invalid'); return;
+        setMsg('Not accepted.', false); playSound('invalid'); return;
       }
       setMsg('Correct!', true);
       playSound('valid');
@@ -452,15 +537,21 @@
       return;
     }
 
+    // Rounds 1-4: only mechanical rules are enforced HERE (length, and —
+    // by construction, since currentWord can only ever contain clicked
+    // rack tiles — using only available rack letters). Whether the word is
+    // actually real is judged only once, at endRound(), so nothing at
+    // submit time can be used to brute-force the dictionary/geo data (see
+    // items 23-24). Submitting again before the timer ends simply replaces
+    // this as the latest candidate (items 25-26) — an older word, valid or
+    // not, is never preserved once a newer one is submitted.
     if (word.length < MIN_WORD_LEN) { setMsg('Word must be at least ' + MIN_WORD_LEN + ' letters.', false); playSound('invalid'); return; }
-    if (!isValidEnglishWord(word)) { setMsg('Not a valid English word.', false); playSound('invalid'); return; }
 
     state.submittedWord = word;
     updateLockedLabel();
-    setMsg('Saved as your current answer.', true);
+    setMsg('WORD SUBMITTED', 'neutral');
     playSound('valid');
-    if (word.length >= 8) fireEvent('long-word', { word });
-    fireEvent('valid-word-submitted', { word, round: state.currentRound });
+    fireEvent('word-submitted', { word, round: state.currentRound });
   }
   activeSubmitBtn.addEventListener('click', submitWord);
 
@@ -470,8 +561,8 @@
   // otherwise leave the displayed timer frozen indefinitely instead of
   // catching up the moment the tab's ticks resume.
   function startTimer() {
-    state.roundDeadline = Date.now() + ROUND_TIME_SECONDS * 1000;
-    state.timeRemaining = ROUND_TIME_SECONDS;
+    state.roundDeadline = Date.now() + NORMAL_ROUND_SECONDS * 1000;
+    state.timeRemaining = NORMAL_ROUND_SECONDS;
     state.warnedThisRound = false;
     updateTimerUi();
     clearInterval(state.timerId);
@@ -483,7 +574,7 @@
     }, 250);
   }
   function updateTimerUi() {
-    const pct = Math.max(0, (state.timeRemaining / ROUND_TIME_SECONDS) * 100);
+    const pct = Math.max(0, (state.timeRemaining / NORMAL_ROUND_SECONDS) * 100);
     timerRing.style.setProperty('--pct', pct);
     timerRing.classList.toggle('warn', state.timeRemaining <= 10);
     timerNum.textContent = Math.max(0, state.timeRemaining);
@@ -503,11 +594,12 @@
       activeRoundSub.textContent = 'FIND THE NINE LETTER WORD';
     } else {
       activeRoundLabel.textContent = 'Round ' + state.currentRound + ' of 5';
-      activeRoundSub.textContent = 'Build the longest valid English word you can.';
+      activeRoundSub.textContent = 'Build the longest word you can — English words + real cities/countries.';
     }
     updateFooterStats();
     showScreen('ACTIVE');
     startTimer();
+    mountSkillCard('active-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar (see item 6)
   }
 
   function startBonusRound() {
@@ -564,8 +656,12 @@
         points = 0;
       }
     } else {
+      // Validity is decided HERE, for the very first time — never at
+      // submit time (items 23-26). Only the LATEST submission is judged;
+      // an earlier valid word the player has since overwritten is not
+      // resurrected just because the new one turned out invalid.
       word = state.submittedWord;
-      valid = !!word;
+      valid = !!word && isValidAnagramQuestWord(word);
       points = valid ? word.length : 0;
     }
 
@@ -582,7 +678,10 @@
     }
     resultIcon.className = valid ? 'tick' : 'cross';
     resultIcon.innerHTML = valid ? '&#10003;' : '&#10060;';
-    resultSubtext.textContent = valid ? 'That word is correct!' : '';
+    // "not accepted" only when a word actually WAS submitted and judged
+    // invalid — true no-submission stays blank (its "NO WORD SUBMITTED"
+    // label above already says everything that case needs).
+    resultSubtext.textContent = valid ? 'That word is correct!' : (word && !bonus ? 'That word was not accepted.' : '');
 
     resultPointsLabel.textContent = 'Points earned:';
     resultPoints.textContent = points + (points === 1 ? ' POINT' : ' POINTS');
@@ -606,6 +705,7 @@
 
     updateFooterStats();
     showScreen('RESULT');
+    mountSkillCard('result-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar (see item 7)
   }
 
   nextRoundBtn.addEventListener('click', () => {

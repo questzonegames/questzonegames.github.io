@@ -3,25 +3,29 @@
 // tuned without touching game logic.
 (function () {
   // Round 5 bonus rack always comes from one of these — every entry is a
-  // genuine, reasonably common 9-letter English word (hand-picked, not a
-  // random slice of the full dictionary, which is full of obscure 9-letter
-  // entries that would make an unfair/unrecognisable bonus round). Each one
-  // is also verified present in data/dictionary.txt, since the shared
-  // validator is what actually accepts the player's answer.
+  // genuine, reasonably common 9-letter word, and deliberately singular/
+  // base-form (an adjective, an uncountable noun, or a proper noun that
+  // doesn't pluralize) — NEVER an obvious plural (no "HOSPITALS",
+  // "CAMPFIRES", etc.) per the anti-brute-force design: curated by hand
+  // rather than a blanket "reject anything ending in S" rule, since some
+  // perfectly singular words legitimately end in S (DANGEROUS, HAPPINESS,
+  // QUIETNESS below all do). The last 8 are real, singular country names
+  // instead of ordinary dictionary words — both count identically as far
+  // as validation/scoring is concerned (see isValidAnagramQuestWord in
+  // anagram-quest.js). Every plain-English entry here is verified present
+  // in data/dictionary.txt, since the shared validator is what actually
+  // accepts the player's answer; the country names are verified against
+  // geo-data.js instead.
   const BONUS_WORDS = [
-    'ADVENTURE','BUTTERFLY','FOOTBALLS','BASEBALLS','MOUNTAINS','DANGEROUS',
-    'BEAUTIFUL','HOSPITALS','TELEPHONE','UMBRELLAS','VACATIONS','AIRPLANES',
-    'NEWSPAPER','CHOCOLATE','PAINTINGS','CAMPFIRES','DISCOVERY','AUDIENCES',
-    'ASTRONAUT','SPACESHIP','METEORITE','UNIVERSAL','ASTEROIDS','FURNITURE',
-    'KEYBOARDS','KNOWLEDGE','DIRECTORS','LANGUAGES','QUESTIONS','MEDICINES',
-    'EDUCATION','FANTASTIC','GENERATOR','HAPPINESS','KILOMETER','LIGHTNING',
-    'MAGNITUDE','NECKLACES','OBSTACLES','QUIETNESS','SATELLITE','TELESCOPE',
-    'UNDERWEAR','VOLCANOES','WATERFALL','EXCELLENT','YESTERDAY','ZOOLOGIST',
-    'BACKYARDS','DAYDREAMS','FIREWORKS','GRASSLAND','HAMBURGER','JELLYFISH',
-    'KANGAROOS','MOONLIGHT','NIGHTMARE','OVERBOARD','RAINCOATS','SNOWSTORM',
-    'VEGETABLE','YOUNGSTER','ZEPPELINS','BUTTERCUP','DINOSAURS','ELECTRONS',
-    'FRAGMENTS','GEOGRAPHY','HURRICANE','MUSICIANS','NOTEBOOKS','COMPUTERS',
-    'BIRTHDAYS'
+    'ADVENTURE','BUTTERFLY','DANGEROUS','BEAUTIFUL','TELEPHONE','NEWSPAPER',
+    'CHOCOLATE','DISCOVERY','ASTRONAUT','SPACESHIP','METEORITE','UNIVERSAL',
+    'FURNITURE','KNOWLEDGE','EDUCATION','FANTASTIC','GENERATOR','HAPPINESS',
+    'KILOMETER','LIGHTNING','MAGNITUDE','QUIETNESS','SATELLITE','TELESCOPE',
+    'UNDERWEAR','WATERFALL','EXCELLENT','YESTERDAY','ZOOLOGIST','GRASSLAND',
+    'HAMBURGER','JELLYFISH','MOONLIGHT','NIGHTMARE','OVERBOARD','SNOWSTORM',
+    'VEGETABLE','YOUNGSTER','BUTTERCUP','GEOGRAPHY','HURRICANE',
+    'MAURITIUS','LITHUANIA','GUATEMALA','NICARAGUA','VENEZUELA','ARGENTINA',
+    'AUSTRALIA','SINGAPORE'
   ];
 
   // Relative weights (not percentages — just proportional) modelling real

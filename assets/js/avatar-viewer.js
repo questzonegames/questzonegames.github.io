@@ -16,12 +16,27 @@
 // is exactly one state machine (`phase`) driving this, so auto-advance,
 // transitions and dragging can never fight each other or stack timers.
 //
-//   window.QZAvatarViewer.mount(container)
+//   window.QZAvatarViewer.mount(container, opts)
 //     -> { destroy, setAvatarEquipment, next, prev }
 //
 // container is the element the avatar fills (e.g. #avatar-3d) — it should
 // be position:relative/absolute with a defined size; this module only
 // ever touches elements it creates inside that container.
+//
+// opts.basePathPrefix (optional, default '') — every art path here (base
+// body, hair, and an item's own views from the catalog in inventory-
+// data.js) is written relative to a page one directory below the site
+// root (profile/index.html, profile/skills.html). A page nested one level
+// deeper (e.g. games/anagram-quest/index.html) mounts the exact same
+// avatar by passing basePathPrefix: '../' — prepended verbatim to every
+// one of those relative paths — rather than needing its own copy of any
+// of this.
+//
+// opts.staticFront (optional, default false) — mounts a permanently-front-
+// facing, non-interactive render (no auto-rotation, no drag) instead of
+// the full turntable viewer. Same renderer/state/equipment data either
+// way; intended for small decorative slots (e.g. a lobby avatar circle)
+// where a rotating/draggable avatar wouldn't make sense.
 (function () {
   const HOLD_MS = 5000;         // how long a settled pose stays put
   const TRANSITION_MS = 450;    // smooth turn between adjacent poses
@@ -64,12 +79,12 @@
   // fraction of the frame.
   const HAIR_DIR = '../assets/img/hair/';
   const AVAILABLE_HAIRSTYLES = { 'male-short-spiky': true };
-  function hairSrc(pose, gender, hairStyle, hairColour) {
+  function hairSrc(pose, gender, hairStyle, hairColour, prefix) {
     const style = hairStyle || 'none';
     if (style === 'none') return null;
     const key = (gender || 'male') + '-' + style;
     if (!AVAILABLE_HAIRSTYLES[key]) return null;
-    return HAIR_DIR + 'hair-' + style + '-' + (hairColour || 'dark-brown') + '-' + pose + '.png';
+    return (prefix || '') + HAIR_DIR + 'hair-' + style + '-' + (hairColour || 'dark-brown') + '-' + pose + '.png';
   }
 
   // Single source of truth for where each equip layer sits on the body,
@@ -101,15 +116,16 @@
     return (slot && slot[pose]) || null;
   }
 
-  function baseSrc(pose, gender, skinColour) {
+  function baseSrc(pose, gender, skinColour, prefix) {
+    const p = prefix || '';
     const key = (gender || 'male') + '-' + (skinColour || 'normal');
-    if (key === 'male-normal') return BASE_DIR + 'avatar-' + pose + '.png';
-    if (AVAILABLE_BASES[key]) return BASE_DIR + key + '-' + pose + '.png';
-    return BASE_DIR + 'avatar-' + pose + '.png';
+    if (key === 'male-normal') return p + BASE_DIR + 'avatar-' + pose + '.png';
+    if (AVAILABLE_BASES[key]) return p + BASE_DIR + key + '-' + pose + '.png';
+    return p + BASE_DIR + 'avatar-' + pose + '.png';
   }
 
-  function defaultFrames() {
-    return POSES.map((pose) => ({ key: pose, src: baseSrc(pose, 'male', 'normal') }));
+  function defaultFrames(prefix) {
+    return POSES.map((pose) => ({ key: pose, src: baseSrc(pose, 'male', 'normal', prefix) }));
   }
 
   function reduceMotion() {
@@ -134,8 +150,10 @@
     return { targetAngle: a + delta, idx };
   }
 
-  function mount(container) {
+  function mount(container, opts) {
     if (!container) return null;
+    const prefix = (opts && opts.basePathPrefix) || '';
+    const staticFront = !!(opts && opts.staticFront);
 
     container.classList.add('avatar-3d');
     let currentGender = 'male';
@@ -143,7 +161,7 @@
     let currentHairStyle = 'none';
     let currentHairColour = 'dark-brown';
     let hairHiddenByHeadwear = false;
-    const imgs = defaultFrames().map((f) => {
+    const imgs = defaultFrames(prefix).map((f) => {
       const img = document.createElement('img');
       img.className = 'avatar-sprite';
       img.src = f.src;
@@ -327,22 +345,32 @@
       endDrag();
     }
 
-    container.addEventListener('pointerdown', onPointerDown);
-    container.addEventListener('pointermove', onPointerMove);
-    container.addEventListener('pointerup', onPointerUp);
-    container.addEventListener('pointercancel', onPointerUp);
-    // in case the pointer is released outside the element entirely
-    window.addEventListener('pointerup', onPointerUp);
+    // staticFront: a small decorative mount (e.g. the Anagram Quest lobby's
+    // avatar circle) that should just show the front pose, permanently —
+    // no auto-rotation, no drag-to-turn, no rAF loop running at all. Still
+    // the exact same renderer/state/equipment data as the interactive
+    // viewer, just never advanced past angle 0 — so it stays correct
+    // through setBaseAppearance/setHairstyle/setAvatarEquipment calls with
+    // zero extra code path, same as the interactive mount.
+    if (!staticFront) {
+      container.addEventListener('pointerdown', onPointerDown);
+      container.addEventListener('pointermove', onPointerMove);
+      container.addEventListener('pointerup', onPointerUp);
+      container.addEventListener('pointercancel', onPointerUp);
+      // in case the pointer is released outside the element entirely
+      window.addEventListener('pointerup', onPointerUp);
+    }
 
     function onVisibilityChange() {
       if (document.hidden) stop();
       else start();
     }
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    if (!document.hidden) start();
-    holdUntil = performance.now() + HOLD_MS; // hold on Front before the first auto-advance
-    render();
+    if (!staticFront) {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      if (!document.hidden) start();
+      holdUntil = performance.now() + HOLD_MS; // hold on Front before the first auto-advance
+    }
+    render(); // paint the initial (front) frame either way
 
     // ---- manual pose stepping (wired to the left/right arrow buttons) ----
     function next() { step(1, performance.now()); }
@@ -376,7 +404,7 @@
         img.className = 'avatar-equip-layer avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
         const pos = equipPosition(currentGender, slotKey, pose);
         if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
-        img.src = views[pose];
+        img.src = prefix + views[pose];
         img.alt = '';
         img.setAttribute('aria-hidden', 'true');
         img.decoding = 'async';
@@ -417,7 +445,7 @@
     function refreshHair() {
       POSES.forEach((pose, i) => {
         const img = hairImgs[i];
-        const src = hairSrc(pose, currentGender, currentHairStyle, currentHairColour);
+        const src = hairSrc(pose, currentGender, currentHairStyle, currentHairColour, prefix);
         img.dataset.broken = '';
         if (!src) { img.removeAttribute('src'); img.dataset.broken = 'true'; return; }
         img.src = src;
@@ -440,7 +468,7 @@
       imgs.forEach((img, i) => {
         const pose = POSES[i];
         img.dataset.broken = '';
-        img.src = baseSrc(pose, currentGender, currentSkinColour);
+        img.src = baseSrc(pose, currentGender, currentSkinColour, prefix);
       });
       // any already-equipped gear needs repositioning too — a body swap
       // (e.g. switching Gender on the Customise screen) can change which
