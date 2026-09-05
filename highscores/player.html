@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Player Highscores — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<meta name="description" content="Quest Zone — an individual player's live Highscores.">
+<link rel="stylesheet" href="../assets/css/site.css">
+<link rel="stylesheet" href="../assets/css/hiscores.css">
+<style>
+  main.hs-player { padding: 28px 0 70px; position: relative; z-index: 1; }
+
+  .hs-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 22px clamp(14px, 3vw, 30px) 28px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .hs-player-head { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+  .hs-player-avatar {
+    width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+    background: radial-gradient(circle at 35% 30%, #3b4a6b, #1a2036 70%);
+    border: 2px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+  }
+  .hs-player-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(22px, 4vw, 30px); color: #fff; letter-spacing: 0.02em; margin: 0; }
+  .hs-player-sub { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html">
+      <img src="../assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="../index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="../profile/index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="#" class="btn btn-chrome-blue" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-chrome-dark" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="hs-player">
+  <div class="container">
+    <div class="hs-frame">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <a class="hs-back-link" href="../highscores.html">← Back to Highscores</a>
+      <div id="hs-player-body">
+        <div class="hs-state"><div class="icon">⏳</div>Loading player…</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/hiscores-shared.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  const escapeHtml = window.QZHiscores.escapeHtml;
+  const rankBadgeHtml = window.QZHiscores.rankBadgeHtml;
+  const nameCellHtml = window.QZHiscores.nameCellHtml;
+
+  function client() { return window.QZAuth && window.QZAuth.client; }
+
+  // Read + decode the ?u= query param safely. A malformed/undecodable
+  // value (e.g. a stray "%") is treated as simply "no username given"
+  // rather than throwing — the page falls back to its own not-found state.
+  function getUsernameFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('u');
+    if (!raw) return null;
+    try {
+      return raw; // URLSearchParams already decodes percent-encoding for us
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function renderNotFound() {
+    document.getElementById('hs-player-body').innerHTML =
+      '<div class="hs-state"><div class="icon">🔍</div>Player not found.</div>';
+  }
+  function renderError() {
+    document.getElementById('hs-player-body').innerHTML =
+      '<div class="hs-state"><div class="icon">⚠️</div>Couldn’t load this player right now. Please try again shortly.</div>';
+  }
+
+  // A real skill's row links its name back to that skill's own ranking on
+  // the main Highscores page (?skill=<id>) — clicking "Total Level" here
+  // goes to the Total Level leaderboard, clicking "Intelligence" goes to
+  // the Intelligence leaderboard. Placeholder Skill 2-24 rows have no
+  // ranking to link to, so they stay plain, dimmed, unclickable text.
+  function skillRowHtml(skill, level, xp, rank) {
+    const href = skill.placeholder ? null : window.QZHiscores.highscoresSkillUrl('../', skill.id);
+    const rowClass = skill.placeholder ? 'hs-placeholder-row' : 'hs-row-clickable';
+    return '<tr class="' + rowClass + '"' + (href ? ' data-href="' + href + '"' : '') + '>' +
+      '<td class="hs-col-rank">' + (skill.placeholder ? '<span style="color:var(--text-dim);">—</span>' : rankBadgeHtml(rank)) + '</td>' +
+      '<td class="hs-col-name">' + nameCellHtml(skill.iconHtml, skill.name, href) + '</td>' +
+      '<td class="hs-col-level">' + (skill.placeholder ? '—' : Number(level).toLocaleString()) + '</td>' +
+      '<td class="hs-col-xp">' + (skill.placeholder ? '—' : Number(xp).toLocaleString()) + '</td>' +
+      '</tr>';
+  }
+
+  // Clicking anywhere on a real skill's row (not just its name link) goes
+  // to that skill's main ranking — the name link already does this
+  // natively; this just widens the click target to the whole row.
+  function wireRowClicks() {
+    document.querySelectorAll('#hs-player-body tr[data-href]').forEach((tr) => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return; // let the real <a> handle its own click
+        window.location.href = tr.getAttribute('data-href');
+      });
+    });
+  }
+
+  async function init() {
+    const username = getUsernameFromQuery();
+    if (!username) { renderNotFound(); return; }
+
+    // Give the header-auth script a brief head start so client() resolves
+    // if the visitor happens to be signed in (admins need to be recognised
+    // for test-account visibility, same as on the main Highscores page).
+    let tries = 0;
+    while (!client() && tries < 20) { await new Promise((r) => setTimeout(r, 50)); tries++; }
+    if (!client()) { renderError(); return; }
+
+    try {
+      const [{ data, error }, registry] = await Promise.all([
+        client().rpc('hiscores_player_stats', { p_username: username }),
+        window.QZHiscores.loadSkillRegistry(client(), '../')
+      ]);
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) { renderNotFound(); return; }
+
+      const totalLevelSkill = registry.find((s) => s.id === 'overall') ||
+        { id: 'overall', name: 'Total Level', iconHtml: '<span style="font-size:14px;">🏆</span>', placeholder: false };
+      let rowsHtml = skillRowHtml(totalLevelSkill, row.total_level, row.total_xp, row.overall_rank);
+      registry.filter((s) => s.id !== 'overall').forEach((s) => {
+        const sd = row.skills && row.skills[s.id];
+        rowsHtml += skillRowHtml(s, sd ? sd.level : 1, sd ? sd.xp : 0, sd ? sd.rank : null);
+      });
+
+      document.getElementById('hs-player-body').innerHTML =
+        '<div class="hs-player-head">' +
+          '<div class="hs-player-avatar">👤</div>' +
+          '<div><h1 class="hs-player-name">' + escapeHtml(row.username) + '</h1>' +
+            '<div class="hs-player-sub">Total Level Rank #' + Number(row.overall_rank).toLocaleString() + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="hs-table-wrap"><table class="hs-table">' +
+          '<thead><tr><th class="hs-col-rank">Rank</th><th class="hs-col-name">Skill</th><th class="hs-col-level">Level</th><th class="hs-col-xp">XP</th></tr></thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+        '</table></div>';
+      wireRowClicks();
+      document.title = row.username + ' — Highscores — Quest Zone';
+    } catch (err) {
+      console.error('Player Highscores: load failed', err);
+      renderError();
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>

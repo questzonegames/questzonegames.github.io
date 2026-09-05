@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
 <meta name="description" content="Quest Zone Highscores — live Overall and per-skill rankings for every registered player.">
 <link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/hiscores.css">
 <style>
   main.highscores { padding: 28px 0 70px; position: relative; z-index: 1; }
 
@@ -74,42 +75,12 @@
   .hs-skill-btn.active .hs-skill-arrow { opacity: 1; color: var(--blue-light); }
 
   /* ---- centre: table ---- */
+  /* Table/badge/state visuals now live in assets/css/hiscores.css (shared
+     with player.html and compare.html) — only this page's own heading
+     style stays here. */
   .hs-center-heading {
     font-family: 'Exo 2', sans-serif; font-weight: 800; font-size: 19px; color: #fff;
     margin: 0 0 14px;
-  }
-  .hs-table-wrap { overflow-x: auto; }
-  table.hs-table { width: 100%; border-collapse: collapse; min-width: 460px; }
-  table.hs-table thead th {
-    text-align: left; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.08em;
-    color: var(--blue-light); text-transform: uppercase; padding: 8px 10px;
-    border-bottom: 1px solid var(--border-strong);
-  }
-  table.hs-table thead th.hs-col-num { text-align: center; width: 64px; }
-  table.hs-table tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
-  table.hs-table tbody tr { transition: background 0.15s ease; }
-  table.hs-table tbody tr:hover { background: rgba(255,255,255,0.03); }
-  table.hs-table tbody tr.hs-row-highlight { background: rgba(59,130,246,0.16); }
-  table.hs-table td.hs-col-num { text-align: center; }
-  table.hs-table td.hs-col-level, table.hs-table td.hs-col-xp { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--blue-light); }
-  table.hs-table td.hs-col-xp { color: #d8e4ff; }
-
-  .hs-rank-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: 50%;
-    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 11px;
-  }
-  .hs-rank-badge.gold {
-    background: radial-gradient(circle at 35% 30%, #fff3c4, #ffcf4d 55%, #b8790a 100%);
-    color: #4a2b00; box-shadow: 0 0 10px rgba(255,207,77,0.55);
-  }
-  .hs-rank-badge.silver {
-    background: radial-gradient(circle at 35% 30%, #f4f8ff, #c9d3e0 55%, #7c8798 100%);
-    color: #2a2f38; box-shadow: 0 0 8px rgba(200,215,235,0.4);
-  }
-  .hs-rank-badge.bronze {
-    background: radial-gradient(circle at 35% 30%, #ffd9b0, #d98f4a 55%, #8a5220 100%);
-    color: #3a2000; box-shadow: 0 0 8px rgba(217,143,74,0.4);
   }
 
   /* ---- pagination ---- */
@@ -130,9 +101,8 @@
   }
   .hs-page-ellipsis { color: var(--text-dim); font-size: 13px; padding: 0 2px; }
 
-  /* ---- centre states: loading / empty / error / coming soon ---- */
-  .hs-state { text-align: center; padding: 40px 10px; color: var(--text-dim); }
-  .hs-state .icon { font-size: 30px; margin-bottom: 10px; opacity: 0.8; }
+  /* ---- centre states: loading skeleton (empty/error/coming-soon states
+     use the shared .hs-state from assets/css/hiscores.css) ---- */
   .hs-skeleton-row { height: 34px; border-radius: 6px; margin-bottom: 8px; background: linear-gradient(90deg, var(--bg-panel-alt) 25%, rgba(255,255,255,0.06) 50%, var(--bg-panel-alt) 75%); background-size: 200% 100%; animation: hsShimmer 1.3s infinite linear; }
   @keyframes hsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
@@ -210,16 +180,16 @@
 
         <!-- ============== CENTRE: ranking table ============== -->
         <div class="hs-panel">
-          <h2 class="hs-center-heading" id="hs-center-heading">Overall Highscores</h2>
+          <h2 class="hs-center-heading" id="hs-center-heading">Total Level Highscores</h2>
           <div id="hs-center-body">
             <div class="hs-table-wrap">
               <table class="hs-table">
                 <thead>
                   <tr>
-                    <th class="hs-col-num">Rank</th>
-                    <th>Name</th>
-                    <th>Level</th>
-                    <th>XP</th>
+                    <th class="hs-col-rank">Rank</th>
+                    <th class="hs-col-name">Name</th>
+                    <th class="hs-col-level">Level</th>
+                    <th class="hs-col-xp">XP</th>
                   </tr>
                 </thead>
                 <tbody id="hs-table-body"></tbody>
@@ -265,6 +235,7 @@
 <script src="assets/js/qz-config.js"></script>
 <script src="assets/js/qz-auth.js"></script>
 <script src="assets/js/qz-header-auth.js"></script>
+<script src="assets/js/hiscores-shared.js"></script>
 <script src="assets/js/starfield.js"></script>
 <script src="assets/js/site.js"></script>
 <script>
@@ -273,61 +244,22 @@
   const ROWS_PER_PAGE = 25; // change this one constant to retune every page size
   const PAGE_WINDOW = 4;    // how many numbered page buttons show at once
 
-  // Real skill icons — keyed by games.game_key, same convention as
-  // assets/js/skill-card.js. Placeholders (Skill 2-10) intentionally have
-  // no entry here; they render a neutral generic icon instead until a
-  // real skill replaces that slot.
-  const REAL_SKILL_ICONS = { intelligence: 'assets/img/skills/intelligence.png' };
-
-  function placeholderIconSvg() {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><circle cx="12" cy="11.5" r="2.2" fill="currentColor" stroke="none"/></svg>';
-  }
+  const escapeHtml = window.QZHiscores.escapeHtml;
+  const rankBadgeHtml = window.QZHiscores.rankBadgeHtml;
 
   // ================= state =================
-  // SKILL_REGISTRY is built once at init (Overall + real games from
-  // Supabase + fixed placeholder slots) — see loadSkillRegistry(). Every
-  // other function reads from this, never a second hardcoded list.
+  // SKILL_REGISTRY is built once at init (Total Level + real games from
+  // Supabase + fixed placeholder slots) — see assets/js/hiscores-shared.js.
+  // Every other function reads from this, never a second hardcoded list.
   let SKILL_REGISTRY = [];
   const state = {
     selectedSkillId: 'overall',
     currentPage: 1,
     totalPages: 1,
-    lastRows: [],
-    highlightUserId: null
+    lastRows: []
   };
 
   function client() { return window.QZAuth && window.QZAuth.client; }
-
-  // ================= skill registry =================
-  async function loadSkillRegistry() {
-    const registry = [{ id: 'overall', name: 'Overall', iconHtml: '<span style="font-size:17px;">🏆</span>', real: true, placeholder: false }];
-    try {
-      if (client()) {
-        const { data: games } = await client().from('games').select('game_key,name,sort_order').order('sort_order', { ascending: true });
-        (games || []).forEach((g) => {
-          const iconSrc = REAL_SKILL_ICONS[g.game_key];
-          registry.push({
-            id: g.game_key,
-            name: g.name,
-            iconHtml: iconSrc ? '<img src="' + iconSrc + '" alt="">' : placeholderIconSvg(),
-            real: true,
-            placeholder: false
-          });
-        });
-      }
-    } catch (err) {
-      console.warn('Highscores: could not load skill registry', err);
-    }
-    // Skill 2-10: fixed placeholder slots, not backed by any database row —
-    // see FINAL GOAL item "include Skill 2-Skill 10 placeholders". Once a
-    // real skill exists for one of these, replace this literal entry (or,
-    // if it was added to public.games with a name other than "Skill N",
-    // it will already appear above from the real-games loop instead).
-    for (let i = 2; i <= 10; i++) {
-      registry.push({ id: 'skill-' + i, name: 'Skill ' + i, iconHtml: placeholderIconSvg(), real: false, placeholder: true });
-    }
-    SKILL_REGISTRY = registry;
-  }
 
   function renderSkillList() {
     const list = document.getElementById('hs-skill-list');
@@ -349,7 +281,6 @@
     if (state.selectedSkillId === skillId) return;
     state.selectedSkillId = skillId;
     state.currentPage = 1;
-    state.highlightUserId = null;
     renderSkillList();
     loadPage();
   }
@@ -397,7 +328,7 @@
   // ================= centre states =================
   function renderLoadingSkeleton() {
     const body = document.getElementById('hs-center-body');
-    let html = '<div class="hs-table-wrap"><table class="hs-table"><thead><tr><th class="hs-col-num">Rank</th><th>Name</th><th>Level</th><th>XP</th></tr></thead></table></div><div style="padding-top:8px;">';
+    let html = '<div class="hs-table-wrap"><table class="hs-table"><thead><tr><th class="hs-col-rank">Rank</th><th class="hs-col-name">Name</th><th class="hs-col-level">Level</th><th class="hs-col-xp">XP</th></tr></thead></table></div><div style="padding-top:8px;">';
     for (let i = 0; i < 8; i++) html += '<div class="hs-skeleton-row"></div>';
     html += '</div>';
     body.innerHTML = html;
@@ -416,14 +347,6 @@
       '<div class="hs-state"><div class="icon">🛠️</div>This skill hasn’t launched yet — check back soon!</div>';
   }
 
-  function rankBadgeHtml(rank) {
-    if (rank === null || rank === undefined) return '<span style="color:var(--text-dim);">—</span>';
-    if (rank === 1) return '<span class="hs-rank-badge gold">1</span>';
-    if (rank === 2) return '<span class="hs-rank-badge silver">2</span>';
-    if (rank === 3) return '<span class="hs-rank-badge bronze">3</span>';
-    return String(rank);
-  }
-
   function renderTable(rows, skill) {
     const tbody = document.getElementById('hs-table-body');
     const wrap = document.createElement('div');
@@ -431,7 +354,7 @@
     const table = document.createElement('table');
     table.className = 'hs-table';
     table.innerHTML =
-      '<thead><tr><th class="hs-col-num">Rank</th><th>Name</th><th>Level</th><th>XP</th></tr></thead><tbody></tbody>';
+      '<thead><tr><th class="hs-col-rank">Rank</th><th class="hs-col-name">Name</th><th class="hs-col-level">Level</th><th class="hs-col-xp">XP</th></tr></thead><tbody></tbody>';
     wrap.appendChild(table);
     document.getElementById('hs-center-body').innerHTML = '';
     document.getElementById('hs-center-body').appendChild(wrap);
@@ -441,10 +364,9 @@
       const level = skill.id === 'overall' ? row.total_level : row.level;
       const xp = skill.id === 'overall' ? row.total_xp : row.xp;
       const tr = document.createElement('tr');
-      if (row.user_id === state.highlightUserId) tr.className = 'hs-row-highlight';
       tr.innerHTML =
-        '<td class="hs-col-num">' + rankBadgeHtml(row.rank) + '</td>' +
-        '<td>' + escapeHtml(row.username) + '</td>' +
+        '<td class="hs-col-rank">' + rankBadgeHtml(row.rank) + '</td>' +
+        '<td class="hs-col-name"><a class="hs-row-link" href="' + window.QZHiscores.playerUrl('', row.username) + '">' + escapeHtml(row.username) + '</a></td>' +
         '<td class="hs-col-level">' + Number(level).toLocaleString() + '</td>' +
         '<td class="hs-col-xp">' + Number(xp).toLocaleString() + '</td>';
       body.appendChild(tr);
@@ -513,30 +435,9 @@
         searchResult.textContent = 'Player not found.';
         return;
       }
-      searchResult.className = 'hs-result-box hs-ok';
-      searchResult.innerHTML =
-        '<div class="row"><span>Username</span><span>' + escapeHtml(row.username) + '</span></div>' +
-        '<div class="row"><span>Overall Rank</span><span>#' + Number(row.overall_rank).toLocaleString() + '</span></div>' +
-        '<div class="row"><span>Total Level</span><span>' + Number(row.total_level).toLocaleString() + '</span></div>' +
-        '<div class="row"><span>Total XP</span><span>' + Number(row.total_xp).toLocaleString() + '</span></div>';
-
-      // Jump the centre table to wherever this player actually ranks for
-      // the currently-selected skill (Overall, or a real skill) — same
-      // idea as the OSRS Hiscores search jumping to the matching page.
-      const skill = currentSkill();
-      let targetRank = null;
-      if (skill.id === 'overall') {
-        targetRank = row.overall_rank;
-      } else if (row.skills && row.skills[skill.id]) {
-        targetRank = row.skills[skill.id].rank;
-      }
-      state.highlightUserId = row.user_id;
-      if (targetRank) {
-        state.currentPage = Math.max(1, Math.ceil(targetRank / ROWS_PER_PAGE));
-        await loadPage();
-      } else if (!skill.placeholder) {
-        searchResult.innerHTML += '<div class="row"><span>' + escapeHtml(skill.name) + '</span><span>Unranked</span></div>';
-      }
+      // Found — go straight to that player's own Highscores page rather
+      // than filtering/highlighting the current table.
+      window.location.href = window.QZHiscores.playerUrl('', row.username);
     } catch (err) {
       console.error('Highscores: search failed', err);
       searchResult.className = 'hs-result-box hs-err';
@@ -552,68 +453,37 @@
   const compareBtn = document.getElementById('hs-compare-btn');
   const compareResult = document.getElementById('hs-compare-result');
 
-  async function fetchPlayer(username) {
-    const { data, error } = await client().rpc('hiscores_player_stats', { p_username: username });
-    if (error) throw error;
-    return Array.isArray(data) ? data[0] : data;
-  }
-
-  async function doCompare() {
+  function doCompare() {
+    // CRITICAL: top input is Player 1 / Main Player, bottom input is
+    // Player 2 / Comparison Target — this order is passed straight through
+    // to compare.html as ?a=<top>&b=<bottom> and must never be swapped.
     const nameA = (compareAInput.value || '').trim();
     const nameB = (compareBInput.value || '').trim();
     compareResult.hidden = false;
     compareResult.className = 'hs-result-box';
     if (!nameA || !nameB) { compareResult.textContent = 'Enter both usernames to compare.'; return; }
-
-    compareResult.innerHTML = '<span class="hs-loader-inline"></span>Comparing…';
-    try {
-      const [a, b] = await Promise.all([fetchPlayer(nameA), fetchPlayer(nameB)]);
-      const missing = [];
-      if (!a) missing.push(nameA);
-      if (!b) missing.push(nameB);
-      if (missing.length) {
-        compareResult.className = 'hs-result-box hs-err';
-        compareResult.textContent = 'Player' + (missing.length > 1 ? 's' : '') + ' not found: ' + missing.map(escapeHtml).join(', ');
-        return;
-      }
-
-      let html = '<div class="hs-compare-block"><h4>Overall</h4>' +
-        compareRow('Player', a.username, b.username) +
-        compareRow('Total Level', a.total_level, b.total_level) +
-        compareRow('Total XP', a.total_xp, b.total_xp) +
-        '</div>';
-
-      SKILL_REGISTRY.filter((s) => s.real && s.id !== 'overall').forEach((s) => {
-        const sa = a.skills && a.skills[s.id];
-        const sb = b.skills && b.skills[s.id];
-        html += '<div class="hs-compare-block"><h4>' + escapeHtml(s.name) + '</h4>' +
-          compareRow('Level', sa ? sa.level : 1, sb ? sb.level : 1) +
-          compareRow('XP', sa ? sa.xp : 0, sb ? sb.xp : 0) +
-          '</div>';
-      });
-
-      compareResult.className = 'hs-result-box hs-ok';
-      compareResult.innerHTML = html;
-    } catch (err) {
-      console.error('Highscores: compare failed', err);
-      compareResult.className = 'hs-result-box hs-err';
-      compareResult.textContent = 'Compare failed — please try again.';
-    }
-  }
-  function compareRow(label, valA, valB) {
-    const fmt = (v) => (typeof v === 'number' ? v.toLocaleString() : escapeHtml(String(v)));
-    return '<div class="row"><span>' + escapeHtml(label) + '</span><span>' + fmt(valA) + ' vs ' + fmt(valB) + '</span></div>';
+    window.location.href = window.QZHiscores.compareUrl('', nameA, nameB);
   }
   compareBtn.addEventListener('click', doCompare);
 
-  // ================= util =================
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // ================= init =================
+  // Deep-link support: a link from a player's profile or the Compare page
+  // (e.g. clicking "Intelligence" there) arrives as ?skill=<id> and should
+  // land on that skill's ranking already selected. The id is only ever
+  // trusted after matching it against our own real, non-placeholder
+  // registry entries below — an unknown or placeholder id is ignored and
+  // the page falls back to its normal Total Level default.
+  function getRequestedSkillId() {
+    return new URLSearchParams(window.location.search).get('skill');
   }
 
-  // ================= init =================
   async function init() {
-    await loadSkillRegistry();
+    SKILL_REGISTRY = await window.QZHiscores.loadSkillRegistry(client(), '');
+    const requested = getRequestedSkillId();
+    if (requested) {
+      const match = SKILL_REGISTRY.find((s) => s.id === requested && s.real && !s.placeholder);
+      if (match) state.selectedSkillId = match.id;
+    }
     renderSkillList();
     await loadPage();
   }

@@ -1,0 +1,86 @@
+/* ============================================================================
+   Quest Zone — shared Highscores visual system.
+
+   Used by highscores.html, highscores/player.html, and highscores/compare.html
+   — the ONE place the ranking-table look (badges, columns, states, links)
+   is defined. Previously each of the three pages had its own near-duplicate
+   copy of this CSS, which is exactly how they drifted slightly out of
+   alignment with each other. Any table using class="hs-table" on any of the
+   three pages now renders from these same rules, so a fix here fixes all
+   three at once and they can never silently diverge again.
+   ============================================================================ */
+
+.hs-back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--blue-light); text-decoration: none; font-size: 13px; margin-bottom: 18px; }
+.hs-back-link:hover { text-decoration: underline; }
+
+/* ---- loading / empty / error / not-found states ---- */
+.hs-state { text-align: center; padding: 40px 10px; color: var(--text-dim); }
+.hs-state .icon { font-size: 30px; margin-bottom: 10px; opacity: 0.8; }
+
+/* ---- the ranking table itself: one canonical column system ---- */
+.hs-table-wrap { overflow-x: auto; }
+table.hs-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed; /* every column's width is fixed by the classes below,
+                           so a row's content can never nudge a column out of
+                           alignment with the header or with any other row */
+}
+table.hs-table thead th {
+  text-align: left; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.08em;
+  color: var(--blue-light); text-transform: uppercase; padding: 8px 10px;
+  border-bottom: 1px solid var(--border-strong); white-space: nowrap;
+}
+table.hs-table tbody td {
+  padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13.5px;
+  white-space: nowrap; vertical-align: middle;
+}
+table.hs-table tbody tr { transition: background 0.15s ease; }
+table.hs-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+table.hs-table tr.hs-placeholder-row td { opacity: 0.5; }
+table.hs-table tr.hs-row-clickable { cursor: pointer; }
+
+/* Column roles — every table on every Highscores page uses these same
+   class names in whichever columns it needs them, so a "Rank" column looks
+   pixel-identical on the main table, a player's own page, and Compare. */
+table.hs-table th.hs-col-rank, table.hs-table td.hs-col-rank { width: 60px; text-align: center; }
+table.hs-table th.hs-col-name, table.hs-table td.hs-col-name { text-align: left; white-space: normal; }
+table.hs-table th.hs-col-level, table.hs-table td.hs-col-level { width: 76px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--blue-light); }
+table.hs-table th.hs-col-xp, table.hs-table td.hs-col-xp { width: 96px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; color: #d8e4ff; }
+table.hs-table th.hs-arrow-col, table.hs-table td.hs-arrow-col { width: 36px; text-align: center; }
+
+/* Name/skill cell content — icon + label, vertically centred as one unit
+   so it lines up with the rank badge and numbers beside it. */
+.hs-name-cell { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.hs-skill-icon-sm { width: 20px; height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.hs-skill-icon-sm img { width: 100%; height: 100%; object-fit: contain; }
+.hs-skill-icon-sm svg { width: 15px; height: 15px; opacity: 0.7; }
+
+/* Row links — a player's username, or a skill's name when it links back to
+   that skill's main Highscores ranking. Same visual treatment everywhere. */
+a.hs-row-link { color: var(--text); text-decoration: none; }
+a.hs-row-link:hover { color: var(--blue-light); text-decoration: underline; }
+
+.hs-rank-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 11px;
+}
+.hs-rank-badge.gold {
+  background: radial-gradient(circle at 35% 30%, #fff3c4, #ffcf4d 55%, #b8790a 100%);
+  color: #4a2b00; box-shadow: 0 0 10px rgba(255,207,77,0.55);
+}
+.hs-rank-badge.silver {
+  background: radial-gradient(circle at 35% 30%, #f4f8ff, #c9d3e0 55%, #7c8798 100%);
+  color: #2a2f38; box-shadow: 0 0 8px rgba(200,215,235,0.4);
+}
+.hs-rank-badge.bronze {
+  background: radial-gradient(circle at 35% 30%, #ffd9b0, #d98f4a 55%, #8a5220 100%);
+  color: #3a2000; box-shadow: 0 0 8px rgba(217,143,74,0.4);
+}
+
+/* ---- rank-comparison arrow (Compare page) ---- */
+.hs-arrow { font-size: 16px; font-weight: 900; display: inline-block; }
+.hs-arrow.up { color: var(--green); }
+.hs-arrow.down { color: #ff6e6e; }
+.hs-arrow.neutral { color: var(--text-dim); }

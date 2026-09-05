@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare Players — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<meta name="description" content="Quest Zone — compare two players' live Highscores side by side.">
+<link rel="stylesheet" href="../assets/css/site.css">
+<link rel="stylesheet" href="../assets/css/hiscores.css">
+<style>
+  main.hs-compare { padding: 28px 0 70px; position: relative; z-index: 1; }
+
+  .hs-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 22px clamp(14px, 3vw, 30px) 28px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .hs-vs-head { display: flex; align-items: center; justify-content: center; gap: clamp(10px, 3vw, 26px); margin-bottom: 22px; flex-wrap: wrap; }
+  .hs-vs-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(18px, 3.6vw, 26px); text-align: center; max-width: 260px; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+  .hs-vs-name.p1 { color: var(--blue-light); }
+  .hs-vs-name.p2 { color: #ffb4d8; }
+  .hs-vs-name:hover { text-decoration: underline; }
+  .hs-vs-badge { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 14px; color: var(--text-dim); letter-spacing: 0.08em; }
+
+  /* ---- comparison table: uses the shared .hs-table column system from
+     hiscores.css (same Rank/Level/XP look as every other Highscores
+     table), just with the Rank/Level/XP trio duplicated per player and an
+     arrow column down the middle. Only the two-row header (player names
+     spanning 3 columns each) is unique to this page. ---- */
+  table.hs-table { min-width: 640px; }
+  table.hs-table th.hs-col-name, table.hs-table td.hs-col-name { width: 190px; }
+  table.hs-table thead tr.hs-name-row th { padding-bottom: 4px; border-bottom: none; font-size: 12.5px; text-align: center; }
+  table.hs-table thead tr.hs-name-row th.p1 { color: var(--blue-light); }
+  table.hs-table thead tr.hs-name-row th.p2 { color: #ffb4d8; }
+  table.hs-table thead tr.hs-name-row th a { color: inherit; text-decoration: none; }
+  table.hs-table thead tr.hs-name-row th a:hover { text-decoration: underline; }
+  table.hs-table thead tr.hs-stat-row th { text-align: center; }
+  table.hs-table thead tr.hs-stat-row th.hs-col-name { text-align: left; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html">
+      <img src="../assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="../index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="../profile/index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="#" class="btn btn-chrome-blue" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-chrome-dark" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="hs-compare">
+  <div class="container">
+    <div class="hs-frame">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <a class="hs-back-link" href="../highscores.html">← Back to Highscores</a>
+      <div id="hs-compare-body">
+        <div class="hs-state"><div class="icon">⏳</div>Loading comparison…</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/hiscores-shared.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  const escapeHtml = window.QZHiscores.escapeHtml;
+  const rankBadgeHtml = window.QZHiscores.rankBadgeHtml;
+  const nameCellHtml = window.QZHiscores.nameCellHtml;
+
+  function client() { return window.QZAuth && window.QZAuth.client; }
+
+  // Reads ?a= (Player 1 / main player) and ?b= (Player 2 / comparison
+  // target). This order is CRITICAL and comes straight from
+  // highscores.html's top-input/bottom-input order — it must never be
+  // swapped here.
+  function getUsernamesFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const a = params.get('a');
+    const b = params.get('b');
+    if (!a || !b) return null;
+    return { a, b };
+  }
+
+  function renderNotFound(missingNames) {
+    document.getElementById('hs-compare-body').innerHTML =
+      '<div class="hs-state"><div class="icon">🔍</div>Player' + (missingNames.length > 1 ? 's' : '') +
+      ' not found: ' + missingNames.map(escapeHtml).join(', ') + '</div>';
+  }
+  function renderBadRequest() {
+    document.getElementById('hs-compare-body').innerHTML =
+      '<div class="hs-state"><div class="icon">🔍</div>Enter two players to compare from the Highscores page.</div>';
+  }
+  function renderError() {
+    document.getElementById('hs-compare-body').innerHTML =
+      '<div class="hs-state"><div class="icon">⚠️</div>Couldn’t load this comparison right now. Please try again shortly.</div>';
+  }
+
+  async function fetchPlayer(username) {
+    const { data, error } = await client().rpc('hiscores_player_stats', { p_username: username });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  }
+
+  // ---- Arrow logic (rank-driven only — NEVER derived from XP/level) ----
+  // Lower world rank number = better.
+  //   both unranked            -> neutral
+  //   rank1 unranked, rank2 not -> Player 2 is better -> red (down) for Player 1's row
+  //   rank2 unranked, rank1 not -> Player 1 is better -> green (up)
+  //   rank1 < rank2             -> Player 1 better -> green (up)
+  //   rank1 > rank2             -> Player 1 worse -> red (down)
+  //   rank1 === rank2           -> tie -> neutral
+  function arrowFor(rank1, rank2) {
+    const r1 = (rank1 === null || rank1 === undefined) ? null : rank1;
+    const r2 = (rank2 === null || rank2 === undefined) ? null : rank2;
+    if (r1 === null && r2 === null) return { cls: 'neutral', glyph: '–' };
+    if (r1 === null) return { cls: 'down', glyph: '▼' };
+    if (r2 === null) return { cls: 'up', glyph: '▲' };
+    if (r1 < r2) return { cls: 'up', glyph: '▲' };
+    if (r1 > r2) return { cls: 'down', glyph: '▼' };
+    return { cls: 'neutral', glyph: '–' };
+  }
+
+  // One row per skill, with each player's Rank/Level/XP in its own cell
+  // (same column classes as every other Highscores table) so nothing
+  // wraps or drifts out of line, and a single arrow cell between the two
+  // sides. A real skill's name links back to that skill's own ranking on
+  // the main Highscores page — placeholder Skill 2-24 rows stay plain.
+  function compareRowHtml(skill, s1, s2) {
+    const placeholder = !!skill.placeholder;
+    const rank1 = placeholder ? null : s1.rank;
+    const rank2 = placeholder ? null : s2.rank;
+    const arrow = placeholder ? { cls: 'neutral', glyph: '' } : arrowFor(rank1, rank2);
+    const dash = '<span style="color:var(--text-dim);">—</span>';
+    const href = placeholder ? null : window.QZHiscores.highscoresSkillUrl('../', skill.id);
+    const rowClass = placeholder ? 'hs-placeholder-row' : 'hs-row-clickable';
+    return '<tr class="' + rowClass + '"' + (href ? ' data-href="' + href + '"' : '') + '>' +
+      '<td class="hs-col-name">' + nameCellHtml(skill.iconHtml, skill.name, href) + '</td>' +
+      '<td class="hs-col-rank">' + (placeholder ? dash : rankBadgeHtml(rank1)) + '</td>' +
+      '<td class="hs-col-level">' + (placeholder ? '—' : Number(s1.level).toLocaleString()) + '</td>' +
+      '<td class="hs-col-xp">' + (placeholder ? '—' : Number(s1.xp).toLocaleString()) + '</td>' +
+      '<td class="hs-arrow-col"><span class="hs-arrow ' + arrow.cls + '">' + arrow.glyph + '</span></td>' +
+      '<td class="hs-col-rank">' + (placeholder ? dash : rankBadgeHtml(rank2)) + '</td>' +
+      '<td class="hs-col-level">' + (placeholder ? '—' : Number(s2.level).toLocaleString()) + '</td>' +
+      '<td class="hs-col-xp">' + (placeholder ? '—' : Number(s2.xp).toLocaleString()) + '</td>' +
+      '</tr>';
+  }
+
+  // Clicking anywhere on a real skill's row (not just its name link) goes
+  // to that skill's main ranking — widens the click target beyond just
+  // the inline <a>.
+  function wireRowClicks() {
+    document.querySelectorAll('#hs-compare-body tr[data-href]').forEach((tr) => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return; // let the real <a> handle its own click
+        window.location.href = tr.getAttribute('data-href');
+      });
+    });
+  }
+
+  async function init() {
+    const usernames = getUsernamesFromQuery();
+    if (!usernames) { renderBadRequest(); return; }
+
+    let tries = 0;
+    while (!client() && tries < 20) { await new Promise((r) => setTimeout(r, 50)); tries++; }
+    if (!client()) { renderError(); return; }
+
+    try {
+      const [playerAResult, playerBResult, registry] = await Promise.all([
+        fetchPlayer(usernames.a),
+        fetchPlayer(usernames.b),
+        window.QZHiscores.loadSkillRegistry(client(), '../')
+      ]);
+      const missing = [];
+      if (!playerAResult) missing.push(usernames.a);
+      if (!playerBResult) missing.push(usernames.b);
+      if (missing.length) { renderNotFound(missing); return; }
+
+      const a = playerAResult, b = playerBResult; // a = Player 1, b = Player 2 — order preserved throughout
+      const totalLevelSkill = registry.find((s) => s.id === 'overall') ||
+        { id: 'overall', name: 'Total Level', iconHtml: '<span style="font-size:14px;">🏆</span>', placeholder: false };
+
+      let rowsHtml = compareRowHtml(
+        totalLevelSkill,
+        { level: a.total_level, xp: a.total_xp, rank: a.overall_rank },
+        { level: b.total_level, xp: b.total_xp, rank: b.overall_rank }
+      );
+      registry.filter((s) => s.id !== 'overall').forEach((s) => {
+        const sa = (a.skills && a.skills[s.id]) || { level: 1, xp: 0, rank: null };
+        const sb = (b.skills && b.skills[s.id]) || { level: 1, xp: 0, rank: null };
+        rowsHtml += compareRowHtml(s, sa, sb);
+      });
+
+      const playerAUrl = window.QZHiscores.playerUrl('../', a.username);
+      const playerBUrl = window.QZHiscores.playerUrl('../', b.username);
+      const nameALink = '<a class="hs-vs-name p1" href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a>';
+      const nameBLink = '<a class="hs-vs-name p2" href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a>';
+
+      document.getElementById('hs-compare-body').innerHTML =
+        '<div class="hs-vs-head">' + nameALink + '<div class="hs-vs-badge">VS</div>' + nameBLink + '</div>' +
+        '<div class="hs-table-wrap"><table class="hs-table">' +
+          // An explicit colgroup makes column widths authoritative
+          // regardless of row order or the name-row's colspans — the
+          // fixed-layout algorithm otherwise only guarantees consistency
+          // from the FIRST row's own (unspanned) cells, and this table's
+          // first row spans 3 columns at a time.
+          '<colgroup>' +
+            '<col style="width:190px">' +
+            '<col style="width:60px"><col style="width:76px"><col style="width:96px">' +
+            '<col style="width:36px">' +
+            '<col style="width:60px"><col style="width:76px"><col style="width:96px">' +
+          '</colgroup>' +
+          '<thead>' +
+            '<tr class="hs-name-row">' +
+              '<th class="hs-col-name"></th>' +
+              '<th class="p1" colspan="3"><a href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a></th>' +
+              '<th></th>' +
+              '<th class="p2" colspan="3"><a href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a></th>' +
+            '</tr>' +
+            '<tr class="hs-stat-row">' +
+              '<th class="hs-col-name">Skill</th>' +
+              '<th class="hs-col-rank">Rank</th><th class="hs-col-level">Level</th><th class="hs-col-xp">XP</th>' +
+              '<th class="hs-arrow-col"></th>' +
+              '<th class="hs-col-rank">Rank</th><th class="hs-col-level">Level</th><th class="hs-col-xp">XP</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+        '</table></div>';
+      wireRowClicks();
+      document.title = a.username + ' vs ' + b.username + ' — Quest Zone';
+    } catch (err) {
+      console.error('Compare Players: load failed', err);
+      renderError();
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>
