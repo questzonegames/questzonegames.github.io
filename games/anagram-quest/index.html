@@ -144,7 +144,8 @@
   .player-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(18px, 3vw, 24px); }
   .stat-row { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
   .stat { text-align: left; }
-  .stat .label { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat .label { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 4px; }
+  .skill-icon { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
   .stat .value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 20px; color: var(--gold); }
 
   .rule-item { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
@@ -282,7 +283,10 @@
           <div class="stat-row">
             <div class="stat"><div class="label">High Score</div><div class="value" id="lobby-highscore">0</div></div>
             <div class="stat"><div class="label">Games Played</div><div class="value" id="lobby-gamesplayed">0</div></div>
-            <div class="stat"><div class="label">Intelligence</div><div class="value" id="lobby-level">1/99</div></div>
+            <div class="stat">
+              <div class="label"><img src="../../assets/img/skills/intelligence.png" alt="" class="skill-icon"> Intelligence</div>
+              <div class="value" id="lobby-level">1/99</div>
+            </div>
           </div>
         </div>
         <div class="rules-card panel" style="margin-bottom:0;">
