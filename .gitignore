@@ -1,0 +1,21 @@
+# ===== Quest Zone — root .gitignore =====
+#
+# There is no root-level .env today (assets/js/qz-config.js holds the
+# PUBLIC Supabase URL + publishable/anon key directly — that's meant to be
+# public and safe to ship, see the comment in that file). This file exists
+# so that if a real secret-bearing .env is ever created at the project
+# root — e.g. for a future build step or Edge Function — it is protected
+# from day one instead of needing someone to remember to add it later.
+# (supabase/.gitignore already covers supabase/.env*, supabase/.temp, etc.
+# for the Supabase CLI's own local files — this covers the rest of the repo.)
+
+.env
+.env.*
+!.env.example
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+
+# Node, if a build step is ever added here
+node_modules/

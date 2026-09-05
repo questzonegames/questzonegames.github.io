@@ -1,9 +1,14 @@
 // ===== Quest Zone — Supabase auth wrapper =====
 //
 // Requires, in this order, before this script on the page:
-//   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+//   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 //   <script src=".../qz-config.js"></script>   (sets window.QZ_SUPABASE_URL / _ANON_KEY)
 //   <script src=".../qz-auth.js"></script>      (this file)
+//
+// SECURITY: window.QZ_SUPABASE_ANON_KEY (see qz-config.js) is the ONLY
+// Supabase credential that belongs anywhere in this codebase. Never add
+// the service-role key or any other privileged credential here or to any
+// other frontend file — see SECURITY.md.
 //
 // window.QZAuth.client is the raw Supabase client (null if not configured
 // yet — see qz-config.js). Everything else is a thin, Quest-Zone-flavoured

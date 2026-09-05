@@ -18,8 +18,9 @@
 -- 20260903053242_avatar_customization.sql,
 -- 20260903062722_avatar_skin_colour_normal_default.sql,
 -- 20260905010000_anagram_quest.sql,
--- 20260905020000_intelligence_skill.sql, and
--- 20260905030000_only_intelligence_skill.sql).
+-- 20260905020000_intelligence_skill.sql,
+-- 20260905030000_only_intelligence_skill.sql, and
+-- 20260905040000_security_hardening.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -1294,3 +1295,135 @@ $$;
 
 alter table public.avatar_customization
   alter column skin_colour set default 'normal';
+-- ============================================================================
+-- Security hardening pass (20260905040000_security_hardening.sql) — see
+-- SECURITY.md for the permanent rules. Summary of what changed here:
+--   1. award_xp() now rejects any single call above 2,000,000 XP — it had
+--      no upper bound at all before, so any authenticated caller could
+--      award themselves an arbitrary amount directly via the REST API.
+--   2. total_level() now caps each skill's contribution at level 99 —
+--      virtual levels (past 99) are a display-only concept and must not
+--      inflate Total Level, matching real OSRS semantics.
+--   3. osrs_xp_for_level/osrs_level_for_xp now pin search_path (matches
+--      every other function in this file; flagged by `supabase db
+--      advisors` as the only 3 that didn't).
+--   4. osrs_xp_for_level/osrs_level_for_xp/handle_new_user had EXECUTE
+--      revoked from public/anon/authenticated — Postgres grants EXECUTE
+--      to PUBLIC by default unless revoked, so these were reachable via
+--      /rest/v1/rpc/<name> despite being internal-only helpers/a
+--      trigger function never meant to be called directly. No client
+--      code called any of them directly (verified).
+--   5. profiles.username now has a real format CHECK constraint at the
+--      database layer (matching qz-auth.js's existing client-side
+--      regex), closing the gap where calling supabase.auth.signUp()
+--      directly (bypassing QZAuth.signUp()) skipped that validation
+--      entirely. Verified safe against every existing account first.
+-- ============================================================================
+
+create or replace function public.award_xp(p_game_key text, p_xp_to_add bigint)
+returns table (xp bigint, level int)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_new_xp bigint;
+  v_max_xp_per_call constant bigint := 2000000;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+  if public.is_banned(v_uid) then
+    raise exception 'This account is banned.';
+  end if;
+  if p_xp_to_add is null or p_xp_to_add < 0 then
+    raise exception 'xp_to_add must be a non-negative integer';
+  end if;
+  if p_xp_to_add > v_max_xp_per_call then
+    raise exception 'xp_to_add exceeds the maximum allowed for a single award (%).', v_max_xp_per_call;
+  end if;
+
+  insert into public.game_progress (user_id, game_key, xp, level)
+  values (v_uid, p_game_key, 0, 1)
+  on conflict (user_id, game_key) do nothing;
+
+  update public.game_progress g
+    set xp = least(2147483647, g.xp + p_xp_to_add),
+        updated_at = now()
+    where g.user_id = v_uid and g.game_key = p_game_key
+    returning g.xp into v_new_xp;
+
+  update public.game_progress g
+    set level = public.osrs_level_for_xp(v_new_xp)
+    where g.user_id = v_uid and g.game_key = p_game_key;
+
+  return query
+    select g.xp, g.level
+    from public.game_progress g
+    where g.user_id = v_uid and g.game_key = p_game_key;
+end;
+$$;
+
+create or replace function public.total_level(p_user uuid)
+returns bigint
+language sql
+stable
+set search_path = public
+as $$
+  select (select count(*) from public.games)
+       + coalesce((select sum(least(gp.level, 99) - 1) from public.game_progress gp where gp.user_id = p_user), 0);
+$$;
+
+grant execute on function public.total_level(uuid) to authenticated, anon;
+
+create or replace function public.osrs_xp_for_level(p_level int)
+returns bigint
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  total double precision := 0;
+  n int;
+begin
+  if p_level <= 1 then
+    return 0;
+  end if;
+  for n in 1..(p_level - 1) loop
+    total := total + floor(n + 300 * power(2::double precision, n::double precision / 7));
+  end loop;
+  return floor(total / 4)::bigint;
+end;
+$$;
+
+create or replace function public.osrs_level_for_xp(p_xp bigint)
+returns int
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  lvl int := 1;
+begin
+  while public.osrs_xp_for_level(lvl + 1) <= p_xp loop
+    lvl := lvl + 1;
+  end loop;
+  return lvl;
+end;
+$$;
+
+revoke execute on function public.osrs_xp_for_level(int) from public, anon, authenticated;
+revoke execute on function public.osrs_level_for_xp(bigint) from public, anon, authenticated;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_username_format_check'
+  ) then
+    alter table public.profiles
+      add constraint profiles_username_format_check
+      check (username ~ '^[A-Za-z0-9_]{3,20}$');
+  end if;
+end $$;
