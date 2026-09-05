@@ -3,12 +3,15 @@
 //   LOBBY -> LETTER_SELECTION -> ACTIVE_ROUND -> ROUND_RESULT -> (repeat x4)
 //   -> BONUS_ROUND (round 5, reuses ACTIVE_ROUND/ROUND_RESULT screens) -> GAME_OVER
 //
-// XP is intentionally NOT implemented anywhere in this file — level is
-// read-only (whatever the account's game_progress row already has), and
-// nothing here ever calls award_xp(). See supabase/migrations/
-// 20260905010000_anagram_quest.sql for the account-side plumbing.
+// XP: Anagram Quest trains the "Intelligence" skill (see supabase/
+// migrations/20260905020000_intelligence_skill.sql) at exactly 1 XP per
+// point of the game's final score — awarded once per completed game,
+// through the same award_xp() RPC every other game uses (Space Snake
+// included), following the shared OSRS-style level formula in
+// supabase/schema.sql. Nothing about the formula or the RPC is special-
+// cased for this game; only GAME_KEY and the per-run XP amount are.
 (function () {
-  const GAME_KEY = 'anagram-quest';
+  const GAME_KEY = 'intelligence';
   const TOTAL_ROUNDS = 5;
   const ROUND_TIME_SECONDS = 40;
   const MIN_WORD_LEN = 4;
@@ -147,6 +150,31 @@
       }
     } catch (err) {
       console.warn('Anagram Quest: could not save result', err);
+    }
+  }
+
+  // Intelligence XP: exactly 1 XP per point of this run's final score, via
+  // the same award_xp() every game shares — it caps the total and
+  // recalculates level server-side; a tampered client can only ever ask
+  // to "add this run's score" as XP, never set the stored value directly.
+  async function awardIntelligenceXp(finalScore) {
+    if (!window.QZAuth || !window.QZAuth.client || !state.profile || finalScore <= 0) return;
+    try {
+      const { data, error } = await window.QZAuth.client.rpc('award_xp', {
+        p_game_key: GAME_KEY,
+        p_xp_to_add: finalScore
+      });
+      if (error) { console.warn('Anagram Quest: could not save XP', error); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && window.QZXp) {
+        const lvl = window.QZXp.displayLevel(row.xp);
+        state.level = lvl.base;
+        goXpLine.textContent = '+' + finalScore.toLocaleString() + ' Intelligence XP (Level ' +
+          lvl.base + (lvl.isVirtual ? ' · Virtual ' + lvl.virtual : '') + ')';
+        updateFooterStats();
+      }
+    } catch (err) {
+      console.warn('Anagram Quest: could not save XP', err);
     }
   }
 
@@ -435,16 +463,22 @@
   const goScore = document.getElementById('go-score');
   const goScore2 = document.getElementById('go-score2');
   const goGamesPlayed = document.getElementById('go-gamesplayed');
+  const goXpLine = document.getElementById('go-xp-line');
 
   async function finishGame() {
     const finalScore = state.totalScore;
     goName.textContent = state.profile ? state.profile.username : 'Guest';
     goScore.textContent = finalScore;
     goScore2.textContent = finalScore;
+    goXpLine.textContent = state.profile ? ' ' : 'Sign in to save your score and earn Intelligence XP.';
     showScreen('GAMEOVER');
     playSound('game-over');
     fireEvent('game-completed', { score: finalScore });
-    await saveGameResult(finalScore); // increments games played exactly once, here, per completed game
+    // both are per-completed-game, exactly once, here — never per round
+    await Promise.all([
+      saveGameResult(finalScore),
+      awardIntelligenceXp(finalScore)
+    ]);
     goGamesPlayed.textContent = state.gamesPlayed;
     updateFooterStats();
   }

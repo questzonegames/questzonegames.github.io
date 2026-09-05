@@ -16,8 +16,9 @@
 -- 20260903034135_admin_account_info.sql, 20260903034846_fix_account_info_types.sql,
 -- 20260903040317_admin_edit_controls.sql, 20260903042739_admin_inventory_gifting.sql,
 -- 20260903053242_avatar_customization.sql,
--- 20260903062722_avatar_skin_colour_normal_default.sql, and
--- 20260905010000_anagram_quest.sql).
+-- 20260903062722_avatar_skin_colour_normal_default.sql,
+-- 20260905010000_anagram_quest.sql, and
+-- 20260905020000_intelligence_skill.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -75,7 +76,7 @@ create policy "games_select_all" on public.games for select using (true);
 
 insert into public.games (game_key, name, sort_order) values
   ('space-snake', 'Space Snake', 1),
-  ('anagram-quest', 'Anagram Quest', 2),
+  ('intelligence', 'Intelligence', 2),
   ('total-level-3', 'Total Level Game 03', 3),
   ('total-level-4', 'Total Level Game 04', 4),
   ('total-level-5', 'Total Level Game 05', 5),
