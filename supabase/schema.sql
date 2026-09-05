@@ -17,8 +17,9 @@
 -- 20260903040317_admin_edit_controls.sql, 20260903042739_admin_inventory_gifting.sql,
 -- 20260903053242_avatar_customization.sql,
 -- 20260903062722_avatar_skin_colour_normal_default.sql,
--- 20260905010000_anagram_quest.sql, and
--- 20260905020000_intelligence_skill.sql).
+-- 20260905010000_anagram_quest.sql,
+-- 20260905020000_intelligence_skill.sql, and
+-- 20260905030000_only_intelligence_skill.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -74,31 +75,12 @@ alter table public.games enable row level security;
 drop policy if exists "games_select_all" on public.games;
 create policy "games_select_all" on public.games for select using (true);
 
+-- Intelligence is, for now, the only real, coded skill — every other slot
+-- (Space Snake included) was removed by
+-- supabase/migrations/20260905030000_only_intelligence_skill.sql. Add a new
+-- row here the moment another skill is ready to go live.
 insert into public.games (game_key, name, sort_order) values
-  ('space-snake', 'Space Snake', 1),
-  ('intelligence', 'Intelligence', 2),
-  ('total-level-3', 'Total Level Game 03', 3),
-  ('total-level-4', 'Total Level Game 04', 4),
-  ('total-level-5', 'Total Level Game 05', 5),
-  ('total-level-6', 'Total Level Game 06', 6),
-  ('total-level-7', 'Total Level Game 07', 7),
-  ('total-level-8', 'Total Level Game 08', 8),
-  ('total-level-9', 'Total Level Game 09', 9),
-  ('total-level-10', 'Total Level Game 10', 10),
-  ('total-level-11', 'Total Level Game 11', 11),
-  ('total-level-12', 'Total Level Game 12', 12),
-  ('total-level-13', 'Total Level Game 13', 13),
-  ('total-level-14', 'Total Level Game 14', 14),
-  ('total-level-15', 'Total Level Game 15', 15),
-  ('total-level-16', 'Total Level Game 16', 16),
-  ('total-level-17', 'Total Level Game 17', 17),
-  ('total-level-18', 'Total Level Game 18', 18),
-  ('total-level-19', 'Total Level Game 19', 19),
-  ('total-level-20', 'Total Level Game 20', 20),
-  ('total-level-21', 'Total Level Game 21', 21),
-  ('total-level-22', 'Total Level Game 22', 22),
-  ('total-level-23', 'Total Level Game 23', 23),
-  ('total-level-24', 'Total Level Game 24', 24)
+  ('intelligence', 'Intelligence', 1)
 on conflict (game_key) do nothing;
 -- Renaming a placeholder to a real game later: just
 --   update public.games set game_key = 'real-slug', name = 'Real Name'

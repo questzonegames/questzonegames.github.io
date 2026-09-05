@@ -112,7 +112,7 @@
   }
   .skill-box {
     position: relative;
-    min-height: 62px;
+    min-height: 92px;
     border-radius: 10px;
     border: 1.5px solid rgba(110,150,220,0.35);
     background: linear-gradient(180deg, rgba(14,20,38,0.85), rgba(6,10,20,0.9));
@@ -121,20 +121,19 @@
     cursor: default;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .skill-box.named { border-color: rgba(255,207,77,0.55); }
   .skill-box:hover { border-color: var(--blue-light); box-shadow: 0 0 14px rgba(90,160,255,0.35); }
-  .skill-box .skill-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .skill-box .skill-id img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+  .skill-box .skill-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .skill-box .skill-id img { width: 68px; height: 68px; object-fit: contain; flex-shrink: 0; }
   .skill-box .skill-name {
-    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11.5px;
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12px;
     letter-spacing: 0.03em; text-transform: uppercase; color: #eaf3ff;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .skill-box .skill-level {
-    position: absolute; right: 10px; bottom: 7px;
-    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 14px; color: var(--gold, #ffcf4d);
+    position: absolute; right: 10px; bottom: 6px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 26px; color: var(--gold, #ffcf4d);
   }
-  .skill-box .skill-level .of99 { color: var(--text-dim); font-weight: 700; font-size: 11px; }
+  .skill-box .skill-level .of99 { color: var(--text-dim); font-weight: 700; font-size: 18px; }
 
   .total-level-bar {
     margin: 18px 0 22px;
@@ -305,6 +304,13 @@
     return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // Visual grid size is fixed at 24 — independent of how many real skills
+  // exist in public.games right now (currently just Intelligence). Real
+  // skills fill the first boxes; the rest render as plain, non-interactive
+  // placeholders (no tooltip, no fabricated data) until a new skill is
+  // actually added to the backend.
+  const TOTAL_SKILL_SLOTS = 24;
+
   function renderSkillBox(skill) {
     const box = document.createElement('div');
     const hasIcon = !!SKILL_ICONS[skill.game_key];
@@ -320,7 +326,15 @@
     return box;
   }
 
-  // ---- load the 24 skills + this account's progress in each ----
+  function renderPlaceholderBox() {
+    const box = document.createElement('div');
+    box.className = 'skill-box';
+    box.innerHTML = '<span class="skill-level">1<span class="of99">/99</span></span>';
+    return box;
+  }
+
+  // ---- load whichever skills are actually real right now + this
+  // account's progress in each ----
   async function loadSkills(profile) {
     const grid = document.getElementById('skill-grid');
     if (!window.QZAuth || !window.QZAuth.client) return;
@@ -346,9 +360,10 @@
       return { game_key: g.game_key, name: g.name, xp: (p && p.xp) || 0, level: (p && p.level) || 1 };
     });
     // named (icon-having) skills surface first, in their own sort order —
-    // matches Intelligence being "slot one" while it's still the only
-    // skill with real art; every other slot is still a genuine row from
-    // public.games, just not visually named until it gets its own icon
+    // matches Intelligence being "slot one" while it's still the only real
+    // skill; a future skill added to public.games without an icon yet
+    // would still render (unnamed, level-only) ahead of the static
+    // placeholder boxes below, same as Intelligence did before it had art
     skills.sort((a, b) => {
       const an = SKILL_ICONS[a.game_key] ? 0 : 1;
       const bn = SKILL_ICONS[b.game_key] ? 0 : 1;
@@ -357,13 +372,16 @@
 
     grid.innerHTML = '';
     skills.forEach((s) => grid.appendChild(renderSkillBox(s)));
+    for (let i = skills.length; i < TOTAL_SKILL_SLOTS; i++) {
+      grid.appendChild(renderPlaceholderBox());
+    }
 
     if (profile) {
       const { data: totalLevel } = await client.rpc('total_level', { p_user: profile.id });
       document.getElementById('total-level-value').textContent =
-        (typeof totalLevel === 'number' ? totalLevel : games.length).toLocaleString();
+        (typeof totalLevel === 'number' ? totalLevel : skills.length).toLocaleString();
     } else {
-      document.getElementById('total-level-value').textContent = games.length;
+      document.getElementById('total-level-value').textContent = skills.length;
     }
   }
 
