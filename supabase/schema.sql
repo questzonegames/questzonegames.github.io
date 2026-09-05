@@ -19,8 +19,12 @@
 -- 20260903062722_avatar_skin_colour_normal_default.sql,
 -- 20260905010000_anagram_quest.sql,
 -- 20260905020000_intelligence_skill.sql,
--- 20260905030000_only_intelligence_skill.sql, and
--- 20260905040000_security_hardening.sql).
+-- 20260905030000_only_intelligence_skill.sql,
+-- 20260905040000_security_hardening.sql,
+-- 20260905050000_public_highscores.sql,
+-- 20260905050100_fix_hiscores_null_level_bug.sql,
+-- 20260905050200_fix_hiscores_xp_type.sql, and
+-- 20260905060000_hide_test_accounts_from_highscores.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -1427,3 +1431,206 @@ begin
       check (username ~ '^[A-Za-z0-9_]{3,20}$');
   end if;
 end $$;
+
+-- ============================================================================
+-- Public Highscores — read-only leaderboard RPCs (folded together from
+-- 20260905050000/050100/050200/060000 as their final, correct shape). See
+-- SECURITY.md and the migrations themselves for the full reasoning; short
+-- version: SECURITY DEFINER so they can rank across every account despite
+-- profiles/game_progress RLS being locked to "your own row or an admin",
+-- but each one returns only public columns (username, level, xp, rank) —
+-- never email, ban details, or any other private field. None of them
+-- write anything; highscores can never change XP.
+--
+-- Claude-created test accounts (is_test_account, see below) are excluded
+-- from all three unless the CALLER is an admin — anonymous visitors and
+-- ordinary signed-in players never see them; an admin (e.g. James) does.
+-- ============================================================================
+
+alter table public.profiles add column if not exists is_test_account boolean not null default false;
+
+-- admin_set_test_account() — the only way is_test_account changes. Same
+-- controlled-write-path pattern as every other admin_* function.
+create or replace function public.admin_set_test_account(p_user uuid, p_is_test boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+  update public.profiles set is_test_account = coalesce(p_is_test, false) where id = p_user;
+  if not found then
+    raise exception 'No such account.';
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_set_test_account(uuid, boolean) to authenticated;
+
+create or replace function public.hiscores_overall(p_limit int default 25, p_offset int default 0)
+returns table (
+  rank bigint,
+  user_id uuid,
+  username text,
+  total_level bigint,
+  total_xp bigint,
+  total_count bigint
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with totals as (
+    select
+      p.id as user_id,
+      p.username,
+      (select count(*) from public.games)
+        + coalesce(sum(least(gp.level, 99) - 1) filter (where gp.user_id is not null), 0) as total_level,
+      coalesce(sum(gp.xp) filter (where gp.user_id is not null), 0)::bigint as total_xp
+    from public.profiles p
+    left join public.game_progress gp on gp.user_id = p.id
+    where not public.is_banned(p.id)
+      and (not p.is_test_account or public.is_admin())
+    group by p.id, p.username
+  )
+  select
+    row_number() over (order by total_level desc, total_xp desc, username asc) as rank,
+    user_id, username, total_level, total_xp,
+    count(*) over () as total_count
+  from totals
+  order by total_level desc, total_xp desc, username asc
+  limit least(greatest(coalesce(p_limit, 25), 1), 100)
+  offset greatest(coalesce(p_offset, 0), 0);
+$$;
+
+grant execute on function public.hiscores_overall(int, int) to anon, authenticated;
+
+-- Single-skill leaderboard. Only accounts with an actual game_progress row
+-- for this skill appear (real OSRS "unranked until trained" behaviour) —
+-- unlike Overall, a never-played account isn't shown cluttering the list.
+create or replace function public.hiscores_skill(p_game_key text, p_limit int default 25, p_offset int default 0)
+returns table (
+  rank bigint,
+  user_id uuid,
+  username text,
+  level int,
+  xp bigint,
+  total_count bigint
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with rows as (
+    select p.id as user_id, p.username, gp.level, gp.xp
+    from public.game_progress gp
+    join public.profiles p on p.id = gp.user_id
+    where gp.game_key = p_game_key
+      and not public.is_banned(p.id)
+      and (not p.is_test_account or public.is_admin())
+  )
+  select
+    row_number() over (order by level desc, xp desc, username asc) as rank,
+    user_id, username, level, xp,
+    count(*) over () as total_count
+  from rows
+  order by level desc, xp desc, username asc
+  limit least(greatest(coalesce(p_limit, 25), 1), 100)
+  offset greatest(coalesce(p_offset, 0), 0);
+$$;
+
+grant execute on function public.hiscores_skill(text, int, int) to anon, authenticated;
+
+-- Powers Search and Compare: case-insensitive exact username match (same
+-- convention as email_for_username/ban_message_for_login), returns zero
+-- rows for "no such account", "account is banned", AND "account is a test
+-- account and caller isn't an admin" alike — none of those are
+-- distinguishable from each other to a non-admin caller. `skills` is a
+-- jsonb map of every real game_key -> {level, xp, rank} (rank null = never
+-- played that skill) so adding a new skill to public.games later needs no
+-- change here.
+create or replace function public.hiscores_player_stats(p_username text)
+returns table (
+  user_id uuid,
+  username text,
+  total_level bigint,
+  total_xp bigint,
+  overall_rank bigint,
+  skills jsonb
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_caller_is_admin boolean := public.is_admin();
+begin
+  select p.id into v_user_id
+  from public.profiles p
+  where lower(p.username) = lower(p_username)
+    and not public.is_banned(p.id)
+    and (not p.is_test_account or v_caller_is_admin);
+
+  if v_user_id is null then
+    return;
+  end if;
+
+  return query
+  with totals as (
+    select
+      p.id as uid,
+      p.username as uname,
+      (select count(*) from public.games)
+        + coalesce(sum(least(gp.level, 99) - 1) filter (where gp.user_id is not null), 0) as tlevel,
+      coalesce(sum(gp.xp) filter (where gp.user_id is not null), 0)::bigint as txp
+    from public.profiles p
+    left join public.game_progress gp on gp.user_id = p.id
+    where not public.is_banned(p.id)
+      and (not p.is_test_account or v_caller_is_admin)
+    group by p.id, p.username
+  ),
+  ranked as (
+    select uid, uname, tlevel, txp,
+      row_number() over (order by tlevel desc, txp desc, uname asc) as rnk
+    from totals
+  ),
+  skill_ranks as (
+    select gp.user_id, gp.game_key, gp.level, gp.xp,
+      row_number() over (partition by gp.game_key order by gp.level desc, gp.xp desc, pr.username asc) as srank
+    from public.game_progress gp
+    join public.profiles pr on pr.id = gp.user_id
+    where not public.is_banned(gp.user_id)
+      and (not pr.is_test_account or v_caller_is_admin)
+  ),
+  skillmap as (
+    select jsonb_object_agg(
+      g.game_key,
+      jsonb_build_object('level', coalesce(sr.level, 1), 'xp', coalesce(sr.xp, 0), 'rank', sr.srank)
+    ) as skills
+    from public.games g
+    left join skill_ranks sr on sr.game_key = g.game_key and sr.user_id = v_user_id
+  )
+  select r.uid, r.uname, r.tlevel, r.txp, r.rnk, sm.skills
+  from ranked r, skillmap sm
+  where r.uid = v_user_id;
+end;
+$$;
+
+grant execute on function public.hiscores_player_stats(text) to anon, authenticated;
+
+-- Mark the current, known Claude-created test accounts (created across
+-- earlier sessions while testing signup/ban/XP flows) — a fresh install
+-- of this file has no such accounts to mark; this is a no-op then.
+update public.profiles
+   set is_test_account = true
+ where lower(username) in (
+   'qz_testplayer1', 'qz_freshtest2', 'qz_confirmtest3', 'qz_resendtest1', 'qz_bantest1'
+ );
+

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Highscores — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+<meta name="description" content="Quest Zone Highscores — live Overall and per-skill rankings for every registered player.">
+<link rel="stylesheet" href="assets/css/site.css">
+<style>
+  main.highscores { padding: 28px 0 70px; position: relative; z-index: 1; }
+
+  /* ---- outer chrome frame (reuses the same look as .game-section) ---- */
+  .hs-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 22px clamp(14px, 3vw, 30px) 28px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .hs-frame .hud-heading { font-size: clamp(24px, 4.4vw, 40px); margin: 0 0 clamp(18px, 2.6vw, 26px); }
+
+  .hs-layout {
+    display: grid;
+    grid-template-columns: 250px 1fr 280px;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 1050px) {
+    .hs-layout { grid-template-columns: 1fr; }
+  }
+
+  /* ---- shared panel chrome for all three columns ---- */
+  .hs-panel {
+    position: relative;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .hs-panel-title {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    letter-spacing: 0.06em; font-size: 15px; color: var(--text);
+    margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+
+  /* ---- left: skills list ---- */
+  .hs-skill-list { display: flex; flex-direction: column; gap: 6px; }
+  .hs-skill-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; text-align: left; cursor: pointer;
+    background: var(--bg-panel-alt); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 10px;
+    color: var(--text); font-family: 'Exo 2', sans-serif; font-size: 13px; font-weight: 600;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .hs-skill-btn:hover { border-color: var(--blue-light); }
+  .hs-skill-btn.active {
+    background: linear-gradient(180deg, rgba(59,130,246,0.22), rgba(59,130,246,0.08));
+    border-color: var(--blue-light);
+    box-shadow: 0 0 14px rgba(90,160,255,0.4), inset 0 0 10px rgba(90,160,255,0.12);
+    color: #fff;
+  }
+  .hs-skill-btn.placeholder { opacity: 0.55; }
+  .hs-skill-btn.placeholder:hover { opacity: 0.8; }
+  .hs-skill-icon { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .hs-skill-icon img { width: 100%; height: 100%; object-fit: contain; }
+  .hs-skill-icon svg { width: 18px; height: 18px; opacity: 0.7; }
+  .hs-skill-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hs-skill-arrow { opacity: 0.5; font-size: 12px; }
+  .hs-skill-btn.active .hs-skill-arrow { opacity: 1; color: var(--blue-light); }
+
+  /* ---- centre: table ---- */
+  .hs-center-heading {
+    font-family: 'Exo 2', sans-serif; font-weight: 800; font-size: 19px; color: #fff;
+    margin: 0 0 14px;
+  }
+  .hs-table-wrap { overflow-x: auto; }
+  table.hs-table { width: 100%; border-collapse: collapse; min-width: 460px; }
+  table.hs-table thead th {
+    text-align: left; font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.08em;
+    color: var(--blue-light); text-transform: uppercase; padding: 8px 10px;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  table.hs-table thead th.hs-col-num { text-align: center; width: 64px; }
+  table.hs-table tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  table.hs-table tbody tr { transition: background 0.15s ease; }
+  table.hs-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+  table.hs-table tbody tr.hs-row-highlight { background: rgba(59,130,246,0.16); }
+  table.hs-table td.hs-col-num { text-align: center; }
+  table.hs-table td.hs-col-level, table.hs-table td.hs-col-xp { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--blue-light); }
+  table.hs-table td.hs-col-xp { color: #d8e4ff; }
+
+  .hs-rank-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 11px;
+  }
+  .hs-rank-badge.gold {
+    background: radial-gradient(circle at 35% 30%, #fff3c4, #ffcf4d 55%, #b8790a 100%);
+    color: #4a2b00; box-shadow: 0 0 10px rgba(255,207,77,0.55);
+  }
+  .hs-rank-badge.silver {
+    background: radial-gradient(circle at 35% 30%, #f4f8ff, #c9d3e0 55%, #7c8798 100%);
+    color: #2a2f38; box-shadow: 0 0 8px rgba(200,215,235,0.4);
+  }
+  .hs-rank-badge.bronze {
+    background: radial-gradient(circle at 35% 30%, #ffd9b0, #d98f4a 55%, #8a5220 100%);
+    color: #3a2000; box-shadow: 0 0 8px rgba(217,143,74,0.4);
+  }
+
+  /* ---- pagination ---- */
+  .hs-pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .hs-page-btn {
+    min-width: 36px; height: 36px; padding: 0 8px;
+    border-radius: 8px; border: 1px solid var(--border-strong);
+    background: var(--bg-panel-alt); color: var(--text);
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 13px;
+    cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+  }
+  .hs-page-btn:hover:not(:disabled) { border-color: var(--blue-light); color: #fff; }
+  .hs-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .hs-page-btn.active {
+    background: linear-gradient(180deg, rgba(59,130,246,0.35), rgba(59,130,246,0.15));
+    border-color: var(--blue-light); color: #fff;
+    box-shadow: 0 0 12px rgba(90,160,255,0.5);
+  }
+  .hs-page-ellipsis { color: var(--text-dim); font-size: 13px; padding: 0 2px; }
+
+  /* ---- centre states: loading / empty / error / coming soon ---- */
+  .hs-state { text-align: center; padding: 40px 10px; color: var(--text-dim); }
+  .hs-state .icon { font-size: 30px; margin-bottom: 10px; opacity: 0.8; }
+  .hs-skeleton-row { height: 34px; border-radius: 6px; margin-bottom: 8px; background: linear-gradient(90deg, var(--bg-panel-alt) 25%, rgba(255,255,255,0.06) 50%, var(--bg-panel-alt) 75%); background-size: 200% 100%; animation: hsShimmer 1.3s infinite linear; }
+  @keyframes hsShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ---- right column ---- */
+  .hs-right-col { display: flex; flex-direction: column; gap: 16px; }
+  .hs-field-label { font-size: 11.5px; color: var(--text-dim); letter-spacing: 0.03em; margin: 0 0 6px; }
+  .hs-input {
+    width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--border-strong);
+    border-radius: 8px; color: var(--text); padding: 10px 12px; font-size: 13px;
+    font-family: 'Exo 2', sans-serif; margin-bottom: 10px;
+  }
+  .hs-input:focus { outline: none; border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+  .hs-btn {
+    width: 100%; border: 1px solid var(--blue-light); border-radius: 8px;
+    background: linear-gradient(180deg, rgba(59,130,246,0.35), rgba(29,78,216,0.35));
+    color: #fff; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12.5px;
+    letter-spacing: 0.04em; padding: 11px; cursor: pointer;
+    transition: box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .hs-btn:hover { box-shadow: 0 0 16px rgba(90,160,255,0.5); filter: brightness(1.1); }
+  .hs-btn:active { transform: scale(0.98); }
+
+  .hs-result-box {
+    margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text-dim); min-height: 20px;
+  }
+  .hs-result-box.hs-ok { border-color: rgba(57,255,143,0.4); color: var(--text); }
+  .hs-result-box.hs-err { border-color: rgba(255,110,110,0.4); color: #ffb4b4; }
+  .hs-result-box .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+  .hs-result-box .row span:first-child { color: var(--text-dim); }
+  .hs-result-box .row span:last-child { font-family: 'Orbitron', sans-serif; color: var(--blue-light); font-weight: 700; }
+  .hs-compare-block { margin-top: 8px; }
+  .hs-compare-block h4 { margin: 10px 0 4px; font-size: 11.5px; color: var(--blue-light); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .hs-loader-inline { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff; animation: hsSpin 0.7s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes hsSpin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="index.html">
+      <img src="assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="profile/index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="#" class="btn btn-chrome-blue" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-chrome-dark" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="highscores">
+  <div class="container">
+    <div class="hs-frame">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <h1 class="hud-heading"><span class="dash"></span>Highscores<span class="dash"></span></h1>
+
+      <div class="hs-layout">
+        <!-- ============== LEFT: skills ============== -->
+        <div class="hs-panel">
+          <div class="hs-panel-title">Skills</div>
+          <div class="hs-skill-list" id="hs-skill-list"><!-- rendered from SKILL_REGISTRY --></div>
+        </div>
+
+        <!-- ============== CENTRE: ranking table ============== -->
+        <div class="hs-panel">
+          <h2 class="hs-center-heading" id="hs-center-heading">Overall Highscores</h2>
+          <div id="hs-center-body">
+            <div class="hs-table-wrap">
+              <table class="hs-table">
+                <thead>
+                  <tr>
+                    <th class="hs-col-num">Rank</th>
+                    <th>Name</th>
+                    <th>Level</th>
+                    <th>XP</th>
+                  </tr>
+                </thead>
+                <tbody id="hs-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="hs-pagination" id="hs-pagination"></div>
+        </div>
+
+        <!-- ============== RIGHT: search + compare ============== -->
+        <div class="hs-right-col">
+          <div class="hs-panel">
+            <div class="hs-panel-title">🔍 Search Players</div>
+            <div class="hs-field-label">Search by name</div>
+            <input type="text" id="hs-search-input" class="hs-input" placeholder="Enter username...">
+            <button type="button" class="hs-btn" id="hs-search-btn">Search</button>
+            <div class="hs-result-box" id="hs-search-result" hidden></div>
+          </div>
+
+          <div class="hs-panel">
+            <div class="hs-panel-title">👥 Compare Players</div>
+            <input type="text" id="hs-compare-a" class="hs-input" placeholder="Enter first username...">
+            <input type="text" id="hs-compare-b" class="hs-input" placeholder="Enter second username...">
+            <button type="button" class="hs-btn" id="hs-compare-btn">Compare</button>
+            <div class="hs-result-box" id="hs-compare-result" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="assets/js/qz-config.js"></script>
+<script src="assets/js/qz-auth.js"></script>
+<script src="assets/js/qz-header-auth.js"></script>
+<script src="assets/js/starfield.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  // ================= config =================
+  const ROWS_PER_PAGE = 25; // change this one constant to retune every page size
+  const PAGE_WINDOW = 4;    // how many numbered page buttons show at once
+
+  // Real skill icons — keyed by games.game_key, same convention as
+  // assets/js/skill-card.js. Placeholders (Skill 2-10) intentionally have
+  // no entry here; they render a neutral generic icon instead until a
+  // real skill replaces that slot.
+  const REAL_SKILL_ICONS = { intelligence: 'assets/img/skills/intelligence.png' };
+
+  function placeholderIconSvg() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><circle cx="12" cy="11.5" r="2.2" fill="currentColor" stroke="none"/></svg>';
+  }
+
+  // ================= state =================
+  // SKILL_REGISTRY is built once at init (Overall + real games from
+  // Supabase + fixed placeholder slots) — see loadSkillRegistry(). Every
+  // other function reads from this, never a second hardcoded list.
+  let SKILL_REGISTRY = [];
+  const state = {
+    selectedSkillId: 'overall',
+    currentPage: 1,
+    totalPages: 1,
+    lastRows: [],
+    highlightUserId: null
+  };
+
+  function client() { return window.QZAuth && window.QZAuth.client; }
+
+  // ================= skill registry =================
+  async function loadSkillRegistry() {
+    const registry = [{ id: 'overall', name: 'Overall', iconHtml: '<span style="font-size:17px;">🏆</span>', real: true, placeholder: false }];
+    try {
+      if (client()) {
+        const { data: games } = await client().from('games').select('game_key,name,sort_order').order('sort_order', { ascending: true });
+        (games || []).forEach((g) => {
+          const iconSrc = REAL_SKILL_ICONS[g.game_key];
+          registry.push({
+            id: g.game_key,
+            name: g.name,
+            iconHtml: iconSrc ? '<img src="' + iconSrc + '" alt="">' : placeholderIconSvg(),
+            real: true,
+            placeholder: false
+          });
+        });
+      }
+    } catch (err) {
+      console.warn('Highscores: could not load skill registry', err);
+    }
+    // Skill 2-10: fixed placeholder slots, not backed by any database row —
+    // see FINAL GOAL item "include Skill 2-Skill 10 placeholders". Once a
+    // real skill exists for one of these, replace this literal entry (or,
+    // if it was added to public.games with a name other than "Skill N",
+    // it will already appear above from the real-games loop instead).
+    for (let i = 2; i <= 10; i++) {
+      registry.push({ id: 'skill-' + i, name: 'Skill ' + i, iconHtml: placeholderIconSvg(), real: false, placeholder: true });
+    }
+    SKILL_REGISTRY = registry;
+  }
+
+  function renderSkillList() {
+    const list = document.getElementById('hs-skill-list');
+    list.innerHTML = '';
+    SKILL_REGISTRY.forEach((skill) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'hs-skill-btn' + (skill.id === state.selectedSkillId ? ' active' : '') + (skill.placeholder ? ' placeholder' : '');
+      btn.innerHTML =
+        '<span class="hs-skill-icon">' + skill.iconHtml + '</span>' +
+        '<span class="hs-skill-name">' + escapeHtml(skill.name) + '</span>' +
+        '<span class="hs-skill-arrow">›</span>';
+      btn.addEventListener('click', () => selectSkill(skill.id));
+      list.appendChild(btn);
+    });
+  }
+
+  function selectSkill(skillId) {
+    if (state.selectedSkillId === skillId) return;
+    state.selectedSkillId = skillId;
+    state.currentPage = 1;
+    state.highlightUserId = null;
+    renderSkillList();
+    loadPage();
+  }
+
+  function currentSkill() {
+    return SKILL_REGISTRY.find((s) => s.id === state.selectedSkillId) || SKILL_REGISTRY[0];
+  }
+
+  // ================= data loading =================
+  async function loadPage() {
+    const skill = currentSkill();
+    document.getElementById('hs-center-heading').textContent = skill.name + ' Highscores';
+
+    if (skill.placeholder) {
+      renderComingSoon();
+      renderPagination();
+      return;
+    }
+
+    renderLoadingSkeleton();
+    try {
+      const offset = (state.currentPage - 1) * ROWS_PER_PAGE;
+      let rows, error;
+      if (skill.id === 'overall') {
+        ({ data: rows, error } = await client().rpc('hiscores_overall', { p_limit: ROWS_PER_PAGE, p_offset: offset }));
+      } else {
+        ({ data: rows, error } = await client().rpc('hiscores_skill', { p_game_key: skill.id, p_limit: ROWS_PER_PAGE, p_offset: offset }));
+      }
+      if (error) throw error;
+      state.lastRows = rows || [];
+      state.totalPages = rows && rows.length ? Math.max(1, Math.ceil(rows[0].total_count / ROWS_PER_PAGE)) : 1;
+      if (!rows || rows.length === 0) {
+        renderEmpty();
+      } else {
+        renderTable(rows, skill);
+      }
+      renderPagination();
+    } catch (err) {
+      console.error('Highscores: query failed', err);
+      renderError();
+      renderPagination();
+    }
+  }
+
+  // ================= centre states =================
+  function renderLoadingSkeleton() {
+    const body = document.getElementById('hs-center-body');
+    let html = '<div class="hs-table-wrap"><table class="hs-table"><thead><tr><th class="hs-col-num">Rank</th><th>Name</th><th>Level</th><th>XP</th></tr></thead></table></div><div style="padding-top:8px;">';
+    for (let i = 0; i < 8; i++) html += '<div class="hs-skeleton-row"></div>';
+    html += '</div>';
+    body.innerHTML = html;
+    document.getElementById('hs-pagination').innerHTML = '';
+  }
+  function renderEmpty() {
+    document.getElementById('hs-center-body').innerHTML =
+      '<div class="hs-state"><div class="icon">📭</div>No players found yet.</div>';
+  }
+  function renderError() {
+    document.getElementById('hs-center-body').innerHTML =
+      '<div class="hs-state"><div class="icon">⚠️</div>Couldn’t load the highscores right now. Please try again shortly.</div>';
+  }
+  function renderComingSoon() {
+    document.getElementById('hs-center-body').innerHTML =
+      '<div class="hs-state"><div class="icon">🛠️</div>This skill hasn’t launched yet — check back soon!</div>';
+  }
+
+  function rankBadgeHtml(rank) {
+    if (rank === null || rank === undefined) return '<span style="color:var(--text-dim);">—</span>';
+    if (rank === 1) return '<span class="hs-rank-badge gold">1</span>';
+    if (rank === 2) return '<span class="hs-rank-badge silver">2</span>';
+    if (rank === 3) return '<span class="hs-rank-badge bronze">3</span>';
+    return String(rank);
+  }
+
+  function renderTable(rows, skill) {
+    const tbody = document.getElementById('hs-table-body');
+    const wrap = document.createElement('div');
+    wrap.className = 'hs-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'hs-table';
+    table.innerHTML =
+      '<thead><tr><th class="hs-col-num">Rank</th><th>Name</th><th>Level</th><th>XP</th></tr></thead><tbody></tbody>';
+    wrap.appendChild(table);
+    document.getElementById('hs-center-body').innerHTML = '';
+    document.getElementById('hs-center-body').appendChild(wrap);
+    const body = table.querySelector('tbody');
+
+    rows.forEach((row) => {
+      const level = skill.id === 'overall' ? row.total_level : row.level;
+      const xp = skill.id === 'overall' ? row.total_xp : row.xp;
+      const tr = document.createElement('tr');
+      if (row.user_id === state.highlightUserId) tr.className = 'hs-row-highlight';
+      tr.innerHTML =
+        '<td class="hs-col-num">' + rankBadgeHtml(row.rank) + '</td>' +
+        '<td>' + escapeHtml(row.username) + '</td>' +
+        '<td class="hs-col-level">' + Number(level).toLocaleString() + '</td>' +
+        '<td class="hs-col-xp">' + Number(xp).toLocaleString() + '</td>';
+      body.appendChild(tr);
+    });
+  }
+
+  // ================= pagination =================
+  function renderPagination() {
+    const el = document.getElementById('hs-pagination');
+    el.innerHTML = '';
+    if (currentSkill().placeholder) return;
+
+    const cur = state.currentPage;
+    const total = state.totalPages;
+
+    const prev = document.createElement('button');
+    prev.type = 'button'; prev.className = 'hs-page-btn'; prev.textContent = '‹';
+    prev.disabled = cur <= 1;
+    prev.addEventListener('click', () => goToPage(cur - 1));
+    el.appendChild(prev);
+
+    const windowStart = Math.floor((cur - 1) / PAGE_WINDOW) * PAGE_WINDOW + 1;
+    const windowEnd = Math.min(windowStart + PAGE_WINDOW - 1, total);
+    for (let p = windowStart; p <= windowEnd; p++) {
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'hs-page-btn' + (p === cur ? ' active' : ''); btn.textContent = String(p);
+      btn.addEventListener('click', () => goToPage(p));
+      el.appendChild(btn);
+    }
+    if (windowEnd < total) {
+      const dots = document.createElement('span');
+      dots.className = 'hs-page-ellipsis'; dots.textContent = '…';
+      el.appendChild(dots);
+    }
+
+    const next = document.createElement('button');
+    next.type = 'button'; next.className = 'hs-page-btn'; next.textContent = '›';
+    next.disabled = cur >= total;
+    next.addEventListener('click', () => goToPage(cur + 1));
+    el.appendChild(next);
+  }
+  function goToPage(p) {
+    if (p < 1 || p > state.totalPages || p === state.currentPage) return;
+    state.currentPage = p;
+    loadPage();
+  }
+
+  // ================= search =================
+  const searchInput = document.getElementById('hs-search-input');
+  const searchBtn = document.getElementById('hs-search-btn');
+  const searchResult = document.getElementById('hs-search-result');
+
+  async function doSearch() {
+    const name = (searchInput.value || '').trim();
+    searchResult.hidden = false;
+    searchResult.className = 'hs-result-box';
+    if (!name) { searchResult.textContent = 'Enter a username to search.'; return; }
+
+    searchResult.innerHTML = '<span class="hs-loader-inline"></span>Searching…';
+    try {
+      const { data, error } = await client().rpc('hiscores_player_stats', { p_username: name });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        searchResult.className = 'hs-result-box hs-err';
+        searchResult.textContent = 'Player not found.';
+        return;
+      }
+      searchResult.className = 'hs-result-box hs-ok';
+      searchResult.innerHTML =
+        '<div class="row"><span>Username</span><span>' + escapeHtml(row.username) + '</span></div>' +
+        '<div class="row"><span>Overall Rank</span><span>#' + Number(row.overall_rank).toLocaleString() + '</span></div>' +
+        '<div class="row"><span>Total Level</span><span>' + Number(row.total_level).toLocaleString() + '</span></div>' +
+        '<div class="row"><span>Total XP</span><span>' + Number(row.total_xp).toLocaleString() + '</span></div>';
+
+      // Jump the centre table to wherever this player actually ranks for
+      // the currently-selected skill (Overall, or a real skill) — same
+      // idea as the OSRS Hiscores search jumping to the matching page.
+      const skill = currentSkill();
+      let targetRank = null;
+      if (skill.id === 'overall') {
+        targetRank = row.overall_rank;
+      } else if (row.skills && row.skills[skill.id]) {
+        targetRank = row.skills[skill.id].rank;
+      }
+      state.highlightUserId = row.user_id;
+      if (targetRank) {
+        state.currentPage = Math.max(1, Math.ceil(targetRank / ROWS_PER_PAGE));
+        await loadPage();
+      } else if (!skill.placeholder) {
+        searchResult.innerHTML += '<div class="row"><span>' + escapeHtml(skill.name) + '</span><span>Unranked</span></div>';
+      }
+    } catch (err) {
+      console.error('Highscores: search failed', err);
+      searchResult.className = 'hs-result-box hs-err';
+      searchResult.textContent = 'Search failed — please try again.';
+    }
+  }
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+  // ================= compare =================
+  const compareAInput = document.getElementById('hs-compare-a');
+  const compareBInput = document.getElementById('hs-compare-b');
+  const compareBtn = document.getElementById('hs-compare-btn');
+  const compareResult = document.getElementById('hs-compare-result');
+
+  async function fetchPlayer(username) {
+    const { data, error } = await client().rpc('hiscores_player_stats', { p_username: username });
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+  }
+
+  async function doCompare() {
+    const nameA = (compareAInput.value || '').trim();
+    const nameB = (compareBInput.value || '').trim();
+    compareResult.hidden = false;
+    compareResult.className = 'hs-result-box';
+    if (!nameA || !nameB) { compareResult.textContent = 'Enter both usernames to compare.'; return; }
+
+    compareResult.innerHTML = '<span class="hs-loader-inline"></span>Comparing…';
+    try {
+      const [a, b] = await Promise.all([fetchPlayer(nameA), fetchPlayer(nameB)]);
+      const missing = [];
+      if (!a) missing.push(nameA);
+      if (!b) missing.push(nameB);
+      if (missing.length) {
+        compareResult.className = 'hs-result-box hs-err';
+        compareResult.textContent = 'Player' + (missing.length > 1 ? 's' : '') + ' not found: ' + missing.map(escapeHtml).join(', ');
+        return;
+      }
+
+      let html = '<div class="hs-compare-block"><h4>Overall</h4>' +
+        compareRow('Player', a.username, b.username) +
+        compareRow('Total Level', a.total_level, b.total_level) +
+        compareRow('Total XP', a.total_xp, b.total_xp) +
+        '</div>';
+
+      SKILL_REGISTRY.filter((s) => s.real && s.id !== 'overall').forEach((s) => {
+        const sa = a.skills && a.skills[s.id];
+        const sb = b.skills && b.skills[s.id];
+        html += '<div class="hs-compare-block"><h4>' + escapeHtml(s.name) + '</h4>' +
+          compareRow('Level', sa ? sa.level : 1, sb ? sb.level : 1) +
+          compareRow('XP', sa ? sa.xp : 0, sb ? sb.xp : 0) +
+          '</div>';
+      });
+
+      compareResult.className = 'hs-result-box hs-ok';
+      compareResult.innerHTML = html;
+    } catch (err) {
+      console.error('Highscores: compare failed', err);
+      compareResult.className = 'hs-result-box hs-err';
+      compareResult.textContent = 'Compare failed — please try again.';
+    }
+  }
+  function compareRow(label, valA, valB) {
+    const fmt = (v) => (typeof v === 'number' ? v.toLocaleString() : escapeHtml(String(v)));
+    return '<div class="row"><span>' + escapeHtml(label) + '</span><span>' + fmt(valA) + ' vs ' + fmt(valB) + '</span></div>';
+  }
+  compareBtn.addEventListener('click', doCompare);
+
+  // ================= util =================
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ================= init =================
+  async function init() {
+    await loadSkillRegistry();
+    renderSkillList();
+    await loadPage();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
