@@ -24,19 +24,18 @@
 // ever touches elements it creates inside that container.
 //
 // opts.basePathPrefix (optional, default '') — every art path here (base
-// body, hair, and an item's own views from the catalog in inventory-
-// data.js) is written relative to a page one directory below the site
-// root (profile/index.html, profile/skills.html). A page nested one level
-// deeper (e.g. games/anagram-quest/index.html) mounts the exact same
-// avatar by passing basePathPrefix: '../' — prepended verbatim to every
-// one of those relative paths — rather than needing its own copy of any
-// of this.
+// body, hair, and an item's own frames/views/hairMasks from the catalog in
+// inventory-data.js) is written relative to a page one directory below the
+// site root (profile/index.html, profile/skills.html). A page nested one
+// level deeper (e.g. games/anagram-quest/index.html) mounts the exact same
+// avatar by passing basePathPrefix: '../' — prepended verbatim to every one
+// of those relative paths — rather than needing its own copy of any of this.
 //
 // opts.staticFront (optional, default false) — mounts a permanently-front-
-// facing, non-interactive render (no auto-rotation, no drag) instead of
-// the full turntable viewer. Same renderer/state/equipment data either
-// way; intended for small decorative slots (e.g. a lobby avatar circle)
-// where a rotating/draggable avatar wouldn't make sense.
+// facing, non-interactive render (no auto-rotation, no drag) instead of the
+// full turntable viewer. Same renderer/state/equipment data either way;
+// intended for small decorative slots (e.g. a lobby avatar circle) where a
+// rotating/draggable avatar wouldn't make sense.
 (function () {
   const HOLD_MS = 5000;         // how long a settled pose stays put
   const TRANSITION_MS = 450;    // smooth turn between adjacent poses
@@ -65,11 +64,12 @@
 
   // Hair is its own layer (front/back/left/right, transparent everywhere
   // else — no skin, no clothes baked in) composited on top of the bald
-  // base rather than baked into it, specifically so it can be hidden
-  // outright when headwear that encloses the scalp is worn (see
-  // hidesHair in inventory-data.js and the headHidesHair handling in
-  // setAvatarEquipment below) instead of trying to sculpt one hat mesh
-  // that fits every hairstyle's silhouette.
+  // base rather than baked into it. That separation is what lets a head
+  // item occlude just the part of it the item's own body would physically
+  // sit over (a CSS mask, see applyHeadHairMasks below) instead of either
+  // hiding the whole hairstyle for anything worn on the head, or having to
+  // sculpt one hat mesh that fits every hairstyle's silhouette — see
+  // hairBehavior/hairMasks in inventory-data.js and headHairBehavior above.
   //
   // Every hair file shares its pose's exact canvas size with the base
   // body art (see the alignment work that produced them) — so it can
@@ -100,13 +100,25 @@
   // numbers, not a shared guess — 'male' is real today; add a 'female' key
   // here once that base model exists and every item worn on it will just
   // pick up correct placement automatically, no per-page hunting required.
+  // `left` here (61%) isn't an eyeballed number: .avatar-sprite is
+  // `width:100%` PLUS `padding:9% 11% 5%` with the default content-box
+  // sizing, so the rendered body/hair image sits centred in a content box
+  // that itself starts 11% in from the container's left edge — i.e. the
+  // body's true visual centre is at 11% + 50% = 61% of the container width,
+  // not 50%. Every equip layer needs this same 61% (measured empirically
+  // against the actual rendered head, then confirmed algebraically) to
+  // land centred on the body instead of ~11% off to one side; it doesn't
+  // vary by slot or pose, only by this shared padding, so it's one constant
+  // rather than per-position data. top/width below are each item's own
+  // fit and DO vary per slot/pose as before.
+  const EQUIP_BODY_CENTER_PCT = 61;
   const EQUIP_POSITIONS = {
     male: {
       head: {
-        front: { top: 2.2, width: 13 },
-        back:  { top: 2.2, width: 13 },
-        left:  { top: 1.8, width: 12 },
-        right: { top: 1.8, width: 12 }
+        front: { top: 5.5, width: 13 },
+        back:  { top: 5.5, width: 13 },
+        left:  { top: 5,   width: 12 },
+        right: { top: 5,   width: 12 }
       }
     }
   };
@@ -114,6 +126,24 @@
     const g = EQUIP_POSITIONS[gender] || EQUIP_POSITIONS.male;
     const slot = g[slotKey] || EQUIP_POSITIONS.male[slotKey];
     return (slot && slot[pose]) || null;
+  }
+
+  // ---- head-slot / hair interaction ----
+  // Three behaviours a head-slot item can declare (item.hairBehavior):
+  //   'none'    (default) — item doesn't touch hair at all, hair renders
+  //             normally underneath/around it (e.g. a small forehead gem).
+  //   'partial' — hair stays visible except where the item's hairMasks say
+  //             it's physically covered (see applyHairOcclusion below).
+  //   'full'    — hair is hidden outright (a helmet/hood that encloses the
+  //             whole head — no hairstyle's silhouette matters once nothing
+  //             of it could show anyway). `hidesHair: true` is still
+  //             honoured as an older/simpler spelling of the same thing,
+  //             so nothing already using it needs to change.
+  function headHairBehavior(item) {
+    if (!item) return 'none';
+    if (item.hairBehavior) return item.hairBehavior;
+    if (item.hidesHair) return 'full';
+    return 'none';
   }
 
   function baseSrc(pose, gender, skinColour, prefix) {
@@ -160,7 +190,8 @@
     let currentSkinColour = 'default';
     let currentHairStyle = 'none';
     let currentHairColour = 'dark-brown';
-    let hairHiddenByHeadwear = false;
+    let headHairMode = 'none';       // 'none' | 'partial' | 'full' — see headHairBehavior above
+    let headHairMasks = null;        // the equipped head item's hairMasks, keyed by pose (only meaningful for 'partial')
     const imgs = defaultFrames(prefix).map((f) => {
       const img = document.createElement('img');
       img.className = 'avatar-sprite';
@@ -236,12 +267,15 @@
         else img.style.opacity = '0';
       });
 
-      // hair rides the same seg/opacity crossfade as the base body, but is
-      // forced fully transparent whenever the equipped head item hides it
-      // (see setAvatarEquipment) — headwear that covers the scalp means
-      // there's nothing to clip, because hair simply isn't drawn under it
+      // hair rides the same seg/opacity crossfade as the base body. A
+      // head item with hairBehavior 'full' still hides it outright (see
+      // headHairMode below — nothing of the hairstyle could show past a
+      // helmet/hood anyway); 'partial' leaves the crossfade untouched here
+      // and instead relies on the CSS mask already applied per-image by
+      // applyHeadHairMasks, which clips just the region the item actually
+      // occupies rather than the whole layer.
       hairImgs.forEach((img, i) => {
-        if (hairHiddenByHeadwear || img.dataset.broken) { img.style.opacity = '0'; return; }
+        if (headHairMode === 'full' || img.dataset.broken) { img.style.opacity = '0'; return; }
         if (i === seg) img.style.opacity = String(1 - bOpacity);
         else if (i === (seg + 1) % 4) img.style.opacity = String(bOpacity);
         else img.style.opacity = '0';
@@ -391,8 +425,27 @@
       limgs.forEach((img) => img.remove());
       delete equipLayers[slotKey];
     }
-    function setEquipLayer(slotKey, views) {
+    // Equip layers come in two shapes:
+    //
+    // - item.frames: a full-canvas PNG per pose, pre-baked at build time to
+    //   already sit at the item's correct on-body pixel position (same
+    //   canvas dimensions as that pose's base body/hair art). Rendered with
+    //   the exact same 'avatar-sprite' box/contain-fit as the base body, so
+    //   it lands correctly by construction — no percentage math to get
+    //   right, and no way for it to drift from the head, because it's
+    //   subject to the identical CSS as the head is. This is what fixed the
+    //   crown floating/offset: EQUIP_POSITIONS's percent-of-container
+    //   anchoring couldn't be made to agree with .avatar-sprite's own
+    //   padding-driven centering across every rendering context, so the
+    //   item now shares that positioning outright instead of approximating
+    //   it. Preferred for anything anchored to the head/body silhouette.
+    // - item.views: a small, cropped per-pose image positioned via
+    //   EQUIP_POSITIONS (top/width percent of the equip container) — still
+    //   supported for slots that aren't full-canvas (a necklace, a ring)
+    //   where a tiny fixed-size icon genuinely is simplest.
+    function setEquipLayer(slotKey, item) {
       clearEquipLayer(slotKey);
+      const frames = item.frames;
       const limgs = POSES.map((pose) => {
         const img = document.createElement('img');
         // both a slot-general class (avatar-equip-head) and a per-
@@ -401,10 +454,21 @@
         // item can also carry its own per-direction scale/offset/tilt
         // via the more specific class when a single placement doesn't
         // fit every angle (e.g. side views needing a narrower crown)
-        img.className = 'avatar-equip-layer avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
-        const pos = equipPosition(currentGender, slotKey, pose);
-        if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
-        img.src = prefix + views[pose];
+        const directionClass = 'avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
+        if (frames) {
+          img.className = 'avatar-sprite avatar-equip-frame ' + directionClass;
+          // avatar-sprite's own filter is tuned for the base body's blue
+          // glow — equip art keeps its distinct gold-ish glow instead
+          img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
+          img.src = prefix + frames[pose];
+        } else {
+          img.className = 'avatar-equip-layer ' + directionClass;
+          // overrides the CSS rule's left:50% — see EQUIP_BODY_CENTER_PCT
+          img.style.left = EQUIP_BODY_CENTER_PCT + '%';
+          const pos = equipPosition(currentGender, slotKey, pose);
+          if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
+          img.src = prefix + item.views[pose];
+        }
         img.alt = '';
         img.setAttribute('aria-hidden', 'true');
         img.decoding = 'async';
@@ -421,8 +485,8 @@
       loadout.innerHTML = '';
       SLOT_ORDER.forEach((slotKey) => {
         const item = items[slotKey];
-        if (item && item.views) {
-          setEquipLayer(slotKey, item.views);
+        if (item && (item.frames || item.views)) {
+          setEquipLayer(slotKey, item);
           return;
         }
         clearEquipLayer(slotKey);
@@ -433,8 +497,51 @@
         chip.title = item.name || '';
         loadout.appendChild(chip);
       });
-      hairHiddenByHeadwear = !!(items.head && items.head.hidesHair);
+      const headItem = items.head;
+      headHairMode = headHairBehavior(headItem);
+      headHairMasks = (headHairMode === 'partial' && headItem && headItem.hairMasks) ? headItem.hairMasks : null;
+      applyHeadHairMasks();
       render(); // reflect the change immediately, don't wait for the next tick
+    }
+
+    // Applies (or clears) the equipped head item's per-pose hair-occlusion
+    // mask to each of the 4 hair images — a real alpha mask (mask-mode:
+    // alpha), not a colour-key or a crop hack, generated once per head item
+    // from that item's own art at its actual on-head position/scale (see
+    // the tooling that produced assets/img/equipment/head/masks/). Sizing
+    // it to the same content-box/contain-fit the hair image itself renders
+    // with (mask-origin/-clip: content-box, mask-size: contain) is what
+    // keeps the mask aligned to the hair pixels it's meant to cover instead
+    // of the element's raw box, since .avatar-sprite's padding means those
+    // aren't the same thing. Every property is set inline here rather than
+    // in a page's CSS so there's exactly one place this logic lives (same
+    // reasoning as EQUIP_POSITIONS above), and it stays correct across a
+    // hairstyle swap for free — the mask lives on the pose's <img> itself,
+    // independent of which hairstyle src that image currently points at.
+    function applyHeadHairMasks() {
+      hairImgs.forEach((img, i) => {
+        const pose = POSES[i];
+        const maskUrl = headHairMasks && headHairMasks[pose];
+        if (!maskUrl) {
+          img.style.maskImage = 'none';
+          img.style.webkitMaskImage = 'none';
+          return;
+        }
+        const url = 'url(' + JSON.stringify(prefix + maskUrl) + ')';
+        img.style.maskImage = url;
+        img.style.webkitMaskImage = url;
+        img.style.maskMode = 'alpha';
+        img.style.maskRepeat = 'no-repeat';
+        img.style.webkitMaskRepeat = 'no-repeat';
+        img.style.maskPosition = 'center';
+        img.style.webkitMaskPosition = 'center';
+        img.style.maskSize = 'contain';
+        img.style.webkitMaskSize = 'contain';
+        img.style.maskOrigin = 'content-box';
+        img.style.webkitMaskOrigin = 'content-box';
+        img.style.maskClip = 'content-box';
+        img.style.webkitMaskClip = 'content-box';
+      });
     }
 
     // Swap which hairstyle/colour the 4 hair frames point at. Independent
@@ -476,6 +583,10 @@
       // sitting at the previous body's placement
       Object.keys(equipLayers).forEach((slotKey) => {
         equipLayers[slotKey].forEach((img, i) => {
+          // frame-based layers (see setEquipLayer) are full-canvas and
+          // positioned entirely by the 'avatar-sprite' class itself, same
+          // as the base body — nothing here to recompute for them
+          if (img.classList.contains('avatar-equip-frame')) return;
           const pos = equipPosition(currentGender, slotKey, POSES[i]);
           if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
         });

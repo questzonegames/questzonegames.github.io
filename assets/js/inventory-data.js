@@ -35,15 +35,39 @@
       name: 'Admin Crown',
       slot: 'head',
       icon: '👑',
-      // Fully encloses the scalp, so any hairstyle would clip through it —
-      // avatar-viewer.js hides the current hair layer whenever the
-      // equipped head item sets this, rather than trying to render a
-      // crown mesh that fits every hairstyle's shape. See its own comment
-      // above setHairstyle for the full mechanism (not built yet — no
-      // hairstyle art exists to hide). Leave this false/omitted on a head
-      // item that doesn't cover the hair (a circlet, glasses, a hairpin),
-      // so it keeps layering on top of hair normally.
-      hidesHair: true,
+      // A crown only physically covers the band of scalp its own body
+      // occupies — everything else (spikes above/around it, sideburns,
+      // lower/back hair) should keep showing right through. 'partial' tells
+      // avatar-viewer.js to composite the hair layer through hairMasks
+      // (one alpha mask per direction, precomputed from this crown's own
+      // art at its actual on-head position/scale) instead of hiding hair
+      // outright — see HEAD_HAIR_BEHAVIOR/applyHairOcclusion there for the
+      // general mechanism every head-slot item shares. Reserve 'full' (hide
+      // the whole hairstyle, no mask needed) for things that truly enclose
+      // the entire head, like a full helmet or hood; 'none' (or omitting
+      // hairBehavior entirely) for anything that doesn't touch hair at all.
+      hairBehavior: 'partial',
+      hairMasks: {
+        front: '../assets/img/equipment/head/masks/admin-crown-front-hairmask.png',
+        right: '../assets/img/equipment/head/masks/admin-crown-right-hairmask.png',
+        back:  '../assets/img/equipment/head/masks/admin-crown-back-hairmask.png',
+        left:  '../assets/img/equipment/head/masks/admin-crown-left-hairmask.png'
+      },
+      // Full-canvas, per-pose renders of the crown already placed at its
+      // correct on-head pixel position (same canvas size as that pose's
+      // base body art) — see avatar-viewer.js's setEquipLayer. Rendered
+      // through the exact same box/contain-fit as the base body itself,
+      // so it can't drift from the head the way a percent-of-container
+      // position (views + EQUIP_POSITIONS) could across rendering
+      // contexts. `views` stays too — inventory/examine UI elsewhere
+      // (assets/js/inventory.js) still wants a small cropped thumbnail,
+      // not a full transparent canvas.
+      frames: {
+        front: '../assets/img/equipment/head/frames/admin-crown-front-frame.png',
+        right: '../assets/img/equipment/head/frames/admin-crown-right-frame.png',
+        back:  '../assets/img/equipment/head/frames/admin-crown-back-frame.png',
+        left:  '../assets/img/equipment/head/frames/admin-crown-left-frame.png'
+      },
       views: {
         front: '../assets/img/equipment/head/admin-crown-front.png',
         right: '../assets/img/equipment/head/admin-crown-right.png',

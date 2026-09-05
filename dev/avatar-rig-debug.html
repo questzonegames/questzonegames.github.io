@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DEV — Avatar Rig Calibration</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  /* Developer-only tool. Not linked from any site nav, not meant for
+     players — a visual cross-check of assets/js/avatar-rig.js's anchor
+     data against the real bald base art, and a live preview of any
+     equipped head item's frame + hair mask, per direction. See
+     docs/avatar-equipment.md for how to use this when calibrating a new
+     item. */
+  body { background: #0b0e16; color: #cfe0ff; margin: 0; padding: 20px; font-family: 'Segoe UI', sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p.sub { color: #7d8bab; font-size: 12.5px; margin: 0 0 18px; }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; }
+  .stage-wrap { text-align: center; }
+  .stage-wrap label { display: block; font-size: 12px; color: #9ab; margin-bottom: 6px; }
+  .stage { position: relative; width: 240px; aspect-ratio: 3/4; background: #10141f; border: 1px solid #2a3550; overflow: hidden; }
+  .avatar-sprite {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+    padding: 9% 11% 5%;
+  }
+  /* content-box occupied by the base image, per direction, matched to
+     assets/js/avatar-rig.js HEAD_ANCHORS canvasW/H aspect ratios — used
+     only to convert an anchor's canvas-relative % into an on-screen
+     marker position. See computeMarkerPos() below for the exact math. */
+  .marker {
+    position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px;
+    border-radius: 50%; background: #ff4d6d; box-shadow: 0 0 0 2px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  .marker.above-head { background: #ffd24d; }
+  .marker.skull { background: #4dd2ff; }
+  .marker.forehead { background: #7fff8f; }
+  .marker.neck { background: #c98bff; }
+  .legend { margin-top: 16px; font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .controls { margin: 16px 0; display: flex; gap: 10px; align-items: center; font-size: 13px; }
+  .controls select, .controls button { background: #161b28; color: #cfe0ff; border: 1px solid #2a3550; border-radius: 6px; padding: 6px 10px; }
+</style>
+</head>
+<body>
+  <h1>Avatar Rig Calibration</h1>
+  <p class="sub">Markers are computed live from assets/js/avatar-rig.js HEAD_ANCHORS — if a marker looks wrong here, the anchor DATA is wrong, not this page. Yellow = ABOVE_HEAD, blue = SKULL, green = FOREHEAD, purple = NECK.</p>
+
+  <div class="controls">
+    <label>Head item: <select id="item-select"><option value="">— none (bald) —</option></select></label>
+    <label><input type="checkbox" id="show-hair" checked> show Short Spiky hair</label>
+    <label><input type="checkbox" id="show-markers" checked> show anchor markers</label>
+  </div>
+
+  <div class="row" id="stages"></div>
+
+  <div class="legend">
+    <span><i style="background:#ffd24d"></i>ABOVE_HEAD</span>
+    <span><i style="background:#4dd2ff"></i>SKULL</span>
+    <span><i style="background:#7fff8f"></i>FOREHEAD</span>
+    <span><i style="background:#c98bff"></i>NECK</span>
+  </div>
+
+<script src="../assets/js/inventory-data.js"></script>
+<script src="../assets/js/avatar-rig.js"></script>
+<script>
+  const DIRS = ['front', 'right', 'back', 'left'];
+  const stagesEl = document.getElementById('stages');
+  const itemSelect = document.getElementById('item-select');
+  const showHair = document.getElementById('show-hair');
+  const showMarkers = document.getElementById('show-markers');
+
+  (window.QZ_ITEM_CATALOG || []).filter((i) => i.slot === 'head').forEach((i) => {
+    const opt = document.createElement('option');
+    opt.value = i.id; opt.textContent = i.name;
+    itemSelect.appendChild(opt);
+  });
+  itemSelect.value = 'admin-crown';
+
+  function buildStage(dir) {
+    const wrap = document.createElement('div');
+    wrap.className = 'stage-wrap';
+    wrap.innerHTML = '<label>' + dir + '</label><div class="stage" data-dir="' + dir + '"></div>';
+    stagesEl.appendChild(wrap);
+    return wrap.querySelector('.stage');
+  }
+
+  // A marker's on-screen position: convert the anchor's canvas-relative
+  // percentage into a percentage of the STAGE box, going through the same
+  // object-fit:contain + padding math .avatar-sprite itself uses — i.e.
+  // reproducing exactly how a real equip frame ends up positioned, so this
+  // overlay is trustworthy as a check on the anchor data.
+  function markerStyle(anchorPctX, anchorPctY, canvasW, canvasH) {
+    // content-box (where object-fit:contain places the image) — padding is
+    // always a % of the STAGE's own width, even for top/bottom (a CSS
+    // quirk), which is why this must be computed per direction rather
+    // than assumed to be a flat 78%/86% split.
+    const stageAspect = 3 / 4; // width/height, matches .stage
+    const padTopPct = 9, padSidePct = 11, padBottomPct = 5; // of stage WIDTH
+    // stage width = 1 unit, height = 1/stageAspect units, for this math
+    const stageW = 1, stageH = 1 / stageAspect;
+    const padTop = (padTopPct / 100), padSide = (padSidePct / 100), padBottom = (padBottomPct / 100);
+    const contentW = stageW - 2 * padSide;
+    const contentH = stageH - padTop - padBottom;
+    const imgAspect = canvasW / canvasH;
+    const contentAspect = contentW / contentH;
+    let renderW, renderH;
+    if (imgAspect < contentAspect) { renderH = contentH; renderW = renderH * imgAspect; }
+    else { renderW = contentW; renderH = renderW / imgAspect; }
+    const renderLeft = padSide + (contentW - renderW) / 2;
+    const renderTop = padTop + (contentH - renderH) / 2;
+    const x = renderLeft + (anchorPctX / 100) * renderW;
+    const y = renderTop + (anchorPctY / 100) * renderH;
+    return { leftPct: (x / stageW) * 100, topPct: (y / stageH) * 100 };
+  }
+
+  function render() {
+    stagesEl.innerHTML = '';
+    const itemId = itemSelect.value;
+    const item = (window.QZ_ITEM_CATALOG || []).find((i) => i.id === itemId);
+    DIRS.forEach((dir) => {
+      const stage = buildStage(dir);
+      const base = document.createElement('img');
+      base.className = 'avatar-sprite';
+      base.src = '../assets/img/avatar/avatar-' + dir + '.png';
+      stage.appendChild(base);
+
+      if (showHair.checked) {
+        const hair = document.createElement('img');
+        hair.className = 'avatar-sprite';
+        hair.src = '../assets/img/hair/hair-short-spiky-dark-brown-' + dir + '.png';
+        if (item && item.hairMasks && item.hairMasks[dir]) {
+          const url = 'url(' + JSON.stringify('../' + item.hairMasks[dir]) + ')';
+          hair.style.maskImage = url; hair.style.webkitMaskImage = url;
+          hair.style.maskMode = 'alpha'; hair.style.maskRepeat = 'no-repeat'; hair.style.webkitMaskRepeat = 'no-repeat';
+          hair.style.maskPosition = 'center'; hair.style.webkitMaskPosition = 'center';
+          hair.style.maskSize = 'contain'; hair.style.webkitMaskSize = 'contain';
+          hair.style.maskOrigin = 'content-box'; hair.style.webkitMaskOrigin = 'content-box';
+          hair.style.maskClip = 'content-box'; hair.style.webkitMaskClip = 'content-box';
+        }
+        stage.appendChild(hair);
+      }
+
+      if (item && item.frames && item.frames[dir]) {
+        const eq = document.createElement('img');
+        eq.className = 'avatar-sprite';
+        eq.src = '../' + item.frames[dir];
+        stage.appendChild(eq);
+      }
+
+      if (showMarkers.checked) {
+        const a = window.QZAvatarRig.HEAD_ANCHORS[dir];
+        [
+          ['above-head', a.centerXPct, a.aboveHeadYPct],
+          ['skull', a.centerXPct, a.skullYPct],
+          ['forehead', a.centerXPct, a.foreheadYPct],
+          ['neck', a.centerXPct, a.neckYPct]
+        ].forEach(([cls, px, py]) => {
+          const pos = markerStyle(px, py, a.canvasW, a.canvasH);
+          const m = document.createElement('div');
+          m.className = 'marker ' + cls;
+          m.style.left = pos.leftPct + '%';
+          m.style.top = pos.topPct + '%';
+          stage.appendChild(m);
+        });
+      }
+    });
+  }
+
+  itemSelect.addEventListener('change', render);
+  showHair.addEventListener('change', render);
+  showMarkers.addEventListener('change', render);
+  render();
+</script>
+</body>
+</html>
