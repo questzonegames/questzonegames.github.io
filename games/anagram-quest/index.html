@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anagram Quest — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../../assets/img/apple-touch-icon.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@400;600;700&display=swap');
+
+  :root {
+    --bg-deep: #000000;
+    --panel: rgba(6,10,22,0.86);
+    --panel-solid: #060a16;
+    --cyan: #6fe3ff;
+    --cyan-dim: rgba(110,140,220,0.35);
+    --gold: #ffcf4d;
+    --gold-dark: #b8790a;
+    --text-main: #eaf3ff;
+    --text-dim: #9fb3d6;
+    --green: #3ee27a;
+    --red: #ff5e6a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg-deep);
+    color: var(--text-main);
+    font-family: 'Exo 2', sans-serif;
+    overflow-x: hidden;
+  }
+
+  #starfield { position: fixed; inset: 0; z-index: 0; }
+
+  .topbar {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(110,140,220,0.14);
+    background: rgba(0,0,0,0.82);
+    backdrop-filter: blur(14px);
+  }
+  .topbar a.back { display: flex; align-items: center; text-decoration: none; opacity: 0.92; }
+  .topbar a.back:hover { opacity: 1; }
+  .topbar a.back img { height: 40px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
+
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 900px; margin: 0 auto;
+    padding: 18px 16px 40px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(28px, 6vw, 46px);
+    letter-spacing: 0.04em;
+    text-align: center;
+    padding: 10px 34px;
+    margin: 6px 0 18px;
+    border: 2px solid var(--cyan);
+    border-radius: 999px;
+    background: radial-gradient(ellipse at 50% 30%, rgba(60,110,200,0.35), rgba(3,6,14,0.9));
+    box-shadow: 0 0 18px rgba(110,220,255,0.35), inset 0 0 24px rgba(70,150,255,0.25);
+    color: #eaf6ff;
+    text-shadow: 0 0 10px rgba(120,210,255,0.85), 0 0 22px rgba(80,160,255,0.5);
+  }
+
+  .panel {
+    position: relative;
+    width: 100%;
+    background: var(--panel);
+    border: 2px solid var(--cyan);
+    border-radius: 20px;
+    box-shadow: 0 0 22px rgba(70,180,255,0.25), inset 0 0 30px rgba(20,60,120,0.25);
+    padding: clamp(16px, 3vw, 32px);
+    margin-bottom: 16px;
+  }
+
+  /* corner brackets, matching the site-wide HUD-panel look */
+  .corner-brackets { position: absolute; inset: -3px; pointer-events: none; border-radius: inherit; overflow: hidden; }
+  .corner-brackets i { position: absolute; width: 26px; height: 26px; border: 2px solid var(--cyan); opacity: 0.9; }
+  .corner-brackets i:nth-child(1) { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 16px 0 0 0; }
+  .corner-brackets i:nth-child(2) { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 16px 0 0; }
+  .corner-brackets i:nth-child(3) { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 16px; }
+  .corner-brackets i:nth-child(4) { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 16px 0; }
+
+  .gold-heading {
+    font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(26px, 5vw, 42px);
+    text-align: center;
+    letter-spacing: 0.03em;
+    color: var(--gold);
+    text-shadow: 0 2px 0 #6b3f00, 0 0 18px rgba(255,200,60,0.5);
+    margin: 0 0 8px;
+  }
+  .subtitle { text-align: center; color: var(--text-main); font-weight: 700; margin: 0 0 20px; opacity: 0.92; }
+
+  .btn {
+    font-family: 'Orbitron', sans-serif; font-weight: 700;
+    border: none; cursor: pointer; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    transition: transform 0.12s ease, box-shadow 0.15s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-gold {
+    background: linear-gradient(180deg, #ffe38a 0%, #ffc233 45%, #e08e00 100%);
+    color: #3a2200;
+    border: 2px solid #ffe9a8;
+    box-shadow: 0 0 18px rgba(255,190,60,0.55), inset 0 2px 0 rgba(255,255,255,0.6);
+    padding: 16px 20px; font-size: clamp(16px, 3vw, 22px);
+    width: 100%;
+  }
+  .btn-gold:hover { box-shadow: 0 0 26px rgba(255,200,70,0.8), inset 0 2px 0 rgba(255,255,255,0.7); }
+  .btn-gold:disabled { filter: grayscale(0.6) brightness(0.7); cursor: not-allowed; }
+  .btn-dark {
+    background: linear-gradient(180deg, #0f1830, #060a16);
+    color: var(--cyan); border: 2px solid var(--cyan);
+    padding: 14px 16px; font-size: clamp(13px, 2.4vw, 16px);
+    box-shadow: 0 0 12px rgba(80,180,255,0.25);
+    flex: 1;
+  }
+  .btn-dark:hover { box-shadow: 0 0 20px rgba(110,210,255,0.5); }
+
+  .row { display: flex; gap: 12px; width: 100%; flex-wrap: wrap; }
+
+  /* ---- Lobby ---- */
+  .lobby-top { display: flex; gap: 20px; flex-wrap: wrap; }
+  .player-card { flex: 2 1 320px; min-width: 260px; }
+  .rules-card { flex: 1 1 240px; min-width: 230px; }
+  .player-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .avatar-circle {
+    width: 72px; height: 72px; border-radius: 50%;
+    border: 3px solid var(--cyan); background: radial-gradient(circle at 40% 30%, #1a3a66, #05070f);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 14px rgba(90,200,255,0.4);
+    flex-shrink: 0;
+  }
+  .avatar-circle svg { width: 40px; height: 40px; fill: var(--cyan); }
+  .player-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(18px, 3vw, 24px); }
+  .stat-row { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
+  .stat { text-align: left; }
+  .stat .label { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat .value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 20px; color: var(--gold); }
+
+  .rule-item { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
+  .rule-item .ic { width: 26px; height: 26px; flex-shrink: 0; color: var(--cyan); }
+  .rule-item .t { font-weight: 700; font-size: 14px; }
+  .rule-item .d { font-size: 12.5px; color: var(--text-dim); }
+  .rules-title { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--cyan); text-align: center; margin: 0 0 14px; letter-spacing: 0.03em; }
+
+  .bottom-nav { display: flex; gap: 12px; width: 100%; flex-wrap: wrap; }
+  .bottom-nav .btn-dark { min-width: 140px; }
+
+  /* ---- Round screens ---- */
+  .round-label { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--gold); text-align: center; font-size: clamp(20px, 4vw, 30px); margin: 4px 0; }
+  .round-sub { text-align: center; font-weight: 700; margin: 0 0 20px; }
+
+  .slots-row { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  .slots { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .slot {
+    width: clamp(34px, 8vw, 54px); height: clamp(34px, 8vw, 54px);
+    border-radius: 10px; background: #565b66; border: 2px solid #7c828d;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(16px, 4vw, 26px);
+    color: #0c0e12;
+  }
+  .slot.filled { background: linear-gradient(180deg, #eaf6ff, #cfe6ff); border-color: #fff; }
+
+  .backspace-btn {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    color: #fff; font-weight: 700; background: none; border: none; font-family: 'Exo 2', sans-serif; font-size: clamp(13px,2.5vw,17px);
+  }
+  .backspace-btn .x { color: var(--red); font-size: 20px; }
+
+  .tiles-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 26px; }
+  .tile {
+    width: clamp(38px, 10vw, 62px); height: clamp(38px, 10vw, 62px);
+    border-radius: 10px; background: linear-gradient(180deg, #eef8ff, #cfe6ff);
+    border: 3px solid var(--cyan);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(18px, 5vw, 30px);
+    color: #10151c; cursor: pointer; user-select: none;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.35);
+  }
+  .tile:hover { transform: translateY(-2px); }
+  .tile.used { opacity: 0.25; pointer-events: none; transform: none; }
+  .tile.pending { background: linear-gradient(180deg, #bcd8ff, #86b8f2); }
+
+  .vc-row { display: flex; gap: 18px; justify-content: center; margin-bottom: 26px; }
+  .vc-btn {
+    width: clamp(90px, 22vw, 150px); height: 56px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 22px;
+    border-radius: 999px; cursor: pointer;
+    background: radial-gradient(ellipse at 50% -20%, rgba(120,180,255,0.5), transparent 60%), linear-gradient(180deg, #16233f, #060a16);
+    border: 2px solid var(--cyan); color: var(--gold);
+    box-shadow: 0 0 14px rgba(90,180,255,0.35);
+  }
+  .vc-btn:hover { box-shadow: 0 0 22px rgba(120,210,255,0.6); }
+  .vc-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .timer-row { display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap; margin-bottom: 10px; }
+  .timer-ring {
+    width: 92px; height: 92px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #0a0e1a;
+    border: 3px solid rgba(90,150,255,0.25);
+    position: relative;
+  }
+  .timer-ring .ring-fg {
+    position: absolute; inset: -3px; border-radius: 50%;
+    background: conic-gradient(var(--cyan) calc(var(--pct) * 1%), transparent 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  }
+  .timer-ring.warn .ring-fg { background: conic-gradient(var(--red) calc(var(--pct) * 1%), transparent 0); }
+  .timer-num { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 28px; color: var(--gold); z-index: 1; }
+
+  .submit-btn { width: clamp(140px, 30vw, 220px); }
+
+  .msg-inline { text-align: center; min-height: 22px; font-weight: 700; color: var(--red); margin-bottom: 8px; }
+  .msg-inline.ok { color: var(--green); }
+  .locked-answer { text-align: center; color: var(--text-dim); font-size: 13px; margin-bottom: 4px; min-height: 18px; }
+
+  .footer-stats {
+    display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap;
+    width: 100%; gap: 14px; margin-top: 10px; border-top: 1px solid rgba(120,160,220,0.25); padding-top: 14px;
+  }
+  .footer-stats .stat .value { font-size: 18px; }
+
+  /* ---- Result screen ---- */
+  .result-word-box { text-align: center; padding: 18px 10px; border-bottom: 1px solid rgba(120,160,220,0.3); margin-bottom: 18px; }
+  .result-word-label { color: var(--gold); font-weight: 700; margin-bottom: 6px; }
+  .result-word { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(28px, 7vw, 48px); letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 14px; }
+  .tick { color: var(--green); font-size: 32px; }
+  .cross { color: var(--red); font-size: 32px; }
+  .points-earned { text-align: center; margin-top: 6px; }
+  .points-earned .label { color: var(--gold); font-weight: 700; }
+  .points-earned .value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(24px, 6vw, 34px); }
+
+  /* ---- Game over ---- */
+  .final-score-line { text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(22px, 5vw, 32px); margin: 18px 0; }
+  .final-score-line .name { color: var(--gold); }
+  .final-score-line .num { color: #fff; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 560px) {
+    .lobby-top { flex-direction: column; }
+    .vc-btn { width: 45%; }
+  }
+</style>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+
+<div class="topbar">
+  <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
+</div>
+
+<div class="wrap">
+  <div class="logo">ANAGRAM QUEST</div>
+
+  <!-- ============== LOBBY ============== -->
+  <section id="screen-lobby" class="screen">
+    <div class="panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="gold-heading">GAME LOBBY</div>
+      <div class="subtitle">Sharpen your mind. Find the words. Conquer the quest.</div>
+
+      <div class="lobby-top">
+        <div class="player-card panel" style="margin-bottom:0;">
+          <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+          <div class="player-head">
+            <div class="avatar-circle"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+            <div class="player-name" id="lobby-username">Player Name</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat"><div class="label">High Score</div><div class="value" id="lobby-highscore">0</div></div>
+            <div class="stat"><div class="label">Games Played</div><div class="value" id="lobby-gamesplayed">0</div></div>
+            <div class="stat"><div class="label">Level</div><div class="value" id="lobby-level">1/99</div></div>
+          </div>
+        </div>
+        <div class="rules-card panel" style="margin-bottom:0;">
+          <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+          <div class="rules-title">GAME RULES</div>
+          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">Pick 9 letters</div><div class="d">Use V for vowels and C for consonants each round.</div></div></div>
+          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">Build the longest word</div><div class="d">Real English words only, 4+ letters, in 40 seconds.</div></div></div>
+          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">5 rounds total</div><div class="d">Longer words score more points.</div></div></div>
+          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">Final round</div><div class="d">Solve the 9-letter word fast for a big bonus!</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-gold" id="btn-start-game" style="max-width:520px; margin-bottom:16px;">&#9654; START GAME</button>
+
+    <div class="bottom-nav">
+      <button class="btn btn-dark" id="btn-achievements">&#127942; ACHIEVEMENTS</button>
+      <button class="btn btn-dark" id="btn-leaderboards" data-coming-soon="Anagram Quest leaderboards are coming soon!">&#127942; LEADERBOARDS</button>
+      <a class="btn btn-dark" href="../../index.html" style="text-decoration:none;">&#8592; BACK TO ARCADE</a>
+    </div>
+  </section>
+
+  <!-- ============== LETTER SELECTION (rounds 1-4) ============== -->
+  <section id="screen-select" class="screen hidden">
+    <div class="panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="round-label">Round <span id="sel-round-num">1</span> of 5</div>
+      <div class="round-sub">It's your go. Please select nine letters.</div>
+
+      <div class="slots-row">
+        <div class="slots" id="sel-slots"></div>
+        <button class="backspace-btn" id="sel-backspace"><span class="x">&#10060;</span> Backspace</button>
+      </div>
+      <div class="tiles-row" id="sel-tiles"></div>
+
+      <div class="vc-row">
+        <button class="btn vc-btn" id="btn-vowel">V</button>
+        <button class="btn vc-btn" id="btn-consonant">C</button>
+      </div>
+
+      <div class="footer-stats">
+        <div class="stat"><div class="label">Highscore</div><div class="value" id="sel-highscore">0</div></div>
+        <div class="avatar-circle" style="width:56px;height:56px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+        <div class="stat"><div class="label">Games Played</div><div class="value" id="sel-gamesplayed">0</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== ACTIVE ROUND (build + submit) ============== -->
+  <section id="screen-active" class="screen hidden">
+    <div class="panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="round-label" id="active-round-label">Round 1 of 5</div>
+      <div class="round-sub" id="active-round-sub">Build the longest word you can.</div>
+
+      <div class="slots-row">
+        <div class="slots" id="active-slots"></div>
+        <button class="backspace-btn" id="active-backspace"><span class="x">&#10060;</span> Backspace</button>
+      </div>
+      <div class="tiles-row" id="active-tiles"></div>
+
+      <div class="msg-inline" id="active-msg">&nbsp;</div>
+      <div class="locked-answer" id="active-locked">&nbsp;</div>
+
+      <div class="timer-row">
+        <div class="timer-ring" id="active-timer-ring" style="--pct:100;"><span class="ring-fg"></span><span class="timer-num" id="active-timer-num">40</span></div>
+        <button class="btn btn-gold submit-btn" id="active-submit">SUBMIT</button>
+      </div>
+
+      <div class="footer-stats">
+        <div class="stat"><div class="label">Highscore</div><div class="value" id="active-highscore">0</div></div>
+        <div class="avatar-circle" style="width:56px;height:56px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+        <div class="stat"><div class="label">Games Played</div><div class="value" id="active-gamesplayed">0</div></div>
+      </div>
+      <div style="text-align:center;color:var(--text-dim);font-size:12.5px;margin-top:6px;">Time left: <span id="active-timer-text">40</span></div>
+    </div>
+  </section>
+
+  <!-- ============== ROUND RESULT ============== -->
+  <section id="screen-result" class="screen hidden">
+    <div class="panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="result-word-box">
+        <div class="result-word-label" id="result-label">You submitted a 6 letter word:</div>
+        <div class="result-word"><span id="result-word">PLANET</span><span id="result-icon" class="tick">&#10003;</span></div>
+      </div>
+      <div class="points-earned">
+        <div class="label" id="result-points-label">Points earned:</div>
+        <div class="value" id="result-points">6 POINTS</div>
+      </div>
+      <button class="btn btn-gold" id="btn-next-round" style="max-width:320px;margin:22px auto 8px;display:block;">NEXT ROUND</button>
+      <div style="text-align:center;color:var(--text-dim);font-size:12.5px;">Time left: <span id="result-timeleft">0</span></div>
+
+      <div class="footer-stats">
+        <div class="stat"><div class="label">Highscore</div><div class="value" id="result-highscore">0</div></div>
+        <div class="avatar-circle" style="width:56px;height:56px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+        <div class="stat"><div class="label">Games Played</div><div class="value" id="result-gamesplayed">0</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== GAME OVER ============== -->
+  <section id="screen-gameover" class="screen hidden">
+    <div class="panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="gold-heading">GAME OVER</div>
+      <div class="final-score-line"><span class="name" id="go-name">Player</span>: <span class="num" id="go-score">0</span></div>
+      <button class="btn btn-gold" id="btn-back-lobby" style="max-width:320px;margin:10px auto 20px;display:block;">BACK TO LOBBY</button>
+
+      <div class="footer-stats">
+        <div class="stat"><div class="label">Score</div><div class="value" id="go-score2">0</div></div>
+        <div class="avatar-circle" style="width:56px;height:56px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
+        <div class="stat"><div class="label">Games Played</div><div class="value" id="go-gamesplayed">0</div></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../../assets/js/qz-config.js"></script>
+<script src="../../assets/js/qz-auth.js"></script>
+<script src="../../assets/js/site.js"></script>
+<script src="../../assets/js/stars-plain.js"></script>
+<script src="anagram-data.js"></script>
+<script src="anagram-quest.js"></script>
+</body>
+</html>

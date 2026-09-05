@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anagram Quest Achievements — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../../assets/img/apple-touch-icon.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@400;600;700&display=swap');
+
+  :root {
+    --bg-deep: #000000;
+    --panel: rgba(6,10,22,0.86);
+    --cyan: #6fe3ff;
+    --gold: #ffcf4d;
+    --text-main: #eaf3ff;
+    --text-dim: #9fb3d6;
+    --green: #3ee27a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg-deep); color: var(--text-main); font-family: 'Exo 2', sans-serif; overflow-x: hidden; }
+  #starfield { position: fixed; inset: 0; z-index: 0; }
+
+  .topbar { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid rgba(110,140,220,0.14); background: rgba(0,0,0,0.82); backdrop-filter: blur(14px); }
+  .topbar a.back { display: flex; align-items: center; text-decoration: none; opacity: 0.92; }
+  .topbar a.back img { height: 40px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
+
+  .wrap { position: relative; z-index: 1; max-width: 700px; margin: 0 auto; padding: 18px 16px 40px; display: flex; flex-direction: column; align-items: center; }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(24px, 5vw, 38px);
+    letter-spacing: 0.04em; text-align: center; padding: 8px 28px; margin: 6px 0 18px;
+    border: 2px solid var(--cyan); border-radius: 999px;
+    background: radial-gradient(ellipse at 50% 30%, rgba(60,110,200,0.35), rgba(3,6,14,0.9));
+    box-shadow: 0 0 18px rgba(110,220,255,0.35), inset 0 0 24px rgba(70,150,255,0.25);
+    color: #eaf6ff; text-shadow: 0 0 10px rgba(120,210,255,0.85), 0 0 22px rgba(80,160,255,0.5);
+  }
+
+  .panel {
+    position: relative; width: 100%; background: var(--panel); border: 2px solid var(--cyan); border-radius: 20px;
+    box-shadow: 0 0 22px rgba(70,180,255,0.25), inset 0 0 30px rgba(20,60,120,0.25);
+    padding: clamp(16px, 3vw, 32px); margin-bottom: 16px;
+  }
+  .corner-brackets { position: absolute; inset: -3px; pointer-events: none; border-radius: inherit; overflow: hidden; }
+  .corner-brackets i { position: absolute; width: 26px; height: 26px; border: 2px solid var(--cyan); opacity: 0.9; }
+  .corner-brackets i:nth-child(1) { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 16px 0 0 0; }
+  .corner-brackets i:nth-child(2) { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 16px 0 0; }
+  .corner-brackets i:nth-child(3) { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 16px; }
+  .corner-brackets i:nth-child(4) { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 16px 0; }
+
+  .gold-heading { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(22px, 5vw, 32px); text-align: center; letter-spacing: 0.03em; color: var(--gold); text-shadow: 0 2px 0 #6b3f00, 0 0 18px rgba(255,200,60,0.5); margin: 0 0 8px; }
+  .subtitle { text-align: center; color: var(--text-main); font-weight: 700; margin: 0 0 22px; opacity: 0.92; font-size: 14px; }
+
+  .ach-list { display: flex; flex-direction: column; gap: 12px; }
+  .ach-item { display: flex; align-items: center; gap: 14px; background: rgba(10,16,32,0.7); border: 1.5px solid rgba(110,140,220,0.3); border-radius: 14px; padding: 12px 16px; }
+  .ach-item.unlocked { border-color: var(--gold); box-shadow: 0 0 14px rgba(255,207,77,0.25); }
+  .ach-icon { font-size: 30px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; filter: grayscale(1) brightness(0.6); }
+  .ach-item.unlocked .ach-icon { filter: none; }
+  .ach-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 15px; }
+  .ach-item:not(.unlocked) .ach-name { color: var(--text-dim); }
+  .ach-desc { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+  .ach-status { margin-left: auto; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .ach-status.locked { color: var(--text-dim); }
+  .ach-status.unlocked { color: var(--green); }
+
+  .empty-state { text-align: center; color: var(--text-dim); padding: 30px 10px; }
+  .empty-state .big { font-size: 38px; margin-bottom: 10px; }
+
+  .btn { font-family: 'Orbitron', sans-serif; font-weight: 700; border: none; cursor: pointer; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; transition: transform 0.12s ease, box-shadow 0.15s ease; }
+  .btn:active { transform: scale(0.97); }
+  .btn-gold {
+    background: linear-gradient(180deg, #ffe38a 0%, #ffc233 45%, #e08e00 100%); color: #3a2200; border: 2px solid #ffe9a8;
+    box-shadow: 0 0 18px rgba(255,190,60,0.55), inset 0 2px 0 rgba(255,255,255,0.6);
+    padding: 15px 20px; font-size: clamp(15px, 3vw, 19px); max-width: 320px; width: 100%;
+  }
+  .btn-gold:hover { box-shadow: 0 0 26px rgba(255,200,70,0.8), inset 0 2px 0 rgba(255,255,255,0.7); }
+</style>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+
+<div class="topbar">
+  <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
+</div>
+
+<div class="wrap">
+  <div class="logo">ANAGRAM QUEST</div>
+
+  <div class="panel">
+    <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+    <div class="gold-heading">ACHIEVEMENTS</div>
+    <div class="subtitle">Anagram Quest only — not the full Quest Zone list.</div>
+
+    <div class="ach-list" id="ach-list"></div>
+    <div class="empty-state hidden" id="ach-empty">
+      <div class="big">&#127942;</div>
+      No Anagram Quest achievements yet &mdash; check back soon!
+    </div>
+  </div>
+
+  <a class="btn btn-gold" href="index.html">&#8592; BACK TO GAME</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../../assets/js/qz-config.js"></script>
+<script src="../../assets/js/qz-auth.js"></script>
+<script src="../../assets/js/stars-plain.js"></script>
+<script>
+(function () {
+  const GAME_KEY = 'anagram-quest';
+  const listEl = document.getElementById('ach-list');
+  const emptyEl = document.getElementById('ach-empty');
+
+  function renderRow(a, unlocked) {
+    const row = document.createElement('div');
+    row.className = 'ach-item' + (unlocked ? ' unlocked' : '');
+    row.innerHTML =
+      '<div class="ach-icon">' + (a.icon || '&#127942;') + '</div>' +
+      '<div style="min-width:0;">' +
+        '<div class="ach-name">' + escapeHtml(a.name) + '</div>' +
+        (a.description ? '<div class="ach-desc">' + escapeHtml(a.description) + '</div>' : '') +
+      '</div>' +
+      '<div class="ach-status ' + (unlocked ? 'unlocked">Unlocked' : 'locked">Locked') + '</div>';
+    listEl.appendChild(row);
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function load() {
+    if (!window.QZAuth || !window.QZAuth.client) { emptyEl.classList.remove('hidden'); return; }
+    const client = window.QZAuth.client;
+    const { data: achievements, error } = await client
+      .from('achievements')
+      .select('achievement_id,name,description,icon,sort_order')
+      .eq('requirement_game_key', GAME_KEY)
+      .order('sort_order', { ascending: true });
+
+    if (error || !achievements || achievements.length === 0) {
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+
+    let unlockedIds = new Set();
+    try {
+      const profile = await window.QZAuth.getProfile();
+      if (profile) {
+        const { data: unlocked } = await client
+          .from('unlocked_achievements')
+          .select('achievement_id')
+          .eq('user_id', profile.id);
+        unlockedIds = new Set((unlocked || []).map((u) => u.achievement_id));
+      }
+    } catch (err) {
+      console.warn('Anagram Quest achievements: could not load unlock state', err);
+    }
+
+    achievements.forEach((a) => renderRow(a, unlockedIds.has(a.achievement_id)));
+  }
+  load();
+})();
+</script>
+</body>
+</html>

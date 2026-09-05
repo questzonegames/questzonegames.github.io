@@ -15,8 +15,9 @@
 -- 20260903014514_access_token_hook.sql, 20260903014729_ban_message_for_login.sql,
 -- 20260903034135_admin_account_info.sql, 20260903034846_fix_account_info_types.sql,
 -- 20260903040317_admin_edit_controls.sql, 20260903042739_admin_inventory_gifting.sql,
--- 20260903053242_avatar_customization.sql, and
--- 20260903062722_avatar_skin_colour_normal_default.sql).
+-- 20260903053242_avatar_customization.sql,
+-- 20260903062722_avatar_skin_colour_normal_default.sql, and
+-- 20260905010000_anagram_quest.sql).
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -74,7 +75,7 @@ create policy "games_select_all" on public.games for select using (true);
 
 insert into public.games (game_key, name, sort_order) values
   ('space-snake', 'Space Snake', 1),
-  ('total-level-2', 'Total Level Game 02', 2),
+  ('anagram-quest', 'Anagram Quest', 2),
   ('total-level-3', 'Total Level Game 03', 3),
   ('total-level-4', 'Total Level Game 04', 4),
   ('total-level-5', 'Total Level Game 05', 5),
@@ -339,6 +340,65 @@ end;
 $$;
 
 grant execute on function public.award_xp(text, bigint) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- game_stats — high score + games played, per (user, game). Generic across
+-- games on purpose (same shape as game_progress's xp/level) so the next
+-- game that needs a persisted high score/play count reuses this table
+-- instead of getting its own bespoke one. First user: Anagram Quest.
+-- ----------------------------------------------------------------------------
+create table if not exists public.game_stats (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  game_key text not null references public.games(game_key) on update cascade on delete cascade,
+  high_score int not null default 0,
+  games_played int not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, game_key)
+);
+alter table public.game_stats enable row level security;
+
+drop policy if exists "game_stats_select_own_or_admin" on public.game_stats;
+create policy "game_stats_select_own_or_admin"
+  on public.game_stats for select
+  using (auth.uid() = user_id or public.is_admin());
+
+-- deliberately no insert/update policy for clients — same reasoning as
+-- game_progress: the only way these change is record_game_result() below,
+-- so nobody can PATCH their own high score via the REST API directly.
+
+-- ----------------------------------------------------------------------------
+-- record_game_result() — the ONLY way game_stats changes. Called once per
+-- completed game (not per round). Always increments games_played by 1;
+-- raises high_score only if the new score beats it. p_score is clamped to
+-- a sane range so a tampered client can't write an absurd value straight
+-- into the leaderboard/high-score column — a coarse backstop, not full
+-- server-side replay validation, but matches every other write path in
+-- this schema: no raw client UPDATE reaches the table at all.
+-- ----------------------------------------------------------------------------
+create or replace function public.record_game_result(p_game_key text, p_score int)
+returns table (high_score int, games_played int)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_score int := greatest(0, least(coalesce(p_score, 0), 100000));
+begin
+  insert into public.game_stats (user_id, game_key, high_score, games_played)
+  values (auth.uid(), p_game_key, v_score, 1)
+  on conflict (user_id, game_key) do update
+    set high_score = greatest(public.game_stats.high_score, excluded.high_score),
+        games_played = public.game_stats.games_played + 1,
+        updated_at = now();
+
+  return query
+    select gs.high_score, gs.games_played
+    from public.game_stats gs
+    where gs.user_id = auth.uid() and gs.game_key = p_game_key;
+end;
+$$;
+
+grant execute on function public.record_game_result(text, int) to authenticated;
 
 -- ============================================================================
 -- inventory — owned items + what's equipped in each slot

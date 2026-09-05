@@ -127,12 +127,25 @@
       status: 'active',
       category: 'total-level'
     };
+    TOTAL_LEVEL_GAMES[1] = {
+      id: 'anagram-quest',
+      number: '02',
+      title: 'Anagram Quest',
+      image: 'assets/img/anagram-quest-thumb.svg',
+      route: 'games/anagram-quest/',
+      status: 'active',
+      category: 'total-level'
+    };
 
     TOTAL_LEVEL_GAMES.forEach((g) => {
       totalLevelGrid.appendChild(makeGameCard({
         title: g.title,
         route: g.route,
-        label: 'Total Level<br>Game',
+        // a real, active game with no thumbnail yet (Anagram Quest, until
+        // real art exists) still shows its own name instead of the
+        // generic placeholder label, same as Space Snake's image-based
+        // card already does via its title-over-artwork overlay
+        label: (g.status === 'active' && !g.image) ? g.title : 'Total Level<br>Game',
         number: g.number,
         image: g.image,
         active: g.status === 'active',
