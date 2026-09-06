@@ -422,13 +422,12 @@
       if (error) { console.warn('Anagram Quest: could not save XP', error); return; }
       const row = Array.isArray(data) ? data[0] : data;
       if (row && window.QZXp) {
-        // `lvl` is derived straight from the RPC's own fresh response, not
-        // from any cached state — the lobby skill card will independently
-        // pick up the same new level next time it mounts (updateFooterStats
-        // below re-mounts it).
-        const lvl = window.QZXp.displayLevel(row.xp);
-        goXpLine.textContent = '+' + xpAmount.toLocaleString() + ' Intelligence XP (Level ' +
-          lvl.base + (lvl.isVirtual ? ' · Virtual ' + lvl.virtual : '') + ')';
+        // The widget itself now shows the level/XP bar — animateXpGain()
+        // flies the +XP label into it and eases it up to `row`'s fresh
+        // value, so the lobby (updateFooterStats below re-mounts it) and
+        // this screen always agree with the same server response, never a
+        // client-derived guess.
+        animateXpGain(xpAmount, row);
         updateFooterStats();
       }
     } catch (err) {
@@ -702,8 +701,7 @@
 
   function startBonusRound() {
     state.currentRound = 5;
-    const words = window.QZAnagramData.BONUS_WORDS;
-    const answer = words[Math.floor(Math.random() * words.length)];
+    const answer = window.QZAnagramData.pickBonusWord();
     let letters = answer.split('');
     // shuffle (Fisher-Yates), reshuffle on the vanishingly rare chance it
     // lands back on the original order
@@ -853,7 +851,123 @@
   const goXpLine = document.getElementById('go-xp-line');
   const goRoundEls = [1, 2, 3, 4, 5].map((n) => document.getElementById('go-r' + n));
   const goTotalPoints = document.getElementById('go-total-points');
-  const goXpCalc = document.getElementById('go-xp-calc');
+  const goSkillcardSlot = document.getElementById('go-skillcard-slot');
+  // Set by mountGameOverSkillCard() each game — the box + the pre-game
+  // skill snapshot it was built from, so awardIntelligenceXp's response
+  // (the only place the POST-game xp/level exists) has something to
+  // animate from.
+  let goSkillBox = null;
+  let goSkillPre = null;
+
+  // Mounted at the PRE-game level/XP (award_xp hasn't run yet at this
+  // point in finishGame), using the exact same createFullBox() the lobby
+  // uses — same look, same hover tooltip, just built by hand here (instead
+  // of QZSkillCard.mountFull's own fetch+render) so this file keeps a
+  // reference to the box and can animate its bar/level in place afterwards
+  // rather than having a fresh mount() throw the old element away.
+  async function mountGameOverSkillCard() {
+    goSkillcardSlot.innerHTML = '';
+    if (!window.QZSkillCard) { goSkillBox = null; goSkillPre = null; return; }
+    const client = window.QZAuth && window.QZAuth.client;
+    const userId = state.profile ? state.profile.id : null;
+    goSkillPre = await window.QZSkillCard.fetchSkill(client, userId, GAME_KEY, 'Intelligence');
+    goSkillPre.iconSrc = '../../assets/img/skills/intelligence.png';
+    goSkillBox = window.QZSkillCard.createFullBox(goSkillPre, { caption: 'Solve words to earn Intelligence XP' });
+    goSkillcardSlot.appendChild(goSkillBox);
+  }
+
+  // One spark-burst + banner per level gained THIS game, never per level —
+  // called at most once from animateXpGain regardless of how many levels
+  // the award crossed.
+  function playLevelUpBurst(newLevel) {
+    if (!goSkillBox || goSkillBox.querySelector('.qz-levelup-burst')) return; // never stack
+    const burst = document.createElement('div');
+    burst.className = 'qz-levelup-burst';
+    const SPARK_COUNT = 14;
+    for (let i = 0; i < SPARK_COUNT; i++) {
+      const spark = document.createElement('span');
+      spark.className = 'spark';
+      const angle = (Math.PI * 2 * i) / SPARK_COUNT + Math.random() * 0.3;
+      const dist = 46 + Math.random() * 34;
+      spark.style.setProperty('--dx', (Math.cos(angle) * dist).toFixed(1) + 'px');
+      spark.style.setProperty('--dy', (Math.sin(angle) * dist).toFixed(1) + 'px');
+      spark.style.animationDelay = (Math.random() * 0.12).toFixed(2) + 's';
+      burst.appendChild(spark);
+    }
+    const banner = document.createElement('div');
+    banner.className = 'qz-levelup-banner';
+    banner.textContent = 'LEVEL UP! Now Level ' + newLevel;
+    goSkillBox.appendChild(burst);
+    goSkillBox.appendChild(banner);
+    setTimeout(() => { burst.remove(); banner.remove(); }, 1900);
+  }
+
+  // A "+N XP" label appears just off the widget's right edge (in line
+  // with its icon), slides straight up the screen fading as it goes, and
+  // is fully gone by the time it's level with Round 3 — roughly halfway
+  // between the widget and that row. Only once it's faded out does the
+  // bar pulse gold and fill across to the new value. `newSkill` is the
+  // fresh {xp, level} award_xp() itself returned — never a value
+  // re-derived client-side.
+  const XP_SLIDE_MS = 1100;
+  function animateXpGain(xpAmount, newSkill) {
+    if (!goSkillBox || !goSkillPre || !window.QZXp) return;
+    const fillEl = goSkillBox.querySelector('.qz-skillcard-full-fill');
+    const barEl = goSkillBox.querySelector('.qz-skillcard-full-bar');
+    const levelEl = goSkillBox.querySelector('.qz-skillcard-full-level');
+    if (!fillEl || !barEl || !levelEl) return;
+
+    const iconEl = goSkillBox.querySelector('.qz-skillcard-full-icon');
+    const iconRect = (iconEl || goSkillBox).getBoundingClientRect();
+    const widgetRect = goSkillBox.getBoundingClientRect();
+    const round3Rect = goRoundEls[2] ? goRoundEls[2].getBoundingClientRect() : null;
+
+    const startX = widgetRect.right + 14; // off the widget, not on it
+    const startY = iconRect.top + iconRect.height / 2; // in line with the icon
+    const round3Y = round3Rect ? round3Rect.top : widgetRect.top - 120;
+    const midY = (widgetRect.top + round3Y) / 2; // fully faded by here
+    const slideDist = Math.max(24, startY - midY); // px travelled upward
+
+    const label = document.createElement('div');
+    label.className = 'qz-xp-fly-label';
+    label.style.setProperty('--qz-xp-slide-dist', -slideDist + 'px');
+    label.textContent = '+' + xpAmount.toLocaleString() + ' XP';
+    label.style.left = startX + 'px';
+    label.style.top = startY + 'px';
+    document.body.appendChild(label);
+
+    requestAnimationFrame(() => label.classList.add('sliding'));
+
+    setTimeout(() => {
+      label.remove();
+
+      // gold pulse, then the bar fills across to the new value
+      barEl.classList.add('qz-bar-pulse');
+      setTimeout(() => barEl.classList.remove('qz-bar-pulse'), 520);
+
+      setTimeout(() => {
+        const newLvl = window.QZXp.displayLevel(newSkill.xp);
+        const base = newLvl.base;
+        let pct = 100;
+        if (base < 99) {
+          const curFloor = window.QZXp.xpForLevel(base);
+          const nextFloor = window.QZXp.xpForLevel(base + 1);
+          const span = nextFloor - curFloor;
+          pct = span > 0 ? Math.max(0, Math.min(100, ((newSkill.xp - curFloor) / span) * 100)) : 100;
+        }
+        const levelLabel = newLvl.isVirtual
+          ? base + ' <span class="qz-skillcard-full-of99">(Virtual ' + newLvl.virtual + ')</span>'
+          : base + '<span class="qz-skillcard-full-of99">/99</span>';
+
+        fillEl.style.transition = 'width 1.1s cubic-bezier(.2,.8,.2,1)';
+        fillEl.style.width = pct + '%';
+        levelEl.innerHTML = 'LEVEL ' + levelLabel;
+
+        const oldBase = window.QZXp.displayLevel(goSkillPre.xp).base;
+        if (base > oldBase) playLevelUpBurst(base);
+      }, 450); // let the pulse read on its own before the bar starts moving
+    }, XP_SLIDE_MS);
+  }
 
   // Called once per completed game, alongside saveGameResult/
   // awardIntelligenceXp — records THIS difficulty's high score and adds
@@ -894,11 +1008,14 @@
     goTotalPoints.textContent = finalScore;
     goScore.textContent = finalScore;
     goScore2.textContent = finalScore;
-    goXpCalc.textContent = finalScore + ' × ' + cfg.xpPerPoint + ' XP/point = ' + xpEarned.toLocaleString() + ' Intelligence XP';
     goXpLine.textContent = state.profile ? ' ' : 'Sign in to save your score and earn Intelligence XP.';
     showScreen('GAMEOVER');
     playSound('game-over');
     fireEvent('game-completed', { score: finalScore, difficulty: state.difficulty, xp: xpEarned, nineLetterCount: state.nineLetterCount });
+    // Mounted at the PRE-game level/XP, before award_xp runs, so
+    // animateXpGain() (inside awardIntelligenceXp below) has an accurate
+    // "before" state to animate the bar up from.
+    await mountGameOverSkillCard();
     // all three are per-completed-game, exactly once, here — never per round
     await Promise.all([
       saveGameResult(finalScore),
@@ -999,9 +1116,25 @@
 
   // ================= keyboard support =================
   document.addEventListener('keydown', (e) => {
+    // Letter-selection screen (Rounds 1-4, before the round timer starts):
+    // V/C on the keyboard press the on-screen Vowel/Consonant buttons —
+    // lets a player build their whole rack without touching the mouse.
+    // Scoped to this screen only, so it never fights with V/C as ordinary
+    // rack letters once the round itself starts (handled below).
+    if (!screens.SELECT.classList.contains('hidden')) {
+      const key = e.key.toUpperCase();
+      if (key === 'V' && !btnVowel.disabled) { e.preventDefault(); pressVC('V'); }
+      else if (key === 'C' && !btnConsonant.disabled) { e.preventDefault(); pressVC('C'); }
+      return;
+    }
+
     if (screens.ACTIVE.classList.contains('hidden')) return;
     if (e.key === 'Backspace') { e.preventDefault(); backspace(); return; }
     if (e.key === 'Enter') { e.preventDefault(); lockInRound(); return; }
+    // Once the round starts, V/C (like every other letter) only ever
+    // selects a rack tile — same as any other key, no special-casing
+    // needed: it already does nothing unless that letter is actually in
+    // this round's rack.
     const key = e.key.toUpperCase();
     if (key.length === 1 && key >= 'A' && key <= 'Z') {
       const idx = state.rack.findIndex((t) => !t.used && t.letter === key);

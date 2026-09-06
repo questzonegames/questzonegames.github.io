@@ -419,6 +419,62 @@
   }
   .footer-stats .stat .value { font-size: 18px; }
 
+  /* ---- Game Over XP-gain animation: a "+440 XP" label appears just off
+     the right edge of the skill widget (in line with its icon), slides
+     straight up the screen, and fades out along the way — fully gone by
+     the time it's level with Round 3, roughly halfway between the widget
+     and that row. Once it's faded out, the XP bar pulses gold, then fills
+     across to the new value. See animateXpGain() in anagram-quest.js —
+     this is the only place that function's visuals live; nothing here
+     runs on its own. ---- */
+  .qz-xp-fly-label {
+    position: fixed; z-index: 200; left: 0; top: 0;
+    transform: translateY(0);
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 18px;
+    color: #ffcf4d; text-shadow: 0 0 10px rgba(255,207,77,0.8), 0 0 20px rgba(255,207,77,0.5);
+    white-space: nowrap; pointer-events: none;
+    opacity: 1;
+    transition: transform 1.1s ease-out, opacity 1.1s ease-in;
+  }
+  .qz-xp-fly-label.sliding { transform: translateY(var(--qz-xp-slide-dist, -80px)); opacity: 0; }
+
+  /* a brief gold pulse on the bar itself once the label has fully faded,
+     right before it fills across to the new value */
+  @keyframes qz-bar-pulse-gold {
+    0% { box-shadow: none; filter: brightness(1); }
+    45% { box-shadow: 0 0 16px 3px rgba(255,207,77,0.85); filter: brightness(1.7); }
+    100% { box-shadow: none; filter: brightness(1); }
+  }
+  .qz-skillcard-full-bar.qz-bar-pulse { animation: qz-bar-pulse-gold 0.5s ease; }
+
+  /* level-up: a single golden spark/firework burst around the widget —
+     never more than one, even when a game's XP crosses several levels
+     at once. */
+  .qz-levelup-burst { position: absolute; inset: -20px; pointer-events: none; z-index: 5; overflow: visible; }
+  .qz-levelup-burst .spark {
+    position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, #ffcf4d 45%, rgba(255,207,77,0) 75%);
+    box-shadow: 0 0 8px 2px rgba(255,207,77,0.8);
+    animation: qz-spark-burst 0.9s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  @keyframes qz-spark-burst {
+    0% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0); opacity: 0; }
+  }
+  .qz-levelup-banner {
+    position: absolute; left: 50%; top: -34px; transform: translateX(-50%) translateY(6px);
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 13px; letter-spacing: 0.06em;
+    color: #ffcf4d; text-shadow: 0 0 12px rgba(255,207,77,0.8); white-space: nowrap;
+    opacity: 0; pointer-events: none; z-index: 6;
+    animation: qz-levelup-banner 1.8s ease forwards;
+  }
+  @keyframes qz-levelup-banner {
+    0% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  }
+
   /* ---- Result screen ---- */
   .result-word-box { text-align: center; padding: 18px 10px; border-bottom: 1px solid rgba(120,160,220,0.3); margin-bottom: 18px; }
   .result-word-label { color: var(--gold); font-weight: 700; margin-bottom: 6px; }
@@ -593,8 +649,8 @@
             <span>RULES</span>
           </div>
           <div class="rules-accordion" id="rules-accordion">
-            <div class="rule-acc-item open" data-rule="how-to-play">
-              <button class="rule-acc-head" type="button" aria-expanded="true">
+            <div class="rule-acc-item" data-rule="how-to-play">
+              <button class="rule-acc-head" type="button" aria-expanded="false">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
                 <span class="rule-acc-title">How To Play</span>
                 <svg class="rule-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
@@ -839,14 +895,19 @@
           <span>TOTAL POINTS</span><span id="go-total-points">0</span>
         </div>
       </div>
-      <div style="text-align:center;color:var(--cyan);font-weight:700;font-size:13px;margin-top:10px;" id="go-xp-calc">0 &times; 20 XP/point = 0 Intelligence XP</div>
-
+      <!-- Intelligence skill widget (same reusable component as the lobby,
+           see assets/js/skill-card.js's createFullBox) — replaces the old
+           plain-text "22 x 20 XP/point = 440 Intelligence XP" line. Mounted
+           at the PRE-game level/XP by mountGameOverSkillCard(), then
+           animateXpGain() flies the "+440 XP" label into it and animates
+           the bar/level up to the new post-award value — see
+           anagram-quest.js. -->
+      <div id="go-skillcard-slot" class="qz-skillcard-full-row" style="max-width:340px;margin:14px auto 0;position:relative;"></div>
       <div style="text-align:center;color:var(--gold);font-size:13px;font-weight:700;min-height:18px;margin:6px 0 6px;" id="go-xp-line">&nbsp;</div>
       <button class="btn btn-gold" id="btn-back-lobby" style="max-width:320px;margin:10px auto 20px;display:block;">BACK TO LOBBY</button>
 
       <div class="footer-stats">
         <div class="stat"><div class="label">Score</div><div class="value" id="go-score2">0</div></div>
-        <div class="avatar-circle" style="width:56px;height:56px;"><svg viewBox="0 0 24 24" style="width:28px;height:28px;"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></div>
         <div class="stat"><div class="label">Games Played</div><div class="value" id="go-gamesplayed">0</div></div>
       </div>
     </div>
