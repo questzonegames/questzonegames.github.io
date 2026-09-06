@@ -29,7 +29,9 @@
     background: radial-gradient(circle at 35% 30%, #3b4a6b, #1a2036 70%);
     border: 2px solid var(--border-strong);
     display: flex; align-items: center; justify-content: center; font-size: 28px;
+    overflow: hidden;
   }
+  .hs-player-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .hs-player-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(22px, 4vw, 30px); color: #fff; letter-spacing: 0.02em; margin: 0; }
   .hs-player-sub { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 </style>
@@ -95,6 +97,7 @@
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/email-verify-modal.js"></script>
+<script src="../assets/js/profile-picture-picker.js"></script>
 <script src="../assets/js/hiscores-shared.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
@@ -171,7 +174,8 @@
     try {
       const [{ data, error }, registry] = await Promise.all([
         client().rpc('hiscores_player_stats', { p_username: username }),
-        window.QZHiscores.loadSkillRegistry(client(), '../')
+        window.QZHiscores.loadSkillRegistry(client(), '../'),
+        window.QZProfilePicture ? window.QZProfilePicture.ready() : Promise.resolve()
       ]);
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
@@ -188,7 +192,7 @@
       const bannedTag = row.is_banned ? ' <span class="hs-banned-tag">⛔ Banned</span>' : '';
       document.getElementById('hs-player-body').innerHTML =
         '<div class="hs-player-head">' +
-          '<div class="hs-player-avatar">👤</div>' +
+          '<div class="hs-player-avatar">' + (window.QZProfilePicture ? window.QZProfilePicture.imgHtml(row.equipped_profile_picture_id) : '') + '</div>' +
           '<div><h1 class="hs-player-name' + (row.is_banned ? ' hs-banned-name' : '') + '">' + escapeHtml(row.username) + bannedTag + '</h1>' +
             '<div class="hs-player-sub">Total Level Rank #' + Number(row.overall_rank).toLocaleString() + '</div>' +
           '</div>' +

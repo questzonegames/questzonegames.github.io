@@ -32,7 +32,8 @@
 -- 20260906060000_players_search_and_public_profiles.sql,
 -- 20260906070000_players_search_avatar_thumbnails.sql, and
 -- 20260906080000_email_verification.sql, and
--- 20260906090000_profile_pictures.sql).
+-- 20260906090000_profile_pictures.sql, and
+-- 20260906100000_hiscores_profile_picture.sql).
 -- As of 06/09/2026 this list was cross-checked against `supabase migration
 -- list` (every local migration file's timestamp matches an applied remote
 -- migration, zero drift) and every function/table below was folded in from
@@ -1676,12 +1677,16 @@ $$;
 grant execute on function public.hiscores_skill(text, int, int) to anon, authenticated;
 
 -- Powers Search and Compare, and (via the client calling it directly)
--- Players' public skill view: case-insensitive exact username match, zero
--- rows for "no such account", "permanently banned", "hidden", AND "test
--- account and caller isn't an admin" alike — none distinguishable from each
--- other to a non-admin caller. `skills` is a jsonb map of every real
--- game_key -> {level, xp, rank} (rank null = never played that skill) so
--- adding a new skill to public.games later needs no change here.
+-- Players' public skill view AND the individual Highscores player page's
+-- avatar circle: case-insensitive exact username match, zero rows for "no
+-- such account", "permanently banned", "hidden", AND "test account and
+-- caller isn't an admin" alike — none distinguishable from each other to a
+-- non-admin caller. `skills` is a jsonb map of every real game_key ->
+-- {level, xp, rank} (rank null = never played that skill) so adding a new
+-- skill to public.games later needs no change here. Final version
+-- (superseding the pre-profile-picture one from 20260906050000): also
+-- returns equipped_profile_picture_id (see
+-- 20260906100000_hiscores_profile_picture.sql).
 create or replace function public.hiscores_player_stats(p_username text)
 returns table (
   user_id uuid,
@@ -1690,6 +1695,7 @@ returns table (
   total_xp bigint,
   overall_rank bigint,
   is_banned boolean,
+  equipped_profile_picture_id text,
   skills jsonb
 )
 language plpgsql
@@ -1701,9 +1707,10 @@ declare
   v_user_id uuid;
   v_caller_is_admin boolean := public.is_admin();
   v_is_banned boolean;
+  v_pfp text;
 begin
-  select p.id, (p.banned_until is not null and p.banned_until > now())
-    into v_user_id, v_is_banned
+  select p.id, (p.banned_until is not null and p.banned_until > now()), p.equipped_profile_picture_id
+    into v_user_id, v_is_banned, v_pfp
   from public.profiles p
   where lower(p.username) = lower(p_username)
     and not p.banned_permanently
@@ -1751,7 +1758,7 @@ begin
     from public.games g
     left join skill_ranks sr on sr.game_key = g.game_key and sr.user_id = v_user_id
   )
-  select r.uid, r.uname, r.tlevel, r.txp, r.rnk, v_is_banned, sm.skills
+  select r.uid, r.uname, r.tlevel, r.txp, r.rnk, v_is_banned, v_pfp, sm.skills
   from ranked r, skillmap sm
   where r.uid = v_user_id;
 end;
