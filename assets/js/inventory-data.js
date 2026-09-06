@@ -15,6 +15,16 @@
 // avatar-viewer.js's setAvatarEquipment. An item with no `views` yet still
 // works everywhere else (Worn Equipment, Inventory, equip/unequip), it
 // just shows as an icon chip on the avatar instead of true on-body art.
+//
+// WHERE on the body `views` actually lands is calibrated live, per
+// direction, in Supabase (avatar_rig_items — see
+// supabase/migrations/20260906010000_avatar_rig_editor.sql), editable by
+// an admin at Admin Zone -> Avatar Rig. `anchorType` below is just which
+// reusable body anchor (skull/forehead/above_head/neck — see
+// assets/js/avatar-rig.js) the item's calibration is measured FROM; it is
+// NOT the item's position itself, and it's only a fallback default (the
+// real anchor_type actually used per-direction lives in the DB row, set
+// by whichever anchor the admin picked in the editor).
 (function () {
   const SLOTS = [
     { key: 'head',      label: 'Head' },
@@ -35,33 +45,39 @@
       name: 'Admin Crown',
       slot: 'head',
       icon: '👑',
+      anchorType: 'skull', // fallback only — see comment above; the DB row is authoritative
       // A crown only physically covers the band of scalp its own body
       // occupies — everything else (spikes above/around it, sideburns,
       // lower/back hair) should keep showing right through. 'partial' tells
-      // avatar-viewer.js to composite the hair layer through hairMasks
-      // (one alpha mask per direction, precomputed from this crown's own
-      // art at its actual on-head position/scale) instead of hiding hair
-      // outright — see HEAD_HAIR_BEHAVIOR/applyHairOcclusion there for the
-      // general mechanism every head-slot item shares. Reserve 'full' (hide
-      // the whole hairstyle, no mask needed) for things that truly enclose
-      // the entire head, like a full helmet or hood; 'none' (or omitting
-      // hairBehavior entirely) for anything that doesn't touch hair at all.
+      // avatar-viewer.js to composite the hair layer through a live-
+      // generated occlusion mask (built fresh from wherever this crown is
+      // CURRENTLY calibrated to sit, every time — see buildHairMaskDataUrl
+      // in avatar-viewer.js) instead of hiding hair outright, so recalibrating
+      // the crown in Admin Zone -> Avatar Rig can never leave a stale mask
+      // behind. Reserve 'full' (hide the whole hairstyle) for things that
+      // truly enclose the entire head, like a full helmet or hood; 'none'
+      // (or omitting hairBehavior entirely) for anything that doesn't touch
+      // hair at all.
       hairBehavior: 'partial',
+      // hairMasks below is legacy — only consulted if the live rig-data
+      // fetch fails entirely (see avatar-viewer.js's rigDataFallback) AND
+      // this item is falling back to its pre-baked `frames`. Kept (not
+      // deleted) purely as that offline/outage safety net; the real,
+      // currently-used mask is always generated live.
       hairMasks: {
         front: '../assets/img/equipment/head/masks/admin-crown-front-hairmask.png',
         right: '../assets/img/equipment/head/masks/admin-crown-right-hairmask.png',
         back:  '../assets/img/equipment/head/masks/admin-crown-back-hairmask.png',
         left:  '../assets/img/equipment/head/masks/admin-crown-left-hairmask.png'
       },
-      // Full-canvas, per-pose renders of the crown already placed at its
-      // correct on-head pixel position (same canvas size as that pose's
-      // base body art) — see avatar-viewer.js's setEquipLayer. Rendered
-      // through the exact same box/contain-fit as the base body itself,
-      // so it can't drift from the head the way a percent-of-container
-      // position (views + EQUIP_POSITIONS) could across rendering
-      // contexts. `views` stays too — inventory/examine UI elsewhere
-      // (assets/js/inventory.js) still wants a small cropped thumbnail,
-      // not a full transparent canvas.
+      // Full-canvas, per-pose renders of the crown at its OLD, pre-Avatar-
+      // Rig-editor fixed position — kept only as the emergency fallback
+      // used if the live avatar_rig_* fetch fails (see avatar-viewer.js's
+      // setEquipLayer). The real, normally-used position now comes from
+      // Supabase (avatar_rig_items), editable at Admin Zone -> Avatar Rig,
+      // not from these files. `views` stays load-bearing — it's both the
+      // live-positioned art itself AND what inventory/examine UI elsewhere
+      // (assets/js/inventory.js) uses for a small cropped thumbnail.
       frames: {
         front: '../assets/img/equipment/head/frames/admin-crown-front-frame.png',
         right: '../assets/img/equipment/head/frames/admin-crown-right-frame.png',

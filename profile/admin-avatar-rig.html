@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avatar Rig — Quest Zone</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  main.rig { padding: 26px 0 60px; position: relative; z-index: 1; }
+
+  .rig-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 24px clamp(14px, 3vw, 30px) 30px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .rig-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 20px; flex-wrap: wrap; }
+  .rig-heading {
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 18px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(18px, 2.6vw, 26px); letter-spacing: 0.1em; text-align: center; margin: 0;
+    background: linear-gradient(180deg, #fff 0%, #cfd9ee 40%, #93a3c4 60%, #eef3fc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,170,255,0.6), 0 2px 1px rgba(0,0,0,0.6);
+  }
+  .rig-heading .dash { flex: 1 1 40px; max-width: 70px; height: 2px; background: linear-gradient(90deg, transparent, var(--blue-light), transparent); opacity: 0.9; }
+
+  .rig-state { max-width: 480px; margin: 30px auto; text-align: center; color: var(--text-dim); font-size: 13.5px; line-height: 1.6; }
+  .rig-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+  /* ---- mode selector ---- */
+  .rig-mode-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; justify-content: center; }
+  .rig-mode-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+  .rig-mode-btn {
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 8px 16px; border-radius: 7px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(10,16,30,0.6); color: var(--text-dim); cursor: pointer;
+  }
+  .rig-mode-btn.active.item { color: #fff; background: linear-gradient(180deg,#3b6fe0,#1c3a8f); border-color: rgba(150,200,255,0.8); box-shadow: 0 0 12px rgba(70,140,255,0.5); }
+  .rig-mode-btn.active.anchor { color: #fff; background: linear-gradient(180deg,#c9932f,#8a5f12); border-color: rgba(255,210,120,0.8); box-shadow: 0 0 12px rgba(255,180,60,0.4); }
+  .rig-mode-btn.active.pose { color: #fff; background: linear-gradient(180deg,#7a3fd6,#4a1f8f); border-color: rgba(190,150,255,0.8); }
+  .rig-mode-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---- 3-column editor layout ---- */
+  .rig-grid { display: grid; grid-template-columns: 220px 1fr 260px; gap: 16px; align-items: start; }
+  @media (max-width: 1050px) { .rig-grid { grid-template-columns: 1fr; } }
+  .rig-panel { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 12px; padding: 14px; }
+  .rig-panel-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: 13px; letter-spacing: 0.05em; color: var(--text); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  .rig-field { margin-bottom: 14px; }
+  .rig-field label { display: block; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+  .rig-field select, .rig-field input[type="text"] {
+    width: 100%; padding: 8px 10px; border-radius: 7px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.6); color: var(--text); font-size: 12.5px; font-family: inherit;
+  }
+  .rig-dir-row { display: flex; gap: 6px; }
+  .rig-dir-btn {
+    flex: 1; padding: 8px 4px; border-radius: 7px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text-dim); font-family: 'Orbitron', sans-serif; font-size: 10.5px; cursor: pointer;
+  }
+  .rig-dir-btn.active { color: #fff; border-color: var(--blue-light); background: rgba(59,130,246,0.22); box-shadow: 0 0 10px rgba(70,140,255,0.4); }
+  .rig-dir-btn.dirty::after { content: ' •'; color: #ffb454; }
+  .rig-toggle-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+  .rig-toggle-row input { accent-color: var(--blue-light); }
+  .rig-mirror-hint { font-size: 10.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
+  .rig-bg-swatches { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .rig-bg-swatch {
+    width: 26px; height: 26px; border-radius: 6px; border: 2px solid rgba(120,160,220,0.3);
+    cursor: pointer; padding: 0;
+  }
+  .rig-bg-swatch:hover { border-color: rgba(150,200,255,0.7); }
+  .rig-bg-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px rgba(90,160,255,0.6); }
+  #bg-color-picker { width: 30px; height: 26px; padding: 0; border: 2px solid rgba(120,160,220,0.3); border-radius: 6px; background: none; cursor: pointer; }
+
+  /* ---- center preview ---- */
+  .rig-stage-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .rig-stage {
+    position: relative; width: 100%; max-width: 420px; aspect-ratio: 3/4;
+    background: #0a0e18; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden;
+  }
+  .rig-sprite { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 9% 11% 5%; pointer-events: none; }
+  .rig-item-layer { position: absolute; cursor: grab; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3)); }
+  .rig-item-layer.dragging { cursor: grabbing; }
+  .rig-marker { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,0.7); pointer-events: none; }
+  .rig-marker.above_head { background: #ffd24d; }
+  .rig-marker.skull { background: #4dd2ff; }
+  .rig-marker.forehead { background: #7fff8f; }
+  .rig-marker.neck { background: #c98bff; }
+  .rig-marker.active-anchor { width: 16px; height: 16px; margin: -8px 0 0 -8px; cursor: grab; pointer-events: auto; box-shadow: 0 0 0 3px #fff, 0 0 10px 3px rgba(255,255,255,0.7); }
+  .rig-marker.active-anchor.dragging { cursor: grabbing; }
+  .rig-debug-line { position: absolute; font-family: 'Orbitron', monospace; font-size: 9.5px; color: #7fff8f; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 3px; white-space: nowrap; pointer-events: none; }
+
+  /* ---- right: transform controls ---- */
+  .rig-num-row { display: flex; align-items: center; gap: 6px; }
+  .rig-num-row input[type="number"] {
+    flex: 1; padding: 7px 8px; border-radius: 6px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.6); color: var(--text); font-size: 12.5px; font-family: inherit;
+  }
+  .rig-nudge-btn {
+    width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text-dim); cursor: pointer; font-size: 13px; line-height: 1;
+  }
+  .rig-nudge-btn:hover { color: #fff; border-color: rgba(150,200,255,0.6); }
+  .rig-debug-panel { font-family: 'Orbitron', monospace; font-size: 10.5px; color: var(--text-dim); line-height: 1.8; }
+  .rig-debug-panel b { color: var(--text); }
+  .rig-unsaved-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ffb454; margin-right: 5px; box-shadow: 0 0 6px #ffb454; }
+
+  /* ---- toolbar ---- */
+  .rig-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+  .rig-toolbar .spacer { flex: 1; }
+  .rig-btn {
+    font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 0.04em;
+    padding: 9px 14px; border-radius: 8px; border: 1.5px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.5); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .rig-btn:hover:not(:disabled) { border-color: rgba(150,200,255,0.6); color: #fff; }
+  .rig-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .rig-btn.primary { background: linear-gradient(180deg,#3b6fe0,#1c3a8f); border-color: rgba(150,200,255,0.8); color: #fff; }
+  .rig-btn.danger { background: rgba(200,60,60,0.15); border-color: rgba(220,90,90,0.5); color: #ff9d9d; }
+  .rig-btn.danger:hover { background: rgba(220,70,70,0.28); }
+
+  .rig-save-status { font-size: 11.5px; color: var(--text-dim); margin-top: 8px; text-align: center; }
+  .rig-save-status.err { color: #ff9d9d; }
+  .rig-save-status.ok { color: #6be3a0; }
+
+  /* ---- confirm modal (mirrors admin.html) ---- */
+  .qz-backdrop { position: fixed; inset: 0; z-index: 600; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(4,7,14,0.72); backdrop-filter: blur(3px); }
+  .qz-backdrop.show { display: flex; }
+  .qz-modal { width: 100%; max-width: 440px; border: 1.5px solid rgba(140,195,255,0.35); border-radius: 14px; background: var(--qp-fill); padding: 22px 24px 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+  .qz-modal h3 { margin: 0 0 10px; font-family: 'Orbitron', sans-serif; font-size: 15px; color: #fff; }
+  .qz-modal p { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 18px; }
+  .qz-modal .row { display: flex; gap: 10px; justify-content: flex-end; }
+
+  .pose-blocked { text-align: center; padding: 40px 20px; color: var(--text-dim); font-size: 13px; line-height: 1.7; }
+  .pose-blocked .icon { font-size: 28px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html"><img src="../assets/img/logo.png" alt="Quest Zone"></a>
+    <div class="site-search"><form action="../index.html"><input type="text" name="q" placeholder="Search games..." autocomplete="off"><button type="submit" aria-label="Search">🔍</button></form></div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="../signup.html" class="btn btn-chrome-blue" data-coming-soon="">Signup</a>
+      <a href="../login.html" class="btn btn-chrome-dark" data-coming-soon="">Login</a>
+    </div>
+  </div>
+</header>
+
+<main class="rig">
+  <div class="container">
+    <div class="rig-frame bezel-lg">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="rig-top">
+        <a href="admin.html" class="btn btn-chrome-dark">‹ Admin Zone</a>
+        <h1 class="rig-heading"><span class="dash"></span>Avatar Rig<span class="dash"></span></h1>
+        <span style="min-width:118px;"></span>
+      </div>
+
+      <div id="rig-state" class="rig-state">Checking access…</div>
+
+      <div id="rig-content" hidden>
+        <div class="rig-mode-row">
+          <span class="rig-mode-label">Mode:</span>
+          <button type="button" class="rig-mode-btn item active" id="mode-item" data-mode="item">Item</button>
+          <button type="button" class="rig-mode-btn anchor" id="mode-anchor" data-mode="anchor">Rig Anchor</button>
+          <button type="button" class="rig-mode-btn pose" id="mode-pose" data-mode="pose">Pose</button>
+        </div>
+
+        <div class="rig-grid">
+          <!-- LEFT: selectors -->
+          <div class="rig-panel">
+            <div class="rig-panel-title">Selection</div>
+            <div class="rig-field">
+              <label>Body</label>
+              <select id="sel-body"><option value="male">Male</option></select>
+            </div>
+            <div class="rig-field">
+              <label>Slot</label>
+              <select id="sel-slot"></select>
+            </div>
+            <div class="rig-field" id="field-item">
+              <label>Item</label>
+              <select id="sel-item"></select>
+            </div>
+            <div class="rig-field" id="field-anchor-type-picker">
+              <label>Anchor (rig anchor mode)</label>
+              <select id="sel-anchor-pick">
+                <option value="above_head">Above Head</option>
+                <option value="skull">Skull</option>
+                <option value="forehead">Forehead</option>
+                <option value="neck">Neck</option>
+              </select>
+            </div>
+            <div class="rig-field">
+              <label>Direction</label>
+              <div class="rig-dir-row">
+                <button type="button" class="rig-dir-btn active" data-dir="front">Front</button>
+                <button type="button" class="rig-dir-btn" data-dir="right">Right</button>
+                <button type="button" class="rig-dir-btn" data-dir="back">Back</button>
+                <button type="button" class="rig-dir-btn" data-dir="left">Left</button>
+              </div>
+            </div>
+            <div class="rig-field" id="mirror-box" hidden>
+              <label>Mirror Left ↔ Right</label>
+              <button type="button" class="rig-btn" id="btn-mirror-copy" style="width:100%;margin-bottom:6px;justify-content:center;"></button>
+              <button type="button" class="rig-btn" id="btn-mirror-paste" style="width:100%;justify-content:center;" disabled></button>
+              <div class="rig-mirror-hint" id="mirror-hint"></div>
+            </div>
+            <div class="rig-panel-title" style="margin-top:6px;">View Options</div>
+            <div class="rig-toggle-row"><input type="checkbox" id="tog-anchors" checked> Show anchors</div>
+            <div class="rig-toggle-row"><input type="checkbox" id="tog-hair" checked> Show hair (Short Spiky)</div>
+            <div class="rig-toggle-row"><input type="checkbox" id="tog-debug" checked> Show debug values</div>
+            <div class="rig-field">
+              <label>Stage Background</label>
+              <div class="rig-bg-swatches">
+                <button type="button" class="rig-bg-swatch active" data-bg="#0a0e18" title="Default" style="background:#0a0e18;"></button>
+                <button type="button" class="rig-bg-swatch" data-bg="#00ff00" title="Green screen" style="background:#00ff00;"></button>
+                <button type="button" class="rig-bg-swatch" data-bg="#ff00ff" title="Magenta" style="background:#ff00ff;"></button>
+                <button type="button" class="rig-bg-swatch" data-bg="#000000" title="Black" style="background:#000000;"></button>
+                <button type="button" class="rig-bg-swatch" data-bg="#ffffff" title="White" style="background:#ffffff;"></button>
+                <input type="color" id="bg-color-picker" value="#0a0e18" title="Custom colour">
+              </div>
+            </div>
+          </div>
+
+          <!-- CENTER: preview -->
+          <div class="rig-panel">
+            <div class="rig-panel-title" id="stage-title">Preview</div>
+            <div class="rig-stage-wrap">
+              <div class="rig-stage" id="rig-stage"></div>
+              <div id="pose-mode-note" class="pose-blocked" hidden>
+                <div class="icon">🚧</div>
+                POSE mode needs separated arm/hand art (upper arm, forearm, hand — per direction) that doesn't exist yet.<br>
+                The base avatar is one flattened image per direction, so an arm can't be bent independently.<br>
+                See docs/AVATAR_RIG.md → "Assets still required" for the exact file list.
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: transform controls -->
+          <div class="rig-panel">
+            <div class="rig-panel-title">Transform — <span id="transform-scope">Admin Crown / Front</span></div>
+
+            <div class="rig-field">
+              <label>Anchor Type</label>
+              <select id="ctl-anchor-type">
+                <option value="above_head">Above Head</option>
+                <option value="skull">Skull</option>
+                <option value="forehead">Forehead</option>
+                <option value="neck">Neck</option>
+              </select>
+            </div>
+
+            <div class="rig-field">
+              <label id="lbl-x">X Offset (px)</label>
+              <div class="rig-num-row">
+                <button type="button" class="rig-nudge-btn" data-nudge="x" data-dir="-1">−</button>
+                <input type="number" id="ctl-x" step="0.5">
+                <button type="button" class="rig-nudge-btn" data-nudge="x" data-dir="1">+</button>
+              </div>
+            </div>
+            <div class="rig-field">
+              <label id="lbl-y">Y Offset (px)</label>
+              <div class="rig-num-row">
+                <button type="button" class="rig-nudge-btn" data-nudge="y" data-dir="-1">−</button>
+                <input type="number" id="ctl-y" step="0.5">
+                <button type="button" class="rig-nudge-btn" data-nudge="y" data-dir="1">+</button>
+              </div>
+            </div>
+            <div class="rig-field">
+              <label id="lbl-scale">Scale (relative to anchor width)</label>
+              <div class="rig-num-row">
+                <button type="button" class="rig-nudge-btn" data-nudge="scale" data-dir="-1">−</button>
+                <input type="number" id="ctl-scale" step="0.01" min="0.05" max="5">
+                <button type="button" class="rig-nudge-btn" data-nudge="scale" data-dir="1">+</button>
+              </div>
+            </div>
+            <div class="rig-field">
+              <label>Rotation (°)</label>
+              <div class="rig-num-row">
+                <button type="button" class="rig-nudge-btn" data-nudge="rotation" data-dir="-1">−</button>
+                <input type="number" id="ctl-rotation" step="1" min="-180" max="180">
+                <button type="button" class="rig-nudge-btn" data-nudge="rotation" data-dir="1">+</button>
+              </div>
+            </div>
+
+            <div class="rig-panel-title" style="margin-top:10px;">Debug</div>
+            <div class="rig-debug-panel" id="rig-debug"></div>
+          </div>
+        </div>
+
+        <div class="rig-toolbar">
+          <button type="button" class="rig-btn" id="btn-undo">↶ Undo</button>
+          <button type="button" class="rig-btn" id="btn-redo">↷ Redo</button>
+          <span style="width:12px;"></span>
+          <button type="button" class="rig-btn danger" id="btn-reset-saved">Reset to Last Saved</button>
+          <button type="button" class="rig-btn danger" id="btn-reset-factory">Reset to Factory Default</button>
+          <div class="spacer"></div>
+          <span id="unsaved-indicator"></span>
+          <button type="button" class="rig-btn" id="btn-save-direction">Save Front</button>
+          <button type="button" class="rig-btn" id="btn-save-all-directions">Save Item — All Directions</button>
+          <button type="button" class="rig-btn primary" id="btn-save-whole-rig">Save Whole Rig</button>
+        </div>
+        <div class="rig-save-status" id="save-status"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container"><div class="footer-bottom">
+    <span>© 2026 Quest Zone. All rights reserved.</span>
+    <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+  </div></div>
+</footer>
+
+<!-- confirm modal -->
+<div class="qz-backdrop" id="confirm-backdrop">
+  <div class="qz-modal">
+    <h3 id="confirm-title">Are you sure?</h3>
+    <p id="confirm-body"></p>
+    <div class="row">
+      <button type="button" class="rig-btn" id="confirm-cancel">Cancel</button>
+      <button type="button" class="rig-btn danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/inventory-data.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script type="module" src="../assets/js/avatar-viewer.js"></script>
+<script>
+(function () {
+  const POSES = ['front', 'right', 'back', 'left'];
+  const ANCHOR_TYPES = ['above_head', 'skull', 'forehead', 'neck'];
+  const stateEl = document.getElementById('rig-state');
+  const contentEl = document.getElementById('rig-content');
+  let client = null, myId = null;
+  let AV = null; // window.QZAvatarViewer, awaited once ready
+
+  function setState(html) { stateEl.innerHTML = html; stateEl.hidden = false; contentEl.hidden = true; }
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ================= app state =================
+  let mode = 'item'; // 'item' | 'anchor' | 'pose'
+  let bodyType = 'male';
+  let slot = 'head';
+  let itemId = null;
+  let direction = 'front';
+  let pickedAnchorType = 'skull'; // for RIG ANCHOR mode's anchor-type picker
+
+  let rigData = null; // { anchors, items } from loadRigData — the DB baseline
+  // localItemCalib[direction] = { anchor_type, offset_x, offset_y, scale, rotation } — working copy, per item
+  let localItemCalib = {};
+  let savedItemCalib = {}; // snapshot at last load/save, for dirty-checking + "reset to last saved"
+  // localAnchor[direction] = { center_x_pct, y_pct, width_pct } for pickedAnchorType — working copy
+  let localAnchor = {};
+  let savedAnchor = {};
+
+  const DEFAULT_ITEM_CALIB = { anchor_type: 'skull', offset_x: 0, offset_y: 0, scale: 1, rotation: 0 };
+
+  // ================= undo/redo =================
+  // Each entry: { kind: 'item'|'anchor', direction, before, after } — a
+  // full snapshot diff of that direction's calibration object, so a whole
+  // drag (or one numeric field edit) is exactly one entry, never one per
+  // mousemove. New edits after an Undo drop the redo tail (standard
+  // editor behaviour).
+  let history = [];
+  let historyIndex = -1; // points at the last APPLIED entry
+  const MAX_HISTORY = 200;
+
+  function pushHistory(entry) {
+    history = history.slice(0, historyIndex + 1);
+    history.push(entry);
+    if (history.length > MAX_HISTORY) history.shift();
+    historyIndex = history.length - 1;
+    refreshUndoRedoButtons();
+  }
+  function applyEntryValue(entry, which) {
+    const val = which === 'before' ? entry.before : entry.after;
+    if (entry.kind === 'item') localItemCalib[entry.direction] = Object.assign({}, val);
+    else localAnchor[entry.direction] = Object.assign({}, val);
+  }
+  function undo() {
+    if (historyIndex < 0) return;
+    const entry = history[historyIndex];
+    applyEntryValue(entry, 'before');
+    historyIndex--;
+    if (entry.direction !== direction) selectDirection(entry.direction, true);
+    else { syncControlsFromState(); renderStage(); }
+    refreshUndoRedoButtons();
+    markDirtyUI();
+  }
+  function redo() {
+    if (historyIndex >= history.length - 1) return;
+    historyIndex++;
+    const entry = history[historyIndex];
+    applyEntryValue(entry, 'after');
+    if (entry.direction !== direction) selectDirection(entry.direction, true);
+    else { syncControlsFromState(); renderStage(); }
+    refreshUndoRedoButtons();
+    markDirtyUI();
+  }
+  function refreshUndoRedoButtons() {
+    document.getElementById('btn-undo').disabled = historyIndex < 0;
+    document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
+  }
+
+  // ================= data loading =================
+  function currentCalib() {
+    if (mode === 'anchor') return localAnchor[direction] || {};
+    return localItemCalib[direction] || Object.assign({}, DEFAULT_ITEM_CALIB);
+  }
+  function isDirty(dir) {
+    dir = dir || direction;
+    if (mode === 'anchor') {
+      const a = localAnchor[dir], b = savedAnchor[dir];
+      if (!a || !b) return false;
+      return a.center_x_pct !== b.center_x_pct || a.y_pct !== b.y_pct || a.width_pct !== b.width_pct;
+    }
+    const a = localItemCalib[dir], b = savedItemCalib[dir];
+    const av = a || DEFAULT_ITEM_CALIB, bv = b || DEFAULT_ITEM_CALIB;
+    return av.anchor_type !== bv.anchor_type || av.offset_x !== bv.offset_x || av.offset_y !== bv.offset_y || av.scale !== bv.scale || av.rotation !== bv.rotation;
+  }
+  function anyDirty() { return POSES.some((d) => isDirty(d)); }
+
+  async function loadItemCalibForCurrentItem() {
+    rigData = await AV.loadRigData(client);
+    localItemCalib = {}; savedItemCalib = {};
+    POSES.forEach((dir) => {
+      const row = rigData.items[bodyType] && rigData.items[bodyType][slot] && rigData.items[bodyType][slot][itemId] && rigData.items[bodyType][slot][itemId][dir];
+      const val = row
+        ? { anchor_type: row.anchor_type, offset_x: Number(row.offset_x), offset_y: Number(row.offset_y), scale: Number(row.scale), rotation: Number(row.rotation) }
+        : Object.assign({}, DEFAULT_ITEM_CALIB);
+      localItemCalib[dir] = Object.assign({}, val);
+      savedItemCalib[dir] = Object.assign({}, val);
+    });
+  }
+  function loadAnchorForCurrentPick() {
+    localAnchor = {}; savedAnchor = {};
+    POSES.forEach((dir) => {
+      const row = rigData.anchors[bodyType] && rigData.anchors[bodyType][dir] && rigData.anchors[bodyType][dir][pickedAnchorType];
+      const val = row ? { center_x_pct: Number(row.center_x_pct), y_pct: Number(row.y_pct), width_pct: Number(row.width_pct), canvas_w: row.canvas_w, canvas_h: row.canvas_h } : null;
+      localAnchor[dir] = val ? Object.assign({}, val) : null;
+      savedAnchor[dir] = val ? Object.assign({}, val) : null;
+    });
+  }
+
+  // ================= UI: selectors =================
+  const slotSel = document.getElementById('sel-slot');
+  const itemSel = document.getElementById('sel-item');
+  (window.QZ_EQUIPMENT_SLOTS || []).forEach((s) => {
+    const opt = document.createElement('option'); opt.value = s.key; opt.textContent = s.label; slotSel.appendChild(opt);
+  });
+  function refreshItemOptions() {
+    itemSel.innerHTML = '';
+    const items = (window.QZ_ITEM_CATALOG || []).filter((i) => i.slot === slot);
+    if (!items.length) {
+      const opt = document.createElement('option'); opt.value = ''; opt.textContent = '— no items in this slot yet —';
+      itemSel.appendChild(opt);
+      itemId = null;
+      return;
+    }
+    items.forEach((i) => { const opt = document.createElement('option'); opt.value = i.id; opt.textContent = i.name; itemSel.appendChild(opt); });
+    itemId = items[0].id;
+    itemSel.value = itemId;
+  }
+  refreshItemOptions();
+
+  slotSel.addEventListener('change', async () => {
+    slot = slotSel.value;
+    refreshItemOptions();
+    await onItemChanged();
+  });
+  itemSel.addEventListener('change', async () => {
+    itemId = itemSel.value || null;
+    await onItemChanged();
+  });
+
+  async function onItemChanged() {
+    history = []; historyIndex = -1; refreshUndoRedoButtons();
+    if (itemId) await loadItemCalibForCurrentItem();
+    syncControlsFromState();
+    renderStage();
+  }
+
+  // direction buttons
+  document.querySelectorAll('.rig-dir-btn').forEach((btn) => {
+    btn.addEventListener('click', () => selectDirection(btn.dataset.dir));
+  });
+  function selectDirection(dir, skipHistoryReset) {
+    direction = dir;
+    document.querySelectorAll('.rig-dir-btn').forEach((b) => b.classList.toggle('active', b.dataset.dir === dir));
+    syncControlsFromState();
+    renderStage();
+  }
+  function refreshDirtyDots() {
+    document.querySelectorAll('.rig-dir-btn').forEach((b) => b.classList.toggle('dirty', isDirty(b.dataset.dir)));
+  }
+
+  // mode buttons
+  document.querySelectorAll('.rig-mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      mode = btn.dataset.mode;
+      document.querySelectorAll('.rig-mode-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      document.getElementById('field-item').style.display = mode === 'anchor' ? 'none' : '';
+      document.getElementById('field-anchor-type-picker').style.display = mode === 'anchor' ? '' : 'none';
+      document.getElementById('pose-mode-note').hidden = mode !== 'pose';
+      document.getElementById('rig-stage').style.display = mode === 'pose' ? 'none' : '';
+      document.querySelector('.rig-toolbar').style.display = mode === 'pose' ? 'none' : '';
+      history = []; historyIndex = -1; refreshUndoRedoButtons();
+      if (mode === 'anchor') loadAnchorForCurrentPick();
+      syncControlsFromState();
+      renderStage();
+    });
+  });
+  document.getElementById('sel-anchor-pick').addEventListener('change', (e) => {
+    pickedAnchorType = e.target.value;
+    loadAnchorForCurrentPick();
+    syncControlsFromState();
+    renderStage();
+  });
+
+  // toggles
+  ['tog-anchors', 'tog-hair', 'tog-debug'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', renderStage);
+  });
+
+  // ---- stage background (e.g. a green-screen colour to spot hair
+  // clipping under headwear more easily than on the default dark panel) —
+  // purely a local preview preference, never saved, never affects any
+  // calibration value. ----
+  const bgColorPicker = document.getElementById('bg-color-picker');
+  function setStageBackground(hex, activeSwatch) {
+    stageEl.style.background = hex;
+    document.querySelectorAll('.rig-bg-swatch').forEach((b) => b.classList.toggle('active', b === activeSwatch));
+    bgColorPicker.value = hex;
+  }
+  document.querySelectorAll('.rig-bg-swatch').forEach((btn) => {
+    btn.addEventListener('click', () => setStageBackground(btn.dataset.bg, btn));
+  });
+  bgColorPicker.addEventListener('input', () => setStageBackground(bgColorPicker.value, null));
+
+  // ================= transform controls =================
+  const ctlAnchorType = document.getElementById('ctl-anchor-type');
+  const ctlX = document.getElementById('ctl-x');
+  const ctlY = document.getElementById('ctl-y');
+  const ctlScale = document.getElementById('ctl-scale');
+  const ctlRotation = document.getElementById('ctl-rotation');
+
+  function syncControlsFromState() {
+    document.getElementById('transform-scope').textContent =
+      (mode === 'anchor' ? (pickedAnchorType + ' anchor') : ((window.QZ_ITEM_CATALOG.find((i) => i.id === itemId) || {}).name || '—')) + ' / ' + direction[0].toUpperCase() + direction.slice(1);
+    document.getElementById('btn-save-direction').textContent = 'Save ' + direction[0].toUpperCase() + direction.slice(1);
+
+    if (mode === 'anchor') {
+      ctlAnchorType.parentElement.style.display = 'none';
+      document.getElementById('lbl-x').textContent = 'Center X (% of canvas)';
+      document.getElementById('lbl-y').textContent = 'Y Position (% of canvas)';
+      document.getElementById('lbl-scale').textContent = 'Reference Width (% of canvas)';
+      const a = localAnchor[direction];
+      ctlX.value = a ? a.center_x_pct : '';
+      ctlY.value = a ? a.y_pct : '';
+      ctlScale.value = a ? a.width_pct : '';
+      ctlRotation.parentElement.style.display = 'none';
+    } else {
+      ctlAnchorType.parentElement.style.display = '';
+      ctlRotation.parentElement.style.display = '';
+      document.getElementById('lbl-x').textContent = 'X Offset (px)';
+      document.getElementById('lbl-y').textContent = 'Y Offset (px)';
+      document.getElementById('lbl-scale').textContent = 'Scale (relative to anchor width)';
+      const c = localItemCalib[direction] || DEFAULT_ITEM_CALIB;
+      ctlAnchorType.value = c.anchor_type;
+      ctlX.value = c.offset_x;
+      ctlY.value = c.offset_y;
+      ctlScale.value = c.scale;
+      ctlRotation.value = c.rotation;
+    }
+    refreshDirtyDots();
+    markDirtyUI();
+    syncMirrorBox();
+  }
+
+  // ================= Mirror Left <-> Right =================
+  // Right and Left are the same item viewed from opposite sides of a
+  // (roughly) symmetric head — copying one side's calibration to the
+  // other needs to flip offset_x and rotation (a +X nudge or a clockwise
+  // tilt on the Right view is the mirror-image -X nudge / counter-
+  // clockwise tilt on the Left view), while offset_y, scale and
+  // anchor_type carry across unchanged. Only ever offered in ITEM mode,
+  // and only for Right/Left (Front/Back aren't mirror images of each
+  // other — they're different silhouettes entirely).
+  let mirrorClipboard = null; // { fromDirection: 'right'|'left', calib: {...} }
+  function mirrorCalib(calib) {
+    return {
+      anchor_type: calib.anchor_type,
+      offset_x: -calib.offset_x,
+      offset_y: calib.offset_y,
+      scale: calib.scale,
+      rotation: -calib.rotation
+    };
+  }
+  function otherSide(dir) { return dir === 'right' ? 'left' : 'right'; }
+
+  function syncMirrorBox() {
+    const box = document.getElementById('mirror-box');
+    const copyBtn = document.getElementById('btn-mirror-copy');
+    const pasteBtn = document.getElementById('btn-mirror-paste');
+    const hint = document.getElementById('mirror-hint');
+    const applicable = mode === 'item' && (direction === 'right' || direction === 'left');
+    box.hidden = !applicable;
+    if (!applicable) return;
+
+    const label = direction[0].toUpperCase() + direction.slice(1);
+    copyBtn.textContent = '📋 Copy ' + label + ' Settings';
+
+    const other = otherSide(direction);
+    const otherLabel = other[0].toUpperCase() + other.slice(1);
+    if (mirrorClipboard && mirrorClipboard.fromDirection === other) {
+      pasteBtn.disabled = false;
+      pasteBtn.textContent = '📥 Paste ' + otherLabel + ' → ' + label + ' (Mirrored)';
+      hint.textContent = 'Ready to paste ' + otherLabel + '’s settings, mirrored, onto ' + label + '.';
+    } else if (mirrorClipboard && mirrorClipboard.fromDirection === direction) {
+      pasteBtn.disabled = true;
+      pasteBtn.textContent = '📥 Paste ' + otherLabel + ' → ' + label + ' (Mirrored)';
+      hint.textContent = 'Copied ' + label + '. Switch to ' + otherLabel + ' to paste it there, mirrored.';
+    } else {
+      pasteBtn.disabled = true;
+      pasteBtn.textContent = '📥 Paste ' + otherLabel + ' → ' + label + ' (Mirrored)';
+      hint.textContent = 'Copy ' + label + ' here, or switch to ' + otherLabel + ' and copy that instead.';
+    }
+  }
+
+  document.getElementById('btn-mirror-copy').addEventListener('click', () => {
+    const calib = localItemCalib[direction] || DEFAULT_ITEM_CALIB;
+    mirrorClipboard = { fromDirection: direction, calib: Object.assign({}, calib) };
+    syncMirrorBox();
+    setSaveStatus('Copied ' + direction + ' settings. Switch to ' + otherSide(direction) + ' to paste (mirrored).');
+  });
+  document.getElementById('btn-mirror-paste').addEventListener('click', () => {
+    if (!mirrorClipboard || mirrorClipboard.fromDirection !== otherSide(direction)) return;
+    const before = Object.assign({}, localItemCalib[direction] || DEFAULT_ITEM_CALIB);
+    const after = mirrorCalib(mirrorClipboard.calib);
+    localItemCalib[direction] = after;
+    pushHistory({ kind: 'item', direction, before, after: Object.assign({}, after) });
+    syncControlsFromState();
+    renderStage();
+    setSaveStatus('Pasted ' + mirrorClipboard.fromDirection + '’s settings onto ' + direction + ', mirrored. Remember to Save.');
+  });
+
+  function commitFieldChange(field, oldVal, newVal) {
+    if (oldVal === newVal) return;
+    const before = mode === 'anchor' ? Object.assign({}, localAnchor[direction]) : Object.assign({}, localItemCalib[direction] || DEFAULT_ITEM_CALIB);
+    if (mode === 'anchor') {
+      if (!localAnchor[direction]) return;
+      localAnchor[direction][field] = newVal;
+    } else {
+      if (!localItemCalib[direction]) localItemCalib[direction] = Object.assign({}, DEFAULT_ITEM_CALIB);
+      localItemCalib[direction][field] = newVal;
+    }
+    const after = mode === 'anchor' ? Object.assign({}, localAnchor[direction]) : Object.assign({}, localItemCalib[direction]);
+    pushHistory({ kind: mode === 'anchor' ? 'anchor' : 'item', direction, before, after });
+    syncControlsFromState();
+    renderStage();
+  }
+
+  ctlAnchorType.addEventListener('change', () => {
+    const before = Object.assign({}, localItemCalib[direction] || DEFAULT_ITEM_CALIB);
+    if (!localItemCalib[direction]) localItemCalib[direction] = Object.assign({}, DEFAULT_ITEM_CALIB);
+    localItemCalib[direction].anchor_type = ctlAnchorType.value;
+    const after = Object.assign({}, localItemCalib[direction]);
+    pushHistory({ kind: 'item', direction, before, after });
+    syncControlsFromState(); renderStage();
+  });
+  // Field name depends on the current mode (anchor vs item), resolved at
+  // the moment the user actually commits a change, not wired once upfront.
+  function fieldNameFor(which) {
+    if (mode === 'anchor') return which === 'x' ? 'center_x_pct' : which === 'y' ? 'y_pct' : 'width_pct';
+    return which === 'x' ? 'offset_x' : which === 'y' ? 'offset_y' : which === 'scale' ? 'scale' : 'rotation';
+  }
+  [['x', ctlX], ['y', ctlY], ['scale', ctlScale], ['rotation', ctlRotation]].forEach(([which, input]) => {
+    let oldVal = null;
+    input.addEventListener('focus', () => { oldVal = parseFloat(input.value); });
+    input.addEventListener('change', () => {
+      const nv = parseFloat(input.value);
+      if (isNaN(nv)) { input.value = oldVal; return; }
+      commitFieldChange(fieldNameFor(which), oldVal, nv);
+      oldVal = nv;
+    });
+  });
+  document.querySelectorAll('.rig-nudge-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const which = btn.dataset.nudge, dir = Number(btn.dataset.dir);
+      const input = which === 'x' ? ctlX : which === 'y' ? ctlY : which === 'scale' ? ctlScale : ctlRotation;
+      const step = which === 'scale' ? 0.01 : which === 'rotation' ? 1 : 1;
+      const oldVal = parseFloat(input.value) || 0;
+      const nv = Math.round((oldVal + dir * step) * 1000) / 1000;
+      input.value = nv;
+      commitFieldChange(fieldNameFor(which), oldVal, nv);
+    });
+  });
+
+  function markDirtyUI() {
+    const dirty = anyDirty();
+    document.getElementById('unsaved-indicator').innerHTML = dirty ? '<span class="rig-unsaved-dot"></span>Unsaved changes' : '';
+    refreshDirtyDots();
+  }
+  window.addEventListener('beforeunload', (e) => {
+    if (!anyDirty()) return;
+    e.preventDefault(); e.returnValue = '';
+  });
+
+  // ================= keyboard shortcuts (scoped to this page) =================
+  document.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+    if (e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+  });
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
+
+  // ================= stage rendering =================
+  const stageEl = document.getElementById('rig-stage');
+  let baseImg, hairImg, itemImg;
+  const markerEls = {}; // anchor_type -> persistent <div>, repositioned in place — never destroyed mid-drag
+
+  // Drag handlers are attached ONCE, here, to elements that live for the
+  // whole session (itemImg is never recreated; markerEls are created once
+  // per anchor_type and only ever repositioned). A previous version
+  // re-attached `.onpointerdown/move/up` on every renderStage() call,
+  // INCLUDING the renders triggered by the drag's own pointermove handler
+  // — reassigning a captured element's handlers dozens of times a second
+  // mid-drag, and for anchor markers, actually destroying and recreating
+  // the captured element mid-drag (which silently drops pointer capture
+  // per spec, since the captured element left the DOM). Symptom reported:
+  // dragging got stuck / the item kept moving on plain hover after a
+  // click, because a stale pointerup never reliably cleared `dragState`.
+  // Always read CURRENT state (direction, calib, rect) inside the
+  // handler itself rather than trusting values captured at wiring time.
+  function buildStageDom() {
+    stageEl.innerHTML = '';
+    baseImg = document.createElement('img'); baseImg.className = 'rig-sprite'; stageEl.appendChild(baseImg);
+    hairImg = document.createElement('img'); hairImg.className = 'rig-sprite'; stageEl.appendChild(hairImg);
+    itemImg = document.createElement('img'); itemImg.className = 'rig-item-layer'; stageEl.appendChild(itemImg);
+    itemImg.addEventListener('pointerdown', onItemPointerDown);
+    itemImg.addEventListener('pointermove', onItemPointerMove);
+    itemImg.addEventListener('pointerup', onItemPointerUp);
+    itemImg.addEventListener('pointercancel', onItemPointerUp);
+  }
+  buildStageDom();
+
+  // The stage's size comes from CSS `aspect-ratio`, which can resolve
+  // AFTER the first script-driven renderStage() call already measured
+  // `stage.clientWidth` as 0 (before layout has settled) — producing a
+  // permanently 0×0-sized item with nothing to ever correct it, since
+  // nothing else re-triggers a layout pass. A ResizeObserver re-renders
+  // whenever the stage's real on-screen size actually changes (first
+  // layout settling, or a real window resize), so this can't get stuck.
+  let stageResizeTimer = null;
+  new ResizeObserver(() => {
+    if (!AV) return; // fires once immediately on observe(), before init() has assigned AV — nothing to render yet
+    if (stageResizeTimer !== null) clearTimeout(stageResizeTimer);
+    stageResizeTimer = setTimeout(() => { stageResizeTimer = null; renderStage(); }, 50);
+  }).observe(stageEl);
+
+  function preloadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  function currentRenderedRect() {
+    const dims = AV.CANVAS_DIMS[direction];
+    const contentBox = AV.computeContentBox(stageEl, baseImg);
+    return AV.computeRenderedImageRect(contentBox, dims.w, dims.h);
+  }
+
+  let dragState = null; // { type:'item'|'anchor', pointerId, startClientX, startClientY, startOffsetX/Y or startCenterXPct/startYPct, screenScale or renderedRect, before }
+
+  function onItemPointerDown(e) {
+    if (mode !== 'item' || !itemId) return;
+    e.preventDefault();
+    itemImg.setPointerCapture(e.pointerId);
+    itemImg.classList.add('dragging');
+    const dims = AV.CANVAS_DIMS[direction];
+    const renderedRect = currentRenderedRect();
+    const calib = localItemCalib[direction] || DEFAULT_ITEM_CALIB;
+    dragState = {
+      type: 'item', pointerId: e.pointerId,
+      startClientX: e.clientX, startClientY: e.clientY,
+      startOffsetX: calib.offset_x, startOffsetY: calib.offset_y,
+      screenScale: renderedRect.width / dims.w,
+      before: Object.assign({}, calib)
+    };
+  }
+  function onItemPointerMove(e) {
+    if (!dragState || dragState.type !== 'item' || dragState.pointerId !== e.pointerId) return;
+    const dx = (e.clientX - dragState.startClientX) / dragState.screenScale;
+    const dy = (e.clientY - dragState.startClientY) / dragState.screenScale;
+    const c = localItemCalib[direction] || DEFAULT_ITEM_CALIB;
+    c.offset_x = dragState.startOffsetX + dx;
+    c.offset_y = dragState.startOffsetY + dy;
+    localItemCalib[direction] = c;
+    renderStage();
+    markDirtyUI();
+  }
+  function onItemPointerUp(e) {
+    if (!dragState || dragState.type !== 'item' || dragState.pointerId !== e.pointerId) return;
+    itemImg.classList.remove('dragging');
+    const after = Object.assign({}, localItemCalib[direction] || DEFAULT_ITEM_CALIB);
+    if (after.offset_x !== dragState.before.offset_x || after.offset_y !== dragState.before.offset_y) {
+      pushHistory({ kind: 'item', direction, before: dragState.before, after });
+    }
+    dragState = null;
+    syncControlsFromState();
+  }
+
+  function onAnchorPointerDown(markerEl, anchorType, e) {
+    if (mode !== 'anchor' || anchorType !== pickedAnchorType) return;
+    const a = localAnchor[direction];
+    if (!a) return;
+    e.preventDefault();
+    markerEl.setPointerCapture(e.pointerId);
+    markerEl.classList.add('dragging');
+    dragState = {
+      type: 'anchor', pointerId: e.pointerId,
+      startClientX: e.clientX, startClientY: e.clientY,
+      startCenterXPct: a.center_x_pct, startYPct: a.y_pct,
+      renderedRect: currentRenderedRect(),
+      before: Object.assign({}, a)
+    };
+  }
+  function onAnchorPointerMove(e) {
+    if (!dragState || dragState.type !== 'anchor' || dragState.pointerId !== e.pointerId) return;
+    const dxPct = ((e.clientX - dragState.startClientX) / dragState.renderedRect.width) * 100;
+    const dyPct = ((e.clientY - dragState.startClientY) / dragState.renderedRect.height) * 100;
+    const a = localAnchor[direction];
+    if (!a) return;
+    a.center_x_pct = dragState.startCenterXPct + dxPct;
+    a.y_pct = dragState.startYPct + dyPct;
+    renderStage();
+    markDirtyUI();
+  }
+  function onAnchorPointerUp(markerEl, e) {
+    if (!dragState || dragState.type !== 'anchor' || dragState.pointerId !== e.pointerId) return;
+    markerEl.classList.remove('dragging');
+    const after = Object.assign({}, localAnchor[direction]);
+    if (after.center_x_pct !== dragState.before.center_x_pct || after.y_pct !== dragState.before.y_pct) {
+      pushHistory({ kind: 'anchor', direction, before: dragState.before, after });
+    }
+    dragState = null;
+    syncControlsFromState();
+  }
+  function getOrCreateMarker(anchorType) {
+    if (markerEls[anchorType]) return markerEls[anchorType];
+    const m = document.createElement('div');
+    m.title = anchorType;
+    stageEl.appendChild(m);
+    m.addEventListener('pointerdown', (e) => onAnchorPointerDown(m, anchorType, e));
+    m.addEventListener('pointermove', onAnchorPointerMove);
+    m.addEventListener('pointerup', (e) => onAnchorPointerUp(m, e));
+    m.addEventListener('pointercancel', (e) => onAnchorPointerUp(m, e));
+    markerEls[anchorType] = m;
+    return m;
+  }
+
+  async function renderStage() {
+    if (mode === 'pose') return;
+    const dims = AV.CANVAS_DIMS[direction];
+    baseImg.src = '../assets/img/avatar/avatar-' + direction + '.png';
+    if (document.getElementById('tog-hair').checked) {
+      hairImg.src = '../assets/img/hair/hair-short-spiky-dark-brown-' + direction + '.png';
+      hairImg.style.display = '';
+    } else {
+      hairImg.style.display = 'none';
+    }
+
+    // No artificial delay needed here: computeContentBox only reads the
+    // container's own clientWidth/height and computed padding, both valid
+    // as soon as CSS layout has run — neither depends on baseImg finishing
+    // its decode/paint. (An earlier version waited a requestAnimationFrame
+    // tick "just in case" — rAF can stall indefinitely in a backgrounded
+    // tab, the same class of bug fixed in avatar-viewer.js's resize
+    // handler, so don't reintroduce it here either.)
+    const contentBox = AV.computeContentBox(stageEl, baseImg);
+    const renderedRect = AV.computeRenderedImageRect(contentBox, dims.w, dims.h);
+
+    stageEl.querySelectorAll('.rig-debug-line').forEach((el) => el.remove());
+
+    const anchorRows = (rigData && rigData.anchors[bodyType] && rigData.anchors[bodyType][direction]) || {};
+    const showAnchors = document.getElementById('tog-anchors').checked;
+    ANCHOR_TYPES.forEach((at) => {
+      const row = anchorRows[at];
+      const existing = markerEls[at];
+      if (!row || !showAnchors) { if (existing) existing.style.display = 'none'; return; }
+      const m = getOrCreateMarker(at);
+      const isActiveAnchor = mode === 'anchor' && at === pickedAnchorType;
+      m.className = 'rig-marker ' + at + (isActiveAnchor ? ' active-anchor' : '');
+      m.style.display = '';
+      m.style.left = (renderedRect.left + (row.center_x_pct / 100) * renderedRect.width) + 'px';
+      m.style.top = (renderedRect.top + (row.y_pct / 100) * renderedRect.height) + 'px';
+    });
+
+    if (mode === 'item') {
+      if (!itemId) { itemImg.style.display = 'none'; }
+      else {
+        const item = window.QZ_ITEM_CATALOG.find((i) => i.id === itemId);
+        const src = '../' + item.views[direction];
+        if (itemImg.dataset.src !== src) { itemImg.src = src; itemImg.dataset.src = src; }
+        itemImg.style.display = '';
+        const natImg = await preloadImage(src);
+        const calib = localItemCalib[direction] || DEFAULT_ITEM_CALIB;
+        const anchorRow = anchorRows[calib.anchor_type];
+        if (natImg && anchorRow) {
+          const layout = AV.computeItemLayout(renderedRect, dims.w, dims.h, anchorRow, calib, natImg.naturalWidth, natImg.naturalHeight);
+          itemImg.style.left = layout.left + 'px';
+          itemImg.style.top = layout.top + 'px';
+          itemImg.style.width = layout.width + 'px';
+          itemImg.style.height = layout.height + 'px';
+          itemImg.style.transform = layout.rotation ? 'rotate(' + layout.rotation + 'deg)' : 'none';
+
+          if (document.getElementById('tog-debug').checked) {
+            const dbg = document.createElement('div');
+            dbg.className = 'rig-debug-line';
+            dbg.textContent = 'x:' + Math.round(calib.offset_x) + ' y:' + Math.round(calib.offset_y) + ' s:' + calib.scale.toFixed(2) + ' r:' + Math.round(calib.rotation) + '°';
+            dbg.style.left = (layout.left) + 'px';
+            dbg.style.top = (layout.top + layout.height + 4) + 'px';
+            stageEl.appendChild(dbg);
+          }
+        }
+      }
+    } else {
+      itemImg.style.display = 'none';
+    }
+
+    renderDebugPanel();
+  }
+
+  function renderDebugPanel() {
+    const el = document.getElementById('rig-debug');
+    const c = mode === 'anchor' ? (localAnchor[direction] || {}) : (localItemCalib[direction] || DEFAULT_ITEM_CALIB);
+    el.innerHTML =
+      '<b>BODY:</b> ' + bodyType + '<br>' +
+      '<b>DIRECTION:</b> ' + direction + '<br>' +
+      '<b>MODE:</b> ' + mode.toUpperCase() + '<br>' +
+      (mode === 'anchor'
+        ? '<b>ANCHOR:</b> ' + pickedAnchorType + '<br><b>X%:</b> ' + (c.center_x_pct != null ? c.center_x_pct.toFixed(2) : '—') + '<br><b>Y%:</b> ' + (c.y_pct != null ? c.y_pct.toFixed(2) : '—') + '<br><b>W%:</b> ' + (c.width_pct != null ? c.width_pct.toFixed(2) : '—')
+        : '<b>SLOT:</b> ' + slot + '<br><b>ITEM:</b> ' + (itemId || '—') + '<br><b>ANCHOR:</b> ' + c.anchor_type + '<br><b>X:</b> ' + c.offset_x.toFixed(1) + '<br><b>Y:</b> ' + c.offset_y.toFixed(1) + '<br><b>SCALE:</b> ' + c.scale.toFixed(3) + '<br><b>ROTATION:</b> ' + c.rotation.toFixed(1) + '°') +
+      '<br><b>STATE:</b> ' + (isDirty(direction) ? 'Unsaved' : 'Saved');
+  }
+
+  // ================= confirm modal =================
+  function confirmDialog(title, body) {
+    return new Promise((resolve) => {
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-body').textContent = body;
+      const backdrop = document.getElementById('confirm-backdrop');
+      backdrop.classList.add('show');
+      function cleanup(result) {
+        backdrop.classList.remove('show');
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        resolve(result);
+      }
+      const okBtn = document.getElementById('confirm-ok');
+      const cancelBtn = document.getElementById('confirm-cancel');
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
+  // ================= save / reset actions =================
+  function setSaveStatus(text, cls) {
+    const el = document.getElementById('save-status');
+    el.textContent = text; el.className = 'rig-save-status' + (cls ? ' ' + cls : '');
+  }
+
+  async function saveItemDirection(dir) {
+    const c = localItemCalib[dir];
+    const { error } = await client.rpc('admin_save_avatar_rig_item', {
+      p_body_type: bodyType, p_slot: slot, p_item_id: itemId, p_direction: dir,
+      p_anchor_type: c.anchor_type, p_offset_x: c.offset_x, p_offset_y: c.offset_y, p_scale: c.scale, p_rotation: c.rotation
+    });
+    if (error) throw error;
+    savedItemCalib[dir] = Object.assign({}, c);
+  }
+  async function saveAnchorDirection(dir) {
+    const a = localAnchor[dir];
+    if (!a) return;
+    const { error } = await client.rpc('admin_save_avatar_rig_anchor', {
+      p_body_type: bodyType, p_direction: dir, p_anchor_type: pickedAnchorType,
+      p_center_x_pct: a.center_x_pct, p_y_pct: a.y_pct, p_width_pct: a.width_pct
+    });
+    if (error) throw error;
+    savedAnchor[dir] = Object.assign({}, a);
+  }
+
+  document.getElementById('btn-save-direction').addEventListener('click', async () => {
+    setSaveStatus('Saving…');
+    try {
+      if (mode === 'anchor') await saveAnchorDirection(direction);
+      else await saveItemDirection(direction);
+      setSaveStatus('Saved ' + direction + '.', 'ok');
+      markDirtyUI();
+    } catch (err) { setSaveStatus('Save failed: ' + err.message, 'err'); }
+  });
+
+  document.getElementById('btn-save-all-directions').addEventListener('click', async () => {
+    setSaveStatus('Saving all directions…');
+    try {
+      for (const dir of POSES) {
+        if (mode === 'anchor') { if (localAnchor[dir]) await saveAnchorDirection(dir); }
+        else await saveItemDirection(dir);
+      }
+      setSaveStatus('Saved all 4 directions.', 'ok');
+      markDirtyUI();
+    } catch (err) { setSaveStatus('Save failed: ' + err.message, 'err'); }
+  });
+
+  document.getElementById('btn-save-whole-rig').addEventListener('click', async () => {
+    const dirtyDirs = POSES.filter((d) => isDirty(d));
+    if (!dirtyDirs.length) { setSaveStatus('Nothing to save.'); return; }
+    const ok = await confirmDialog('Save Whole Rig', 'You are about to save ' + dirtyDirs.length + ' Avatar Rig change(s) (' + dirtyDirs.join(', ') + '). Continue?');
+    if (!ok) return;
+    setSaveStatus('Saving…');
+    try {
+      for (const dir of dirtyDirs) {
+        if (mode === 'anchor') await saveAnchorDirection(dir);
+        else await saveItemDirection(dir);
+      }
+      setSaveStatus('Saved ' + dirtyDirs.length + ' change(s).', 'ok');
+      markDirtyUI();
+    } catch (err) { setSaveStatus('Save failed: ' + err.message, 'err'); }
+  });
+
+  document.getElementById('btn-reset-saved').addEventListener('click', async () => {
+    const ok = await confirmDialog('Reset to Last Saved', 'Discard unsaved changes to ' + direction + ' and restore the last saved calibration?');
+    if (!ok) return;
+    if (mode === 'anchor') localAnchor[direction] = savedAnchor[direction] ? Object.assign({}, savedAnchor[direction]) : null;
+    else localItemCalib[direction] = Object.assign({}, savedItemCalib[direction] || DEFAULT_ITEM_CALIB);
+    syncControlsFromState(); renderStage();
+    setSaveStatus('Reset ' + direction + ' to last saved.');
+  });
+
+  document.getElementById('btn-reset-factory').addEventListener('click', async () => {
+    if (mode === 'anchor') { setSaveStatus('Factory reset is only available in Item mode.', 'err'); return; }
+    const ok = await confirmDialog('Reset to Factory Default', 'Permanently delete the saved calibration for ' + itemId + ' / ' + direction + ' and fall back to the built-in default? This cannot be undone with Undo.');
+    if (!ok) return;
+    setSaveStatus('Resetting…');
+    try {
+      const { error } = await client.rpc('admin_reset_avatar_rig_item_to_factory', { p_body_type: bodyType, p_slot: slot, p_item_id: itemId, p_direction: direction });
+      if (error) throw error;
+      await loadItemCalibForCurrentItem();
+      history = []; historyIndex = -1; refreshUndoRedoButtons();
+      syncControlsFromState(); renderStage();
+      setSaveStatus('Factory reset ' + direction + '.', 'ok');
+    } catch (err) { setSaveStatus('Reset failed: ' + err.message, 'err'); }
+  });
+
+  // ================= init =================
+  async function init() {
+    if (!window.QZAuth || !window.QZAuth.configured) {
+      setState('<div class="icon">⚠️</div>Accounts aren’t configured on this deployment yet.');
+      return;
+    }
+    const session = await window.QZAuth.getSession();
+    if (!session) {
+      setState('<div class="icon">🔒</div>You need to be logged in to view this page.<br><br><a class="btn btn-chrome-blue" href="../login.html">Log In</a>');
+      return;
+    }
+    const profile = await window.QZAuth.getProfile();
+    if (!profile || !profile.is_admin) {
+      setState('<div class="icon">🚫</div>This page is only available to Quest Zone administrators.');
+      return;
+    }
+    myId = profile.id;
+    client = window.QZAuth.client;
+
+    while (!window.QZAvatarViewer) await new Promise((r) => setTimeout(r, 20));
+    AV = window.QZAvatarViewer;
+
+    rigData = await AV.loadRigData(client);
+
+    // Reveal the panel BEFORE the first render, not after — the stage's
+    // size comes from CSS layout, and a `hidden` ([hidden] -> display:none)
+    // ancestor measures as 0×0 no matter what. The very first
+    // renderStage() call (inside onItemChanged below) needs the real,
+    // visible layout already in place, or it bakes in a 0-sized item with
+    // nothing left to ever correct it afterward.
+    stateEl.hidden = true;
+    contentEl.hidden = false;
+
+    await onItemChanged();
+  }
+  init();
+})();
+</script>
+</body>
+</html>

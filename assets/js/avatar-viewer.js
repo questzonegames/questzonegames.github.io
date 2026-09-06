@@ -36,6 +36,22 @@
 // full turntable viewer. Same renderer/state/equipment data either way;
 // intended for small decorative slots (e.g. a lobby avatar circle) where a
 // rotating/draggable avatar wouldn't make sense.
+//
+// ---- live, admin-calibrated equipment placement ----
+// Equipment placement is no longer baked into a pre-rendered PNG per item.
+// It reads live from Supabase (avatar_rig_anchors + avatar_rig_items — see
+// supabase/migrations/20260906010000_avatar_rig_editor.sql), computed by
+// computeItemLayout() below, which is ALSO the exact function the Admin
+// Zone's Avatar Rig editor uses to preview/drag an item — one formula, one
+// source of truth, so a value an admin saves there is what every player
+// sees here, immediately, with no rebuild step. See docs/AVATAR_RIG.md.
+//
+// window.QZAvatarViewer also exports the pieces the editor needs directly:
+//   loadRigData(client)              -> {anchors, items} (cached, shared)
+//   computeContentBox(container, refImg)
+//   computeRenderedImageRect(contentBox, naturalW, naturalH)
+//   computeItemLayout(renderedRect, canvasW, canvasH, anchor, calib, itemNaturalW, itemNaturalH)
+//   buildHairMaskDataUrl(canvasW, canvasH, itemImg, itemRectCanvasSpace, rotationDeg)
 (function () {
   const HOLD_MS = 5000;         // how long a settled pose stays put
   const TRANSITION_MS = 450;    // smooth turn between adjacent poses
@@ -62,6 +78,19 @@
   // one body that's actually real (male-normal), never a mislabeled one.
   const AVAILABLE_BASES = { 'male-black': true, 'male-pale': true, 'male-dark-tanned': true };
 
+  // Canvas pixel dimensions per direction — must match the real
+  // avatar-<dir>.png files exactly (see docs/avatar-equipment.md); this is
+  // also exactly what avatar_rig_anchors.canvas_w/canvas_h store per row,
+  // fetched fresh from the DB in loadRigData() below. This hardcoded copy
+  // is ONLY the fallback used if that fetch fails outright (no network,
+  // Supabase down) — see rigDataFallback().
+  const CANVAS_DIMS = {
+    front: { w: 636, h: 1514 },
+    back:  { w: 584, h: 1514 },
+    right: { w: 302, h: 1515 },
+    left:  { w: 302, h: 1515 }
+  };
+
   // Hair is its own layer (front/back/left/right, transparent everywhere
   // else — no skin, no clothes baked in) composited on top of the bald
   // base rather than baked into it. That separation is what lets a head
@@ -75,8 +104,7 @@
   // body art (see the alignment work that produced them) — so it can
   // reuse the SAME 'avatar-sprite' class/positioning as the base sprite
   // and land in the right place with no separate per-item position data,
-  // unlike a small equip layer (EQUIP_POSITIONS) which only covers a
-  // fraction of the frame.
+  // unlike a small equip layer which only covers a fraction of the frame.
   const HAIR_DIR = '../assets/img/hair/';
   const AVAILABLE_HAIRSTYLES = { 'male-short-spiky': true };
   function hairSrc(pose, gender, hairStyle, hairColour, prefix) {
@@ -87,30 +115,11 @@
     return (prefix || '') + HAIR_DIR + 'hair-' + style + '-' + (hairColour || 'dark-brown') + '-' + pose + '.png';
   }
 
-  // Single source of truth for where each equip layer sits on the body,
-  // as a percentage of the shared avatar box (top = % of box height,
-  // width = % of box width — same units the CSS `top`/`width` properties
-  // use). This used to be hand-duplicated as CSS in customise.html,
-  // inventory.html AND profile/index.html; they'd already drifted out of
-  // sync (profile/index.html's .avatar-sprite padding didn't match the
-  // other two, silently shifting where gear landed depending which page
-  // you were looking at). Now there's exactly one place this lives.
-  //
-  // Keyed by gender because a differently-proportioned body needs its own
-  // numbers, not a shared guess — 'male' is real today; add a 'female' key
-  // here once that base model exists and every item worn on it will just
-  // pick up correct placement automatically, no per-page hunting required.
-  // `left` here (61%) isn't an eyeballed number: .avatar-sprite is
-  // `width:100%` PLUS `padding:9% 11% 5%` with the default content-box
-  // sizing, so the rendered body/hair image sits centred in a content box
-  // that itself starts 11% in from the container's left edge — i.e. the
-  // body's true visual centre is at 11% + 50% = 61% of the container width,
-  // not 50%. Every equip layer needs this same 61% (measured empirically
-  // against the actual rendered head, then confirmed algebraically) to
-  // land centred on the body instead of ~11% off to one side; it doesn't
-  // vary by slot or pose, only by this shared padding, so it's one constant
-  // rather than per-position data. top/width below are each item's own
-  // fit and DO vary per slot/pose as before.
+  // Legacy percent-of-container positioning — kept ONLY as the very last
+  // fallback for a head item that has neither live rig calibration (DB
+  // fetch failed) nor a pre-baked `frames` PNG. Nothing in the current
+  // catalog should ever actually reach this path; new items should always
+  // get a real avatar_rig_items row via the Avatar Rig editor instead.
   const EQUIP_BODY_CENTER_PCT = 61;
   const EQUIP_POSITIONS = {
     male: {
@@ -132,8 +141,11 @@
   // Three behaviours a head-slot item can declare (item.hairBehavior):
   //   'none'    (default) — item doesn't touch hair at all, hair renders
   //             normally underneath/around it (e.g. a small forehead gem).
-  //   'partial' — hair stays visible except where the item's hairMasks say
-  //             it's physically covered (see applyHairOcclusion below).
+  //   'partial' — hair stays visible except where the item's silhouette
+  //             physically covers it — see buildHairMaskDataUrl below,
+  //             computed live from the item's OWN current calibration
+  //             rather than a pre-baked mask file, so it can never drift
+  //             out of sync with wherever an admin has moved the item.
   //   'full'    — hair is hidden outright (a helmet/hood that encloses the
   //             whole head — no hairstyle's silhouette matters once nothing
   //             of it could show anyway). `hidesHair: true` is still
@@ -180,6 +192,143 @@
     return { targetAngle: a + delta, idx };
   }
 
+  // ================= rig calibration data (live, shared, cached) =================
+  // Fetched once per page load (not once per mounted avatar — a lobby page
+  // could mount several) and shared. avatar_rig_anchors/avatar_rig_items
+  // are both public-SELECT (see the migration) so this works for every
+  // visitor, not just admins — read access isn't privileged, only writing
+  // is (via the admin_* RPCs the Avatar Rig editor calls).
+  let rigDataPromise = null;
+  function rigDataFallback() {
+    // Used only if the DB fetch itself fails (offline, Supabase outage) —
+    // an empty rig means every item falls back further, to its own
+    // `frames` PNG if it has one (see setEquipLayer), so a real outage
+    // degrades to "last known-good pre-baked art" rather than a blank spot.
+    return { anchors: {}, items: {} };
+  }
+  function loadRigData(client) {
+    if (rigDataPromise) return rigDataPromise;
+    if (!client) { rigDataPromise = Promise.resolve(rigDataFallback()); return rigDataPromise; }
+    rigDataPromise = Promise.all([
+      client.from('avatar_rig_anchors').select('*'),
+      client.from('avatar_rig_items').select('*')
+    ]).then(([anchorsRes, itemsRes]) => {
+      if (anchorsRes.error || itemsRes.error) throw (anchorsRes.error || itemsRes.error);
+      const anchors = {};
+      (anchorsRes.data || []).forEach((r) => {
+        anchors[r.body_type] = anchors[r.body_type] || {};
+        anchors[r.body_type][r.direction] = anchors[r.body_type][r.direction] || {};
+        anchors[r.body_type][r.direction][r.anchor_type] = r;
+      });
+      const items = {};
+      (itemsRes.data || []).forEach((r) => {
+        items[r.body_type] = items[r.body_type] || {};
+        items[r.body_type][r.slot] = items[r.body_type][r.slot] || {};
+        items[r.body_type][r.slot][r.item_id] = items[r.body_type][r.slot][r.item_id] || {};
+        items[r.body_type][r.slot][r.item_id][r.direction] = r;
+      });
+      return { anchors, items };
+    }).catch((err) => {
+      console.warn('Avatar rig: could not load calibration data, items will fall back to their own frames PNG if any', err);
+      return rigDataFallback();
+    });
+    return rigDataPromise;
+  }
+
+  // The rendered CONTENT box (in px, relative to `container`'s own
+  // top-left) that object-fit:contain actually draws into — i.e. the box
+  // AFTER .avatar-sprite's padding is applied, BEFORE the image's own
+  // aspect ratio further letterboxes it. Measured live from the real
+  // computed padding rather than assuming the 9%/11%/5% numbers, so this
+  // stays correct even if that CSS ever changes.
+  function computeContentBox(container, refImg) {
+    const cs = getComputedStyle(refImg);
+    return {
+      left: parseFloat(cs.paddingLeft) || 0,
+      top: parseFloat(cs.paddingTop) || 0,
+      width: container.clientWidth,
+      height: container.clientHeight
+    };
+  }
+
+  // Where a canvasW x canvasH image (object-fit:contain) actually lands
+  // within a content box that isn't necessarily the same aspect ratio —
+  // one axis fills exactly, the other is centred with letterboxing.
+  function computeRenderedImageRect(contentBox, naturalW, naturalH) {
+    if (!naturalW || !naturalH || !contentBox.width || !contentBox.height) {
+      return { left: contentBox.left, top: contentBox.top, width: contentBox.width, height: contentBox.height };
+    }
+    const boxAspect = contentBox.width / contentBox.height;
+    const imgAspect = naturalW / naturalH;
+    let renderW, renderH;
+    if (imgAspect > boxAspect) { renderW = contentBox.width; renderH = renderW / imgAspect; }
+    else { renderH = contentBox.height; renderW = renderH * imgAspect; }
+    return {
+      left: contentBox.left + (contentBox.width - renderW) / 2,
+      top: contentBox.top + (contentBox.height - renderH) / 2,
+      width: renderW,
+      height: renderH
+    };
+  }
+
+  // The core placement formula — shared verbatim by the real renderer
+  // (below) and the Admin Zone's Avatar Rig editor. Everything is derived
+  // from measured/DB values, nothing here is an eyeballed constant:
+  //   renderedRect  — computeRenderedImageRect() for THIS direction's base
+  //                   body canvas, i.e. where the head/body actually is
+  //                   on screen right now, in this container, at this size
+  //   canvasW/H     — that direction's real base-art pixel dimensions
+  //   anchor        — {center_x_pct, y_pct, width_pct} row for this
+  //                   direction + the item's chosen anchor_type
+  //   calib         — {offset_x, offset_y, scale, rotation} row for this
+  //                   item + direction (or the all-zero/scale-1 default)
+  //   itemNaturalW/H — the item's own small view image's pixel size
+  // Returns a screen-space rect (px, relative to container) plus rotation.
+  function computeItemLayout(renderedRect, canvasW, canvasH, anchor, calib, itemNaturalW, itemNaturalH) {
+    const screenScale = renderedRect.width / canvasW; // == renderedRect.height/canvasH, contain preserves aspect
+    const anchorCenterXpx = (anchor.center_x_pct / 100) * canvasW;
+    const anchorYpx = (anchor.y_pct / 100) * canvasH;
+    const itemCenterXpx = anchorCenterXpx + (calib.offset_x || 0);
+    const itemBottomYpx = anchorYpx + (calib.offset_y || 0);
+    const refWidthPx = (anchor.width_pct / 100) * canvasW;
+    const itemWidthPx = (calib.scale != null ? calib.scale : 1) * refWidthPx;
+    const aspect = (itemNaturalH && itemNaturalW) ? (itemNaturalH / itemNaturalW) : 1;
+    const itemHeightPx = itemWidthPx * aspect;
+    const itemLeftPx = itemCenterXpx - itemWidthPx / 2;
+    const itemTopPx = itemBottomYpx - itemHeightPx;
+    return {
+      left: renderedRect.left + itemLeftPx * screenScale,
+      top: renderedRect.top + itemTopPx * screenScale,
+      width: itemWidthPx * screenScale,
+      height: itemHeightPx * screenScale,
+      rotation: calib.rotation || 0
+    };
+  }
+
+  // A hair-occlusion mask, built live from the item's OWN current on-canvas
+  // rect (in the base canvas's pixel space, not screen space) — opaque
+  // (show hair) everywhere except where the item is currently drawn, so it
+  // can never point at a stale position after a recalibration. See
+  // hairBehavior:'partial' in inventory-data.js / headHairBehavior above.
+  function buildHairMaskDataUrl(canvasW, canvasH, itemImg, itemRectCanvasSpace, rotationDeg) {
+    const c = document.createElement('canvas');
+    c.width = canvasW; c.height = canvasH;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.save();
+    const cx = itemRectCanvasSpace.left + itemRectCanvasSpace.width / 2;
+    const cy = itemRectCanvasSpace.top + itemRectCanvasSpace.height / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate(((rotationDeg || 0) * Math.PI) / 180);
+    try {
+      ctx.drawImage(itemImg, -itemRectCanvasSpace.width / 2, -itemRectCanvasSpace.height / 2, itemRectCanvasSpace.width, itemRectCanvasSpace.height);
+    } catch (err) { /* image not decoded yet — mask just stays blank/opaque this pass */ }
+    ctx.restore();
+    return c.toDataURL('image/png');
+  }
+
   function mount(container, opts) {
     if (!container) return null;
     const prefix = (opts && opts.basePathPrefix) || '';
@@ -191,7 +340,7 @@
     let currentHairStyle = 'none';
     let currentHairColour = 'dark-brown';
     let headHairMode = 'none';       // 'none' | 'partial' | 'full' — see headHairBehavior above
-    let headHairMasks = null;        // the equipped head item's hairMasks, keyed by pose (only meaningful for 'partial')
+    let currentEquipment = {};       // slotKey -> item, last passed to setAvatarEquipment
     const imgs = defaultFrames(prefix).map((f) => {
       const img = document.createElement('img');
       img.className = 'avatar-sprite';
@@ -239,7 +388,10 @@
     const loadout = document.createElement('div');
     loadout.className = 'avatar-loadout';
     container.appendChild(loadout);
-    const equipLayers = {}; // slotKey -> [img0, img1, img2, img3], aligned with FRAMES
+    const equipLayers = {}; // slotKey -> [img0, img1, img2, img3], aligned with POSES
+    const equipLive = {};   // slotKey -> true if that layer is live-positioned (needs layoutEquipLayer)
+
+    function client() { return window.QZAuth && window.QZAuth.client; }
 
     // ---- single state machine: 'holding' | 'transitioning' | 'dragging' ----
     let phase = 'holding';
@@ -271,9 +423,9 @@
       // head item with hairBehavior 'full' still hides it outright (see
       // headHairMode below — nothing of the hairstyle could show past a
       // helmet/hood anyway); 'partial' leaves the crossfade untouched here
-      // and instead relies on the CSS mask already applied per-image by
-      // applyHeadHairMasks, which clips just the region the item actually
-      // occupies rather than the whole layer.
+      // and instead relies on the live CSS mask already applied per-image
+      // by applyHeadHairMasks, which clips just the region the item
+      // actually occupies rather than the whole layer.
       hairImgs.forEach((img, i) => {
         if (headHairMode === 'full' || img.dataset.broken) { img.style.opacity = '0'; return; }
         if (i === seg) img.style.opacity = String(1 - bOpacity);
@@ -424,64 +576,123 @@
       if (!limgs) return;
       limgs.forEach((img) => img.remove());
       delete equipLayers[slotKey];
+      delete equipLive[slotKey];
     }
-    // Equip layers come in two shapes:
+
+    // Live-position one slot's 4 view images against the current rig data
+    // — called right after the images are created/loaded, and again on
+    // window resize (the container's own on-screen size changed, so the
+    // screen-space rect every item is placed at must be recomputed; the
+    // underlying canvas-space calibration itself hasn't changed at all).
+    function layoutEquipLayer(slotKey, rigData) {
+      const limgs = equipLayers[slotKey];
+      const item = currentEquipment[slotKey];
+      if (!limgs || !item) return;
+      const bodyType = currentGender || 'male';
+      POSES.forEach((pose, i) => {
+        const img = limgs[i];
+        if (!img.dataset.itemNaturalW) return; // not decoded yet — onload handler will call this again
+        const dims = CANVAS_DIMS[pose];
+        const baseImg = imgs[i];
+        const contentBox = computeContentBox(container, baseImg);
+        const renderedRect = computeRenderedImageRect(contentBox, dims.w, dims.h);
+        const anchorRow = rigData.anchors[bodyType] && rigData.anchors[bodyType][pose] && rigData.anchors[bodyType][pose][img.dataset.anchorType];
+        if (!anchorRow) { img.style.opacity = '0'; img.dataset.broken = 'true'; return; }
+        const calibRow = (rigData.items[bodyType] && rigData.items[bodyType][slotKey] && rigData.items[bodyType][slotKey][item.id] && rigData.items[bodyType][slotKey][item.id][pose]) || {};
+        const layout = computeItemLayout(
+          renderedRect, dims.w, dims.h, anchorRow, calibRow,
+          Number(img.dataset.itemNaturalW), Number(img.dataset.itemNaturalH)
+        );
+        img.style.left = layout.left + 'px';
+        img.style.top = layout.top + 'px';
+        img.style.width = layout.width + 'px';
+        img.style.height = layout.height + 'px';
+        img.style.transform = layout.rotation ? 'rotate(' + layout.rotation + 'deg)' : 'none';
+        img.dataset.broken = '';
+      });
+      if (headHairMasks && slotKey === 'head') applyHeadHairMasks();
+    }
+    function layoutAllLiveEquipLayers() {
+      loadRigData(client()).then((rigData) => {
+        Object.keys(equipLive).forEach((slotKey) => { if (equipLive[slotKey]) layoutEquipLayer(slotKey, rigData); });
+      });
+    }
+    // A plain debounced setTimeout, not requestAnimationFrame — rAF is
+    // throttled/paused entirely for a backgrounded/hidden tab in real
+    // browsers, which would leave equipment mispositioned indefinitely
+    // until the tab regains focus. This is a one-off layout recompute,
+    // not a continuous animation, so it has no real need to be paint-
+    // frame-synced anyway.
+    let resizeTimer = null;
+    function onWindowResize() {
+      if (resizeTimer !== null) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { resizeTimer = null; layoutAllLiveEquipLayers(); }, 80);
+    }
+    window.addEventListener('resize', onWindowResize);
+
+    // Equip layers come in three shapes, tried in this order:
     //
-    // - item.frames: a full-canvas PNG per pose, pre-baked at build time to
-    //   already sit at the item's correct on-body pixel position (same
-    //   canvas dimensions as that pose's base body/hair art). Rendered with
-    //   the exact same 'avatar-sprite' box/contain-fit as the base body, so
-    //   it lands correctly by construction — no percentage math to get
-    //   right, and no way for it to drift from the head, because it's
-    //   subject to the identical CSS as the head is. This is what fixed the
-    //   crown floating/offset: EQUIP_POSITIONS's percent-of-container
-    //   anchoring couldn't be made to agree with .avatar-sprite's own
-    //   padding-driven centering across every rendering context, so the
-    //   item now shares that positioning outright instead of approximating
-    //   it. Preferred for anything anchored to the head/body silhouette.
-    // - item.views: a small, cropped per-pose image positioned via
-    //   EQUIP_POSITIONS (top/width percent of the equip container) — still
-    //   supported for slots that aren't full-canvas (a necklace, a ring)
-    //   where a tiny fixed-size icon genuinely is simplest.
+    // - LIVE calibration (item.views + a real avatar_rig_items row, or
+    //   even just the fallback defaults if no row exists yet): positioned
+    //   in real screen pixels every layout pass via computeItemLayout, so
+    //   an Avatar Rig editor save takes effect for every player instantly.
+    //   This is the path every current and future item should use.
+    // - item.frames: a full-canvas PNG per pose, pre-baked to already sit
+    //   at a fixed position (same canvas size as that pose's base body
+    //   art). Used ONLY if the rig-data fetch itself fails (offline,
+    //   Supabase outage) — a real fallback to "last known-good art",
+    //   never the normal path anymore.
+    // - item.views + the old EQUIP_POSITIONS percentages: last-resort,
+    //   for a slot that isn't full-canvas and has no rig row and no
+    //   frames either.
     function setEquipLayer(slotKey, item) {
       clearEquipLayer(slotKey);
-      const frames = item.frames;
-      const limgs = POSES.map((pose) => {
-        const img = document.createElement('img');
-        // both a slot-general class (avatar-equip-head) and a per-
-        // direction one (avatar-equip-head-front/-right/-back/-left) —
-        // most gear can share one position across all 4 views, but an
-        // item can also carry its own per-direction scale/offset/tilt
-        // via the more specific class when a single placement doesn't
-        // fit every angle (e.g. side views needing a narrower crown)
-        const directionClass = 'avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
-        if (frames) {
-          img.className = 'avatar-sprite avatar-equip-frame ' + directionClass;
-          // avatar-sprite's own filter is tuned for the base body's blue
-          // glow — equip art keeps its distinct gold-ish glow instead
-          img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
-          img.src = prefix + frames[pose];
-        } else {
-          img.className = 'avatar-equip-layer ' + directionClass;
-          // overrides the CSS rule's left:50% — see EQUIP_BODY_CENTER_PCT
-          img.style.left = EQUIP_BODY_CENTER_PCT + '%';
-          const pos = equipPosition(currentGender, slotKey, pose);
-          if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
-          img.src = prefix + item.views[pose];
-        }
-        img.alt = '';
-        img.setAttribute('aria-hidden', 'true');
-        img.decoding = 'async';
-        img.draggable = false;
-        img.style.opacity = '0';
-        img.addEventListener('error', () => { img.style.opacity = '0'; img.dataset.broken = 'true'; });
-        container.appendChild(img);
-        return img;
+      const bodyType = currentGender || 'male';
+      let rigLooksAvailable = false;
+      loadRigData(client()).then((rigData) => {
+        rigLooksAvailable = !!(rigData.anchors[bodyType] && Object.keys(rigData.anchors[bodyType]).length);
+        const useFrames = !rigLooksAvailable && item.frames;
+        const limgs = POSES.map((pose) => {
+          const img = document.createElement('img');
+          const directionClass = 'avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
+          if (useFrames) {
+            img.className = 'avatar-sprite avatar-equip-frame ' + directionClass;
+            img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
+            img.src = prefix + item.frames[pose];
+          } else if (item.views) {
+            img.className = 'avatar-equip-live ' + directionClass;
+            img.style.position = 'absolute';
+            img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
+            img.dataset.anchorType = item.anchorType || 'skull';
+            img.src = prefix + item.views[pose];
+            img.addEventListener('load', () => {
+              img.dataset.itemNaturalW = String(img.naturalWidth);
+              img.dataset.itemNaturalH = String(img.naturalHeight);
+              loadRigData(client()).then((rd) => layoutEquipLayer(slotKey, rd));
+            });
+          } else {
+            // no views art at all — nothing to place; the loadout chip
+            // (see setAvatarEquipment) is this item's only representation
+            img.style.display = 'none';
+          }
+          img.alt = '';
+          img.setAttribute('aria-hidden', 'true');
+          img.decoding = 'async';
+          img.draggable = false;
+          img.style.opacity = '0';
+          img.addEventListener('error', () => { img.style.opacity = '0'; img.dataset.broken = 'true'; });
+          container.appendChild(img);
+          return img;
+        });
+        equipLayers[slotKey] = limgs;
+        equipLive[slotKey] = !useFrames && !!item.views;
+        if (!useFrames && item.views) layoutEquipLayer(slotKey, rigData);
+        render();
       });
-      equipLayers[slotKey] = limgs;
     }
     function setAvatarEquipment(slots) {
       const items = slots || {};
+      currentEquipment = items;
       loadout.innerHTML = '';
       SLOT_ORDER.forEach((slotKey) => {
         const item = items[slotKey];
@@ -499,48 +710,71 @@
       });
       const headItem = items.head;
       headHairMode = headHairBehavior(headItem);
-      headHairMasks = (headHairMode === 'partial' && headItem && headItem.hairMasks) ? headItem.hairMasks : null;
+      headHairMasks = headHairMode === 'partial' ? true : null;
       applyHeadHairMasks();
       render(); // reflect the change immediately, don't wait for the next tick
     }
 
     // Applies (or clears) the equipped head item's per-pose hair-occlusion
-    // mask to each of the 4 hair images — a real alpha mask (mask-mode:
-    // alpha), not a colour-key or a crop hack, generated once per head item
-    // from that item's own art at its actual on-head position/scale (see
-    // the tooling that produced assets/img/equipment/head/masks/). Sizing
-    // it to the same content-box/contain-fit the hair image itself renders
-    // with (mask-origin/-clip: content-box, mask-size: contain) is what
-    // keeps the mask aligned to the hair pixels it's meant to cover instead
-    // of the element's raw box, since .avatar-sprite's padding means those
-    // aren't the same thing. Every property is set inline here rather than
-    // in a page's CSS so there's exactly one place this logic lives (same
-    // reasoning as EQUIP_POSITIONS above), and it stays correct across a
-    // hairstyle swap for free — the mask lives on the pose's <img> itself,
-    // independent of which hairstyle src that image currently points at.
+    // mask to each of the 4 hair images. When the head item is live-
+    // positioned (the normal path now), the mask is generated fresh from
+    // that item's OWN current on-canvas rect via buildHairMaskDataUrl —
+    // it can never point at a stale position, because it's derived from
+    // the exact same layout the item itself was just drawn at. Falls back
+    // to a pre-baked hairMasks[pose] file only for the legacy `frames`
+    // fallback path (rig data unavailable).
+    let headHairMasks = null; // true = live-generate; else a legacy {front,right,...} map; else null = no mask
     function applyHeadHairMasks() {
+      const headLayer = equipLayers.head;
       hairImgs.forEach((img, i) => {
         const pose = POSES[i];
-        const maskUrl = headHairMasks && headHairMasks[pose];
-        if (!maskUrl) {
-          img.style.maskImage = 'none';
-          img.style.webkitMaskImage = 'none';
+        if (!headHairMasks) { img.style.maskImage = 'none'; img.style.webkitMaskImage = 'none'; return; }
+
+        if (headHairMasks === true && headLayer && equipLive.head) {
+          const itemImg = headLayer[i];
+          const dims = CANVAS_DIMS[pose];
+          if (!itemImg || !itemImg.dataset.itemNaturalW || !dims) { img.style.maskImage = 'none'; img.style.webkitMaskImage = 'none'; return; }
+          const bodyType = currentGender || 'male';
+          loadRigData(client()).then((rigData) => {
+            const item = currentEquipment.head;
+            const anchorRow = rigData.anchors[bodyType] && rigData.anchors[bodyType][pose] && rigData.anchors[bodyType][pose][itemImg.dataset.anchorType];
+            if (!anchorRow || !item) return;
+            const calibRow = (rigData.items[bodyType] && rigData.items[bodyType].head && rigData.items[bodyType].head[item.id] && rigData.items[bodyType].head[item.id][pose]) || {};
+            // rect in CANVAS-SPACE (not screen space) — same maths as
+            // computeItemLayout's inner steps, just without the final
+            // screenScale multiply, since the mask canvas IS the base
+            // canvas's own pixel space.
+            const anchorCenterXpx = (anchorRow.center_x_pct / 100) * dims.w;
+            const anchorYpx = (anchorRow.y_pct / 100) * dims.h;
+            const centerX = anchorCenterXpx + (calibRow.offset_x || 0);
+            const bottomY = anchorYpx + (calibRow.offset_y || 0);
+            const refWidthPx = (anchorRow.width_pct / 100) * dims.w;
+            const widthPx = (calibRow.scale != null ? calibRow.scale : 1) * refWidthPx;
+            const aspect = Number(itemImg.dataset.itemNaturalH) / Number(itemImg.dataset.itemNaturalW);
+            const heightPx = widthPx * aspect;
+            const rectCanvasSpace = { left: centerX - widthPx / 2, top: bottomY - heightPx, width: widthPx, height: heightPx };
+            const dataUrl = buildHairMaskDataUrl(dims.w, dims.h, itemImg, rectCanvasSpace, calibRow.rotation || 0);
+            const url = 'url(' + JSON.stringify(dataUrl) + ')';
+            img.style.maskImage = url; img.style.webkitMaskImage = url;
+            img.style.maskMode = 'alpha'; img.style.maskRepeat = 'no-repeat'; img.style.webkitMaskRepeat = 'no-repeat';
+            img.style.maskPosition = 'center'; img.style.webkitMaskPosition = 'center';
+            img.style.maskSize = 'contain'; img.style.webkitMaskSize = 'contain';
+            img.style.maskOrigin = 'content-box'; img.style.webkitMaskOrigin = 'content-box';
+            img.style.maskClip = 'content-box'; img.style.webkitMaskClip = 'content-box';
+          });
           return;
         }
+
+        // legacy pre-baked mask file fallback
+        const maskUrl = headHairMasks && headHairMasks !== true && headHairMasks[pose];
+        if (!maskUrl) { img.style.maskImage = 'none'; img.style.webkitMaskImage = 'none'; return; }
         const url = 'url(' + JSON.stringify(prefix + maskUrl) + ')';
-        img.style.maskImage = url;
-        img.style.webkitMaskImage = url;
-        img.style.maskMode = 'alpha';
-        img.style.maskRepeat = 'no-repeat';
-        img.style.webkitMaskRepeat = 'no-repeat';
-        img.style.maskPosition = 'center';
-        img.style.webkitMaskPosition = 'center';
-        img.style.maskSize = 'contain';
-        img.style.webkitMaskSize = 'contain';
-        img.style.maskOrigin = 'content-box';
-        img.style.webkitMaskOrigin = 'content-box';
-        img.style.maskClip = 'content-box';
-        img.style.webkitMaskClip = 'content-box';
+        img.style.maskImage = url; img.style.webkitMaskImage = url;
+        img.style.maskMode = 'alpha'; img.style.maskRepeat = 'no-repeat'; img.style.webkitMaskRepeat = 'no-repeat';
+        img.style.maskPosition = 'center'; img.style.webkitMaskPosition = 'center';
+        img.style.maskSize = 'contain'; img.style.webkitMaskSize = 'contain';
+        img.style.maskOrigin = 'content-box'; img.style.webkitMaskOrigin = 'content-box';
+        img.style.maskClip = 'content-box'; img.style.webkitMaskClip = 'content-box';
       });
     }
 
@@ -579,18 +813,16 @@
       });
       // any already-equipped gear needs repositioning too — a body swap
       // (e.g. switching Gender on the Customise screen) can change which
-      // EQUIP_POSITIONS numbers apply, and worn items shouldn't keep
-      // sitting at the previous body's placement
+      // body_type row of rig data applies
       Object.keys(equipLayers).forEach((slotKey) => {
+        if (equipLive[slotKey]) return; // layoutAllLiveEquipLayers (below) covers these
         equipLayers[slotKey].forEach((img, i) => {
-          // frame-based layers (see setEquipLayer) are full-canvas and
-          // positioned entirely by the 'avatar-sprite' class itself, same
-          // as the base body — nothing here to recompute for them
-          if (img.classList.contains('avatar-equip-frame')) return;
+          if (img.classList.contains('avatar-equip-frame')) return; // full-canvas, positions itself
           const pos = equipPosition(currentGender, slotKey, POSES[i]);
           if (pos) { img.style.top = pos.top + '%'; img.style.width = pos.width + '%'; }
         });
       });
+      layoutAllLiveEquipLayers();
       // and the current hairstyle, if any, needs its art path re-resolved
       // against the new gender too
       refreshHair();
@@ -600,6 +832,7 @@
       destroyed = true;
       stop();
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('resize', onWindowResize);
       container.removeEventListener('pointerdown', onPointerDown);
       container.removeEventListener('pointermove', onPointerMove);
       container.removeEventListener('pointerup', onPointerUp);
@@ -617,5 +850,12 @@
     return { destroy, setAvatarEquipment, setBaseAppearance, setHairstyle, next, prev };
   }
 
-  window.QZAvatarViewer = { mount };
+  window.QZAvatarViewer = {
+    mount,
+    // exported so the Admin Zone's Avatar Rig editor uses the EXACT same
+    // math as the real renderer above — one source of truth, see the
+    // file-level comment.
+    loadRigData, computeContentBox, computeRenderedImageRect, computeItemLayout, buildHairMaskDataUrl,
+    CANVAS_DIMS, POSES
+  };
 })();
