@@ -494,6 +494,16 @@ img { max-width: 100%; display: block; }
   filter: grayscale(1) brightness(1.9) contrast(0.9);
   transition: filter 0.18s ease;
 }
+/* custom vector icons (Home / Guidebook / Highscores / Shop) sit in the
+   same .ic span as the emoji placeholders still used elsewhere — size
+   them to match instead of relying on font-size, which only affects
+   text/emoji glyphs. */
+.site-nav a .ic svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: currentColor;
+}
 .site-nav a:hover .ic { filter: grayscale(1) brightness(2.4) contrast(0.95) drop-shadow(0 0 4px rgba(130,170,255,0.6)); }
 
 /* ---------- layout rows ---------- */
