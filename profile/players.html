@@ -60,6 +60,73 @@
     box-shadow: inset 0 1px 0 rgba(200,220,255,0.16), 0 0 0 4px rgba(59,130,246,0.16), 0 0 18px rgba(70,140,255,0.25);
   }
 
+  /* ---- Top 3 Total Level showcase ---- */
+  .players-top3-wrap { max-width: 900px; margin: 0 auto 34px; }
+  .players-top3-heading {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin: 0 0 16px; font-family: 'Orbitron', sans-serif; font-weight: 700;
+    font-size: 12.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .players-top3 {
+    display: flex; align-items: flex-end; justify-content: center;
+    gap: clamp(10px, 2.4vw, 22px); flex-wrap: wrap;
+  }
+  .top3-card {
+    flex: 1 1 180px; max-width: 220px; min-width: 150px;
+    display: flex; flex-direction: column; align-items: center;
+    text-decoration: none; color: inherit;
+    padding: 16px 14px 18px; border-radius: 14px;
+    border: 1.5px solid var(--border-strong);
+    background: linear-gradient(180deg, rgba(140,170,255,0.08) 0%, rgba(140,170,255,0) 30%, #080c18 100%);
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .top3-card:hover { transform: translateY(-2px); }
+  .top3-card[data-rank="1"] { border-color: rgba(255,207,77,0.55); box-shadow: 0 0 22px rgba(255,207,77,0.16); order: 2; }
+  .top3-card[data-rank="2"] { border-color: rgba(201,211,224,0.5); box-shadow: 0 0 16px rgba(201,211,224,0.12); order: 1; }
+  .top3-card[data-rank="3"] { border-color: rgba(217,143,74,0.5); box-shadow: 0 0 16px rgba(217,143,74,0.12); order: 3; }
+  .top3-card[data-rank="1"]:hover { border-color: #ffcf4d; }
+  .top3-card[data-rank="2"]:hover { border-color: #c9d3e0; }
+  .top3-card[data-rank="3"]:hover { border-color: #d98f4a; }
+  .top3-crown { font-size: 20px; line-height: 1; margin-bottom: 6px; filter: drop-shadow(0 0 6px rgba(0,0,0,0.5)); }
+  .top3-rank-label {
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 12px;
+    letter-spacing: 0.08em; margin-bottom: 10px;
+  }
+  .top3-card[data-rank="1"] .top3-rank-label { color: #ffcf4d; text-shadow: 0 0 10px rgba(255,207,77,0.5); }
+  .top3-card[data-rank="2"] .top3-rank-label { color: #cdd6e4; text-shadow: 0 0 10px rgba(200,215,235,0.4); }
+  .top3-card[data-rank="3"] .top3-rank-label { color: #e2934f; text-shadow: 0 0 10px rgba(217,143,74,0.4); }
+  .top3-avatar-frame {
+    position: relative; width: 100%; aspect-ratio: 3 / 4; border-radius: 10px;
+    overflow: hidden; margin-bottom: 12px;
+    border: 2px solid transparent;
+    background:
+      radial-gradient(ellipse at 50% 100%, rgba(70,140,255,0.2), transparent 60%),
+      linear-gradient(180deg, #060b16 0%, #030509 100%) padding-box,
+      var(--chrome-frame-soft) border-box;
+  }
+  .top3-avatar-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .top3-name {
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14.5px;
+    color: #fff; text-align: center; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .top3-card:hover .top3-name { color: var(--blue-light); }
+  .top3-level {
+    margin-top: 4px; font-size: 12px; color: var(--text-dim);
+    text-align: center;
+  }
+  .top3-level strong { color: var(--text); font-weight: 700; }
+  .top3-banned-badge {
+    margin-top: 6px; display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 6px;
+    font-family: 'Orbitron', sans-serif; font-size: 8.5px; letter-spacing: 0.05em; text-transform: uppercase;
+    background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.45);
+  }
+  @media (max-width: 560px) {
+    .top3-card[data-rank] { order: initial; max-width: 260px; flex-basis: 100%; }
+  }
+
   /* ---- states (empty prompt / no results / loading) ---- */
   .players-state {
     max-width: 480px; margin: 40px auto; text-align: center;
@@ -161,6 +228,11 @@
 
       <div class="players-search-wrap">
         <input type="text" id="players-search-input" placeholder="Search players..." autocomplete="off" spellcheck="false" aria-label="Search players">
+      </div>
+
+      <div class="players-top3-wrap" id="players-top3-wrap" hidden>
+        <div class="players-top3-heading">🏆 Top 3 Players by Total Level 🏆</div>
+        <div class="players-top3" id="players-top3"></div>
       </div>
 
       <div id="players-state" class="players-state">
@@ -267,6 +339,49 @@
     }
     debounceTimer = setTimeout(() => runSearch(q), DEBOUNCE_MS);
   });
+
+  // ===== Top 3 Total Level showcase =====
+  // Backed by get_top_total_level_players() (see supabase/migrations/
+  // 20260906120000_top_total_level_players.sql), which follows the exact
+  // same account-visibility rules as search_public_players() above
+  // (permanently banned / hidden / test accounts excluded; temporarily
+  // banned accounts included, with is_banned so the same badge can show)
+  // and computes Total Level generically from every public.games row —
+  // nothing here hardcodes a skill list, so it keeps working as more
+  // skills are added. Clicking a card opens the same public read-only
+  // profile as a normal search result (profile/index.html?player=...).
+  const CROWNS = { 1: '👑', 2: '🥈', 3: '🥉' };
+
+  function renderTop3(rows) {
+    const wrap = document.getElementById('players-top3-wrap');
+    const el = document.getElementById('players-top3');
+    if (!rows || !rows.length) { wrap.hidden = true; return; }
+    el.innerHTML = rows.map((row) => {
+      const pfp = window.QZProfilePicture ? window.QZProfilePicture.imgHtml(row.equipped_profile_picture_id) : '';
+      const badge = row.is_banned ? '<span class="top3-banned-badge">Temporarily Banned</span>' : '';
+      return '<a class="top3-card" data-rank="' + row.rank + '" href="index.html?player=' + encodeURIComponent(row.username) + '">' +
+        '<span class="top3-crown">' + (CROWNS[row.rank] || '') + '</span>' +
+        '<span class="top3-rank-label">#' + row.rank + '</span>' +
+        '<span class="top3-avatar-frame">' + pfp + '</span>' +
+        '<span class="top3-name">' + escapeHtml(row.username) + '</span>' +
+        '<span class="top3-level">Total Level: <strong>' + row.total_level + '</strong></span>' +
+        badge +
+      '</a>';
+    }).join('');
+    wrap.hidden = false;
+  }
+
+  async function loadTop3() {
+    if (!window.QZAuth || !window.QZAuth.configured || !window.QZAuth.client) return;
+    const [{ data, error }] = await Promise.all([
+      window.QZAuth.client.rpc('get_top_total_level_players', { p_limit: 3 }),
+      window.QZProfilePicture ? window.QZProfilePicture.ready() : Promise.resolve()
+    ]);
+    if (error) { console.warn('Players: could not load Top 3', error); return; }
+    renderTop3(data);
+  }
+
+  loadTop3();
 })();
 </script>
 </body>

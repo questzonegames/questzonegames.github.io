@@ -34,7 +34,8 @@
 -- 20260906080000_email_verification.sql, and
 -- 20260906090000_profile_pictures.sql,
 -- 20260906100000_hiscores_profile_picture.sql, and
--- 20260906110000_agility_driving_skills.sql).
+-- 20260906110000_agility_driving_skills.sql, and
+-- 20260906120000_top_total_level_players.sql).
 -- As of 06/09/2026 this list was cross-checked against `supabase migration
 -- list` (every local migration file's timestamp matches an applied remote
 -- migration, zero drift) and every function/table below was folded in from
@@ -2503,4 +2504,50 @@ from public.profiles p
 cross join public.games g
 where g.game_key in ('agility', 'driving')
 on conflict (user_id, game_key) do nothing;
+
+-- ============================================================================
+-- Players page — Top 3 Total Level showcase (see supabase/migrations/
+-- 20260906120000_top_total_level_players.sql).
+-- ============================================================================
+
+create or replace function public.get_top_total_level_players(p_limit int default 3)
+returns table (
+  rank bigint,
+  user_id uuid,
+  username text,
+  total_level bigint,
+  total_xp bigint,
+  is_banned boolean,
+  equipped_profile_picture_id text
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with totals as (
+    select
+      p.id as uid,
+      p.username as uname,
+      (p.banned_until is not null and p.banned_until > now()) as banned,
+      p.equipped_profile_picture_id as pfp,
+      (select count(*) from public.games)
+        + coalesce(sum(least(gp.level, 99) - 1) filter (where gp.user_id is not null), 0) as tlevel,
+      coalesce(sum(gp.xp) filter (where gp.user_id is not null), 0)::bigint as txp
+    from public.profiles p
+    left join public.game_progress gp on gp.user_id = p.id
+    where not p.banned_permanently
+      and not p.is_hidden
+      and (not p.is_test_account or public.is_admin())
+    group by p.id, p.username, p.banned_until, p.equipped_profile_picture_id
+  )
+  select
+    row_number() over (order by tlevel desc, txp desc, uname asc) as rank,
+    uid, uname, tlevel, txp, banned, pfp
+  from totals
+  order by tlevel desc, txp desc, uname asc
+  limit least(greatest(coalesce(p_limit, 3), 1), 10);
+$$;
+
+grant execute on function public.get_top_total_level_players(int) to anon, authenticated;
 
