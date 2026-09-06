@@ -32,6 +32,17 @@
     });
   }
 
+  // site.js wires up the .chrome-sweep glint span for every .btn-chrome-dark/
+  // .btn-chrome-blue on the page, but it does that once on DOMContentLoaded —
+  // before this async function has replaced the header with these buttons.
+  // Add the span here too so Profile/Admin Zone/Logout get the same
+  // hover shimmer as the buttons that exist in the page's initial markup.
+  function addChromeSweep(btn) {
+    const sweep = document.createElement('span');
+    sweep.className = 'chrome-sweep';
+    btn.appendChild(sweep);
+  }
+
   function renderLoggedIn(actions, prefix, profile) {
     actions.innerHTML = '';
 
@@ -40,6 +51,7 @@
     profileBtn.className = 'btn btn-chrome-dark';
     profileBtn.textContent = '👤 ' + (profile ? profile.username : 'Account');
     actions.appendChild(profileBtn);
+    addChromeSweep(profileBtn);
 
     if (profile && profile.is_admin) {
       const adminBtn = document.createElement('a');
@@ -47,6 +59,7 @@
       adminBtn.className = 'btn btn-chrome-blue';
       adminBtn.textContent = '🛠 Admin Zone';
       actions.appendChild(adminBtn);
+      addChromeSweep(adminBtn);
     }
 
     const logoutBtn = document.createElement('button');
@@ -59,6 +72,7 @@
       location.href = prefix + 'index.html';
     });
     actions.appendChild(logoutBtn);
+    addChromeSweep(logoutBtn);
   }
 
   async function run() {

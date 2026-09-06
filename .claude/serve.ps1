@@ -1,5 +1,5 @@
 $root = (Resolve-Path "$PSScriptRoot\..").Path
-$port = 8421
+$port = if ($env:PORT) { $env:PORT } else { 8421 }
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
 $listener.Start()

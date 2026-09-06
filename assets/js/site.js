@@ -34,34 +34,12 @@
     });
   });
 
-  // ---- chrome button lens flare (Profile / Signup / Login) ----
-  // A small sparkle on the frame that drifts opposite the cursor —
-  // giving the illusion of a reflective surface reacting to viewpoint.
-  // CSS handles the actual easing (.flare has a transition), this just
-  // sets the target transform on mousemove.
+  // ---- chrome button shimmer sweep (Profile / Admin Zone / Signup / Login) ----
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.querySelectorAll('.btn-chrome-dark, .btn-chrome-blue').forEach((btn) => {
     const sweep = document.createElement('span');
     sweep.className = 'chrome-sweep';
-    const flare = document.createElement('span');
-    flare.className = 'flare';
     btn.appendChild(sweep);
-    btn.appendChild(flare);
-
-    if (reduceMotion) return; // keep the flare static, skip the tracking
-
-    const maxDrift = 9; // px — stays near the corner, never wanders into the center
-    btn.addEventListener('mousemove', (e) => {
-      const r = btn.getBoundingClientRect();
-      const px = ((e.clientX - r.left) / r.width) * 2 - 1;   // -1..1
-      const py = ((e.clientY - r.top) / r.height) * 2 - 1;   // -1..1
-      const dx = -px * maxDrift; // inverse — cursor right, flare drifts left
-      const dy = -py * maxDrift; // cursor down, flare drifts up
-      flare.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    });
-    btn.addEventListener('mouseleave', () => {
-      flare.style.transform = 'translate(-50%, -50%)';
-    });
   });
 
   // ---- homepage game-selection grids (Total Level Games / Arcade Games) ----
@@ -174,23 +152,19 @@
     });
   }
 
-  // ---- game-card interaction: same tilt / cursor-light / shimmer /
-  // flare system as the Profile dashboard tiles, so it's genuinely one
-  // shared component family. ----
+  // ---- game-card interaction: tilt / cursor-light / shimmer, same
+  // shared component family as the Profile dashboard tiles. ----
   document.querySelectorAll('.game-card').forEach((card) => {
     const light = document.createElement('span');
     light.className = 'tile-light';
     const sweep = document.createElement('span');
     sweep.className = 'tile-shimmer';
-    const flare = document.createElement('span');
-    flare.className = 'flare';
     card.appendChild(light);
     card.appendChild(sweep);
-    card.appendChild(flare);
 
     if (reduceMotion) return;
 
-    const maxTilt = 3, maxDrift = 6;
+    const maxTilt = 3;
     card.addEventListener('mousemove', (e) => {
       const r = card.getBoundingClientRect();
       const px = (e.clientX - r.left) / r.width;
@@ -200,13 +174,9 @@
       card.style.transform = `perspective(600px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
       card.style.setProperty('--mx', (px * 100) + '%');
       card.style.setProperty('--my', (py * 100) + '%');
-      const dx = -(px * 2 - 1) * maxDrift;
-      const dy = -(py * 2 - 1) * maxDrift;
-      flare.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     });
     card.addEventListener('mouseleave', () => {
       card.style.transform = 'perspective(600px) rotateX(0deg) rotateY(0deg) scale(1)';
-      flare.style.transform = 'translate(-50%, -50%)';
     });
   });
 

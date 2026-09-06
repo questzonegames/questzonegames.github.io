@@ -305,7 +305,21 @@ img { max-width: 100%; display: block; }
     0 0 34px rgba(70,120,255,0.75);
 }
 
-.btn-chrome-dark:active, .btn-chrome-blue:active { transform: scale(0.98); }
+/* tactile press: same "sinks in, springs back" feel as the nav tabs */
+.btn-chrome-dark:active, .btn-chrome-blue:active {
+  transform: translateY(1px) scale(0.97);
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.btn-chrome-dark:active {
+  box-shadow:
+    inset 0 2px 6px rgba(0,0,0,0.75),
+    inset 0 0 10px rgba(90,120,220,0.25);
+}
+.btn-chrome-blue:active {
+  box-shadow:
+    inset 0 2px 6px rgba(0,10,40,0.8),
+    inset 0 0 12px rgba(59,130,246,0.4);
+}
 
 /* glossy diagonal shimmer — light sweeping across glass/chrome on hover */
 .chrome-sweep {
@@ -337,38 +351,6 @@ img { max-width: 100%; display: block; }
   to { left: 140%; }
 }
 
-/* interactive lens flare — a small sparkle on the frame that drifts
-   opposite the cursor (site.js drives its position); dim at rest,
-   brightens on hover */
-.flare {
-  position: absolute;
-  top: 22%;
-  left: 18%;
-  width: 1px;
-  height: 1px;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 3;
-  opacity: 0.3;
-  transition: transform 0.35s cubic-bezier(0.22, 0.7, 0.3, 1), opacity 0.3s ease;
-}
-.flare::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(190,220,255,0.5) 35%, rgba(140,170,255,0) 72%);
-}
-.flare::after {
-  content: '';
-  position: absolute;
-  inset: -13px;
-  background:
-    linear-gradient(90deg, transparent 46%, rgba(255,255,255,0.85) 49.5%, rgba(255,255,255,0.85) 50.5%, transparent 54%),
-    linear-gradient(0deg, transparent 46%, rgba(255,255,255,0.85) 49.5%, rgba(255,255,255,0.85) 50.5%, transparent 54%);
-}
-.btn-chrome-dark:hover .flare, .btn-chrome-blue:hover .flare { opacity: 1; }
-
 .btn-disabled {
   background: linear-gradient(180deg, #23283a, #14161f);
   color: var(--text-faint);
@@ -379,7 +361,11 @@ img { max-width: 100%; display: block; }
 }
 .btn-disabled::before { display: none; }
 
-/* ---------- nav ---------- */
+/* ---------- nav ----------
+   Same AAA-chrome family as .btn-chrome-blue/.chrome-sweep (header
+   Profile/Admin Zone/Signup/Login), retuned into a cosmic-blue gunmetal
+   control strip: deep-space base, brushed-titanium bevels, a blue/violet
+   reflection band standing in for a starlit sky catching polished metal. */
 .site-nav {
   position: relative;
   z-index: 1;
@@ -391,16 +377,17 @@ img { max-width: 100%; display: block; }
   display: flex;
   margin: 0;
   padding: 0;
-  /* dark charcoal metallic strip: gradient body, silver outer border,
-     a soft top highlight and inner shadow for a beveled/glossy edge */
-  background: linear-gradient(180deg, #34363c 0%, #232428 8%, #1c1d21 50%, #131418 100%);
-  border: 1px solid rgba(190,196,210,0.3);
+  /* deep-space gunmetal strip with a faint blue cast, silver-blue outer
+     rim, soft top highlight and inner shadow for a beveled hull-plate edge */
+  background: linear-gradient(180deg, #262e48 0%, #171d33 8%, #101527 50%, #080a16 100%);
+  border: 1px solid rgba(130,160,255,0.28);
   border-radius: 6px;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.14),
-    inset 0 -1px 0 rgba(0,0,0,0.5),
-    inset 0 6px 10px -6px rgba(0,0,0,0.5),
-    0 3px 8px rgba(0,0,0,0.4);
+    inset 0 1px 0 rgba(190,210,255,0.16),
+    inset 0 -1px 0 rgba(0,0,0,0.55),
+    inset 0 6px 10px -6px rgba(0,0,0,0.55),
+    0 3px 8px rgba(0,0,0,0.45),
+    0 0 22px rgba(50,90,220,0.16);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -409,11 +396,23 @@ img { max-width: 100%; display: block; }
 
 .site-nav li {
   flex: 1 1 0;
-  border-right: 1px solid rgba(255,255,255,0.08);
+  position: relative;
+  border-right: 1px solid rgba(0,0,4,0.55);
+}
+.site-nav li::after {
+  /* hairline separator highlight, like the edge of an adjacent hull plate */
+  content: "";
+  position: absolute;
+  top: 4px; bottom: 4px; right: -1px;
+  width: 1px;
+  background: rgba(160,190,255,0.1);
+  pointer-events: none;
 }
 .site-nav li:last-child { border-right: none; }
+.site-nav li:last-child::after { display: none; }
 
 .site-nav a {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -421,12 +420,81 @@ img { max-width: 100%; display: block; }
   padding: 10px 14px;
   font-size: 12px;
   font-weight: 600;
-  color: #c7cbd4;
+  letter-spacing: 0.4px;
+  color: #aab6d6;
   text-decoration: none;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.7);
   white-space: nowrap;
+  overflow: hidden;
+  isolation: isolate;
+  /* brushed-titanium key: cool blue bevel top, dark base, soft inner shadow */
+  background:
+    linear-gradient(180deg, rgba(140,170,255,0.14) 0%, rgba(140,170,255,0) 14%, rgba(0,0,10,0) 76%, rgba(0,0,20,0.3) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(180,205,255,0.14),
+    inset 0 -1px 0 rgba(0,0,0,0.4);
+  transition: color 0.18s ease, background-color 0.18s ease, box-shadow 0.16s ease, transform 0.08s ease;
 }
-.site-nav a:hover { color: #fff; background: rgba(255,255,255,0.05); }
-.site-nav a .ic { font-size: 13px; filter: grayscale(1) brightness(2.1) contrast(0.9); }
+
+/* diagonal glint that sweeps across the tab on hover — blue catching an
+   edge, with a faint violet fringe like the chrome-sweep buttons */
+.site-nav a::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  left: -75%;
+  width: 45%;
+  background: linear-gradient(115deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0) 32%,
+    rgba(210,228,255,0.65) 48%,
+    rgba(154,127,255,0.35) 56%,
+    rgba(255,255,255,0) 68%,
+    rgba(255,255,255,0) 100%);
+  transform: skewX(-18deg);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.site-nav a > * { position: relative; z-index: 2; }
+
+.site-nav a:hover {
+  color: #fff;
+  background-color: rgba(90,130,255,0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(200,220,255,0.28),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    inset 0 0 16px rgba(90,140,255,0.18),
+    0 0 14px rgba(59,130,246,0.3);
+}
+.site-nav a:hover::before {
+  opacity: 1;
+  animation: nav-tab-shimmer 0.85s ease forwards;
+}
+@keyframes nav-tab-shimmer {
+  from { left: -75%; }
+  to   { left: 130%; }
+}
+
+/* tactile press: tab sinks into the hull, then springs back on release */
+.site-nav a:active {
+  color: #fff;
+  transform: translateY(1px) scale(0.985);
+  background-color: rgba(4,8,20,0.5);
+  box-shadow:
+    inset 0 2px 6px rgba(0,0,0,0.7),
+    inset 0 0 10px rgba(59,130,246,0.3),
+    inset 0 -1px 0 rgba(140,170,255,0.08);
+  transition: color 0.05s ease, background-color 0.05s ease, box-shadow 0.05s ease, transform 0.05s ease;
+}
+
+.site-nav a .ic {
+  font-size: 13px;
+  filter: grayscale(1) brightness(1.9) contrast(0.9);
+  transition: filter 0.18s ease;
+}
+.site-nav a:hover .ic { filter: grayscale(1) brightness(2.4) contrast(0.95) drop-shadow(0 0 4px rgba(130,170,255,0.6)); }
 
 /* ---------- layout rows ---------- */
 main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
@@ -887,8 +955,20 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   color: transparent;
 }
 .game-card > * { position: relative; z-index: 3; }
-.game-card .flare { z-index: 4; }
-.game-card:hover .flare { opacity: 1; }
+
+/* tactile press: same sink-in-and-spring-back feel as the nav tabs and
+   header chrome buttons, so clicking into a game feels like the same
+   physical control family */
+.game-card:active {
+  transform: perspective(700px) scale(0.97);
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+  box-shadow:
+    inset 0 0 0 1.5px var(--gunmetal),
+    inset 0 0 0 3px rgba(150,215,255,0.8),
+    inset 0 0 0 4px rgba(6,10,20,0.9),
+    inset 0 4px 10px rgba(0,0,0,0.6),
+    inset 0 0 16px 4px rgba(59,130,246,0.35);
+}
 
 .game-card .tile-light {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
