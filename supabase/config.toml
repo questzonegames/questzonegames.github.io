@@ -250,6 +250,15 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Quest Zone's own email verification (assets/js/email-verify-modal.js)
+# reuses client.auth.signInWithOtp() to deliver a 6-digit code — but
+# Supabase's DEFAULT "Magic Link" template only shows a clickable sign-in
+# link, no visible code, which doesn't match a "type the code in" modal at
+# all. This template makes the code the actual, visible point of the email.
+[auth.email.template.magic_link]
+subject = "Your Quest Zone verification code"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
