@@ -55,6 +55,42 @@
 #qz-skillcard-tooltip.show { opacity: 1; transform: translateY(0); }
 #qz-skillcard-tooltip .t-name { font-family: 'Orbitron', sans-serif; font-weight: 900; color: #ffcf4d; margin-bottom: 4px; }
 #qz-skillcard-tooltip .t-row span:first-child { color: #9fb3d6; margin-right: 8px; }
+
+/* ---- "full" variant: icon + level + XP progress bar + caption. Used by
+   the Anagram Quest lobby's Intelligence widget (mountFull) — a richer
+   sibling of the compact .qz-skillcard-box above, sharing the same data
+   fetch and the same hover tooltip, never a second implementation of
+   either. Built so a page can drop more than one of these into the same
+   slot side by side once a game awards XP in multiple skills (see
+   .qz-skillcard-full-row below) without any redesign. ---- */
+.qz-skillcard-full-row { display: flex; flex-direction: column; gap: 10px; }
+.qz-skillcard-full {
+  position: relative;
+  display: flex; align-items: center; gap: 16px;
+  border-radius: 14px; border: 1.5px solid rgba(255,207,77,0.35);
+  background: linear-gradient(180deg, rgba(22,28,48,0.85), rgba(6,10,20,0.92));
+  padding: 14px 16px;
+  box-shadow: inset 0 0 20px rgba(255,200,80,0.06);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  cursor: default;
+  font-family: 'Exo 2', sans-serif;
+}
+.qz-skillcard-full:hover { border-color: #ffcf4d; box-shadow: 0 0 18px rgba(255,207,77,0.3), inset 0 0 20px rgba(255,200,80,0.08); }
+.qz-skillcard-full-icon { flex-shrink: 0; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
+.qz-skillcard-full-icon img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 0 10px rgba(255,150,60,0.5)); }
+.qz-skillcard-full-body { flex: 1; min-width: 0; }
+.qz-skillcard-full-toprow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.qz-skillcard-full-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 12.5px; letter-spacing: 0.06em; color: #eaf3ff; text-transform: uppercase; }
+.qz-skillcard-full-level { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 15px; color: #ffcf4d; white-space: nowrap; }
+.qz-skillcard-full-level .qz-skillcard-full-of99 { color: #9fb3d6; font-weight: 700; font-size: 12px; }
+.qz-skillcard-full-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
+.qz-skillcard-full-fill { height: 100%; background: linear-gradient(90deg,#e0a020,#ffcf4d); box-shadow: 0 0 8px rgba(255,207,77,0.6); transition: width 0.3s ease; }
+.qz-skillcard-full-caption { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: #9fb3d6; }
+.qz-skillcard-full-info {
+  width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+  border: 1px solid #6fe3ff; color: #6fe3ff; font-size: 10px; font-style: italic;
+  font-family: Georgia, serif; display: flex; align-items: center; justify-content: center;
+}
     `;
     document.head.appendChild(style);
   }
@@ -115,6 +151,48 @@
     return box;
   }
 
+  // ---- "full" box: icon + name/level row + XP progress bar + caption
+  // (+ small decorative info dot). Same hover tooltip as the compact box
+  // — hovering anywhere on the card reveals Current Level/Current XP/XP
+  // Remaining, exactly like createBox() does; there is no second tooltip
+  // implementation. opts.caption is a short line under the bar, e.g.
+  // "Solve words to earn Intelligence XP" — purely presentational, never
+  // read back. ----
+  function createFullBox(skill, opts) {
+    injectStyles();
+    const caption = (opts && opts.caption) || '';
+    const box = document.createElement('div');
+    box.className = 'qz-skillcard-full';
+    const lvl = window.QZXp ? window.QZXp.displayLevel(skill.xp) : { base: skill.level, virtual: skill.level, isVirtual: false };
+    const base = lvl.base;
+    let pct = 100;
+    if (window.QZXp && base < 99) {
+      const curFloor = window.QZXp.xpForLevel(base);
+      const nextFloor = window.QZXp.xpForLevel(base + 1);
+      const span = nextFloor - curFloor;
+      pct = span > 0 ? Math.max(0, Math.min(100, ((skill.xp - curFloor) / span) * 100)) : 100;
+    }
+    const levelLabel = lvl.isVirtual
+      ? base + ' <span class="qz-skillcard-full-of99">(Virtual ' + lvl.virtual + ')</span>'
+      : base + '<span class="qz-skillcard-full-of99">/99</span>';
+    box.innerHTML =
+      (skill.iconSrc ? '<div class="qz-skillcard-full-icon"><img src="' + skill.iconSrc + '" alt=""></div>' : '') +
+      '<div class="qz-skillcard-full-body">' +
+        '<div class="qz-skillcard-full-toprow">' +
+          '<span class="qz-skillcard-full-name">' + escapeHtml(skill.name) + '</span>' +
+          '<span class="qz-skillcard-full-level">LEVEL ' + levelLabel + '</span>' +
+        '</div>' +
+        '<div class="qz-skillcard-full-bar"><div class="qz-skillcard-full-fill" style="width:' + pct + '%"></div></div>' +
+        (caption
+          ? '<div class="qz-skillcard-full-caption">' + escapeHtml(caption) + '<span class="qz-skillcard-full-info">i</span></div>'
+          : '') +
+      '</div>';
+    box.addEventListener('mouseenter', (e) => showTooltip(e, skill));
+    box.addEventListener('mousemove', positionTooltip);
+    box.addEventListener('mouseleave', hideTooltip);
+    return box;
+  }
+
   // ---- shared data fetch: same public.games + public.game_progress read
   // every consumer of a given game_key uses, so no page carries its own
   // cached/duplicated copy of the level ----
@@ -154,5 +232,27 @@
     }
   }
 
-  window.QZSkillCard = { injectStyles, createBox, fetchSkill, mount };
+  // ---- mountFull: same fetch/refresh contract as mount(), but renders
+  // the richer createFullBox() instead. opts adds `caption` (see above);
+  // everything else (client/userId/gameKey/iconSrc/fallbackName) is
+  // identical to mount(). A future multi-skill game can append more than
+  // one full box into the same container (wrap it in a
+  // .qz-skillcard-full-row) without touching this function. ----
+  async function mountFull(container, opts) {
+    if (!container) return;
+    injectStyles();
+    const { client, userId, gameKey, iconSrc, fallbackName, caption } = opts || {};
+    try {
+      const skill = await fetchSkill(client, userId, gameKey, fallbackName);
+      skill.iconSrc = iconSrc;
+      container.innerHTML = '';
+      container.appendChild(createFullBox(skill, { caption }));
+    } catch (err) {
+      console.warn('QZSkillCard: could not load skill data (full)', err);
+      container.innerHTML = '';
+      container.appendChild(createFullBox({ game_key: gameKey, name: fallbackName || gameKey, xp: 0, level: 1, iconSrc }, { caption }));
+    }
+  }
+
+  window.QZSkillCard = { injectStyles, createBox, createFullBox, fetchSkill, mount, mountFull };
 })();

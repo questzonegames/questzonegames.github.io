@@ -1,46 +1,98 @@
 // ===== Anagram Quest — game logic =====
 // Single-player, 5-round word game. State machine:
-//   LOBBY -> LETTER_SELECTION -> ACTIVE_ROUND -> ROUND_RESULT -> (repeat x4)
-//   -> BONUS_ROUND (round 5, reuses ACTIVE_ROUND/ROUND_RESULT screens) -> GAME_OVER
+//   LOBBY -> DIFFICULTY -> INTRO -> LETTER_SELECTION -> ACTIVE_ROUND ->
+//   ROUND_RESULT -> (repeat x4) -> BONUS_ROUND (round 5, reuses
+//   ACTIVE_ROUND/ROUND_RESULT screens) -> GAME_OVER
 //
-// LETTER_SELECTION: 10s to pick V/C; generatedRack (state.rack) is
-// immutable the instant a letter lands in it — no Backspace exists on that
-// screen. Reaching 9 letters manually stops the countdown immediately;
-// letting it expire auto-fills the rest (see autoFillRack), preserving
-// every letter already picked.
+// DIFFICULTY: EASY / MEDIUM / HARD (see DIFFICULTIES below) — the ONE
+// place a round's timer length and the Intelligence-XP-per-point
+// multiplier are defined. The POINT SYSTEM itself (POINTS_BY_LENGTH,
+// ROUND5_POINTS) is IDENTICAL across every difficulty, by design — only
+// how much time you get to earn those points, and how much each point is
+// worth in XP, changes. See docs-equivalent spec this was built from:
+// harder difficulty = less time per round + a bigger XP-per-point
+// multiplier, so skilled/fast play is rewarded on every difficulty, and
+// higher difficulties are a genuine, deliberate risk/reward step up
+// rather than a bigger dictionary or a different scoring table.
 //
-// ACTIVE_ROUND (rounds 1-4): 30s (NORMAL_ROUND_SECONDS) to build a word.
-// Submitting only ever checks MECHANICAL rules (length, and — by
-// construction — only-rack-letters) and neutrally says "WORD SUBMITTED";
-// it never reveals whether the word is real, so nothing here can be
-// brute-forced. Submitting again simply replaces the latest candidate.
-// Real validity (isValidAnagramQuestWord: English dictionary OR a real
-// country/city, see geo-data.js) is decided once, at endRound(), against
-// only the LATEST submission. Round 5 is the one exception: it still
-// validates immediately and can end the round early.
+// LETTER_SELECTION: 10s to pick V/C (VC_SELECT_TIME_SECONDS — fixed for
+// every difficulty, not part of the difficulty config); generatedRack
+// (state.rack) is immutable the instant a letter lands in it — no
+// Backspace exists on that screen. Reaching 9 letters manually stops the
+// countdown immediately; letting it expire auto-fills the rest (see
+// autoFillRack), preserving every letter already picked.
+//
+// ACTIVE_ROUND (rounds 1-4): a difficulty-specific number of seconds
+// (state.difficultyConfig.normalRoundSeconds) to build a word. There is
+// no "submit" step any more — whatever letters are sitting in the answer
+// boxes (state.currentWord) at the instant the round ends (LOCK IN, or
+// the timer reaching 0) is exactly what gets judged, by
+// judgeAndEndRound(). Nothing before that ever reveals whether the
+// in-progress word is valid, scores anything, or would earn XP — no
+// colour feedback, no points preview, nothing — so nothing here can be
+// brute-forced and a player can freely rebuild/shorten their answer right
+// up to the deadline (e.g. build HOUSE, then backspace down to HOU, and
+// if the clock hits 0 while it reads HOU, HOU is what's judged — HOUSE is
+// never resurrected). LOCK IN (Rounds 1-4 only) ends the round instantly
+// on demand, letting a confident/fast player bank more games per hour.
+//
+// BONUS_ROUND (round 5): the special 9-letter anagram round. Exactly the
+// same "whatever's in the boxes when time hits 0" judging as Rounds 1-4 —
+// but it has NO Lock In and NO way to end early at all, on purpose (see
+// lockInRound()). This makes Round 5 a mandatory minimum amount of time
+// per completed game, which is the whole point: it stops a player from
+// farming XP/hour by rushing throwaway short words in Rounds 1-4,
+// skipping/instant-ending Round 5, and requeuing as fast as possible.
 //
 // XP: Anagram Quest trains the "Intelligence" skill (see supabase/
-// migrations/20260905020000_intelligence_skill.sql) at exactly 1 XP per
-// point of the game's final score — awarded once per completed game,
-// through the same award_xp() RPC every other game uses (Space Snake
-// included), following the shared OSRS-style level formula in
+// migrations/20260905020000_intelligence_skill.sql). The final score
+// (sum of all 5 rounds' points, using the SAME point table on every
+// difficulty) is converted to XP by multiplying by the chosen
+// difficulty's xpPerPoint (20 / 60 / 180) exactly once, after Round 5
+// ends — never per round — through the same award_xp() RPC every other
+// game uses, following the shared OSRS-style level formula in
 // supabase/schema.sql. Nothing about the formula or the RPC is special-
 // cased for this game; only GAME_KEY and the per-run XP amount are.
 (function () {
   const GAME_KEY = 'intelligence';
   const TOTAL_ROUNDS = 5;
-  const NORMAL_ROUND_SECONDS = 30; // Rounds 1-4 word-building timer (was 40s)
-  const VC_SELECT_TIME_SECONDS = 10; // separate, shorter countdown for letter selection (rounds 1-4) — unchanged
+  const VC_SELECT_TIME_SECONDS = 10; // separate, shorter countdown for letter selection — fixed across every difficulty, not part of DIFFICULTIES
   const MIN_WORD_LEN = 4;
   const MAX_WORD_LEN = 9;
   const RACK_SIZE = 9;
   const VOWELS = 'AEIOU';
   const isVowelLetter = (ch) => VOWELS.indexOf(ch) !== -1;
 
-  // Centralised bonus-round scoring — tune balance here, nowhere else.
-  const BONUS_BASE_POINTS = 10;
-  const BONUS_SPEED_INTERVAL = 5;  // seconds
-  const BONUS_SPEED_POINTS = 1;    // awarded per full interval of time left
+  // ---- shared point table — IDENTICAL across every difficulty. Only the
+  // per-round timer and the XP paid per point (see DIFFICULTIES) change
+  // with difficulty; the points a given word earns never do. 1-3 letter
+  // words (and anything invalid) score 0 — deliberately absent from this
+  // table so pointsForWord() falls through to its default. 7/8/9-letter
+  // words are deliberately worth MORE than their letter count (10/12/18
+  // instead of 7/8/9) so there's always a real incentive to keep hunting
+  // for a longer word instead of locking in a safe 4-6 letter one. ----
+  const POINTS_BY_LENGTH = { 4: 4, 5: 5, 6: 6, 7: 10, 8: 12, 9: 18 };
+  function pointsForWord(len) { return POINTS_BY_LENGTH[len] || 0; }
+  // Round 5's flat reward for a correct 9-letter solve — bigger than an
+  // ordinary 9-letter word found during Rounds 1-4 (18), since Round 5 is
+  // the harder, mandatory-full-duration showcase round. No speed bonus:
+  // Round 5 can never end before the clock does (see lockInRound()), so
+  // "time remaining at judgement" is always 0 and a speed bonus would
+  // never pay out anyway — removed rather than kept as dead code.
+  const ROUND5_POINTS = 30;
+
+  // ---- difficulty configuration — the ONE place a round's seconds and
+  // the XP-per-point multiplier are defined; nothing else in this file
+  // hardcodes either. Adding a 4th difficulty means adding one entry here
+  // plus one button in index.html's #screen-difficulty — everything else
+  // (timers, scoring, XP conversion, Lock In behaviour) is already
+  // difficulty-generic and picks it up automatically. cssClass matches
+  // the .diff-btn/.diff-chip/.intro-diff modifier classes in index.html. ----
+  const DIFFICULTIES = {
+    EASY: { key: 'EASY', label: 'EASY', normalRoundSeconds: 30, round5Seconds: 30, xpPerPoint: 20, cssClass: 'easy' },
+    MEDIUM: { key: 'MEDIUM', label: 'MEDIUM', normalRoundSeconds: 20, round5Seconds: 30, xpPerPoint: 60, cssClass: 'medium' },
+    HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard' }
+  };
 
   // ---- sound hooks (no audio assets shipped yet — safe no-ops until a
   // project-wide sound system exists; call sites are already in place) ----
@@ -77,10 +129,10 @@
     return dictSet.has(word.toLowerCase());
   }
   // The ONE centralized word validator — every place in this file that
-  // needs to know "does this word count" (Rounds 1-4 at round end, Round 5
-  // immediately) calls this, never isValidEnglishWord alone, so English
-  // dictionary words, real countries and real cities are always judged
-  // identically everywhere.
+  // needs to know "does this word count" (Rounds 1-4 and Round 5, both at
+  // round end — see judgeAndEndRound) calls this, never isValidEnglishWord
+  // alone, so English dictionary words, real countries and real cities
+  // are always judged identically everywhere.
   function isValidAnagramQuestWord(word) {
     return isValidEnglishWord(word) ||
       (window.QZAnagramGeo && (window.QZAnagramGeo.isCountryName(word) || window.QZAnagramGeo.isCityName(word)));
@@ -115,25 +167,28 @@
   // ================= state =================
   const state = {
     screen: 'LOBBY',
+    difficulty: null,        // 'EASY' | 'MEDIUM' | 'HARD' — set by selectDifficulty(), before the intro/countdown plays
+    difficultyConfig: null,  // === DIFFICULTIES[state.difficulty]
     currentRound: 0,
     rack: [],            // [{ letter, used }]
-    currentWord: [],      // array of rack-tile refs, in selection order
-    // Rounds 1-4: the LATEST mechanically-allowed submission (right length,
-    // built only from rack tiles) — NOT necessarily a real word. Validity
-    // is deliberately not known/shown until the round ends (see submitWord
-    // and endRound) so a player can't brute-force by watching for a "valid"
-    // reaction. Round 5 still validates immediately, per spec.
-    submittedWord: null,
+    currentWord: [],      // array of rack-tile refs, in selection order — this IS the live "current answer"; there is no separate submitted/locked copy (see judgeAndEndRound)
     roundScores: [0, 0, 0, 0, 0],
     totalScore: 0,
-    timeRemaining: NORMAL_ROUND_SECONDS,
+    timeRemaining: 0,
+    roundSecondsTotal: 0, // whatever seconds this round's timer started at (difficulty- and round5-dependent) — needed for the timer ring's percentage
     timerId: null,
     bonusWord: null,
-    bonusSolved: false,
+    round5Solutions: null,
+    nineLetterCount: 0,  // valid 9-letter solves THIS game (any round) — reset in selectDifficulty(), sent once to record_anagram_quest_difficulty_result() in finishGame()
     selecting: false,     // true while V/C picks are still being made (round timer not started)
     profile: null,        // { id, username, ... } or null for a guest
     highScore: 0,
-    gamesPlayed: 0
+    gamesPlayed: 0,
+    // Per-difficulty high score + 9-letter-word count, keyed 'EASY' |
+    // 'MEDIUM' | 'HARD' -> { highScore, nineCount } — this account only
+    // (see loadDifficultyStats/renderDifficultyStats). null until loaded
+    // (or for a guest, who has nothing to load).
+    difficultyStats: null
     // Intelligence level/XP is intentionally NOT cached here — the lobby's
     // skill card (assets/js/skill-card.js) always fetches it fresh from
     // public.game_progress itself, the same way profile/skills.html does,
@@ -143,6 +198,8 @@
   // ================= DOM =================
   const screens = {
     LOBBY: document.getElementById('screen-lobby'),
+    DIFFICULTY: document.getElementById('screen-difficulty'),
+    INTRO: document.getElementById('screen-intro'),
     SELECT: document.getElementById('screen-select'),
     ACTIVE: document.getElementById('screen-active'),
     RESULT: document.getElementById('screen-result'),
@@ -151,6 +208,12 @@
   function showScreen(key) {
     Object.values(screens).forEach((el) => el.classList.add('hidden'));
     screens[key].classList.remove('hidden');
+    // The lobby has its own hero header (orbital arc, big ANAGRAM QUEST
+    // title, motto) built into #screen-lobby itself — the shared plain
+    // .logo pill every other screen uses is hidden only while the lobby
+    // is showing (see body.lobby-active in the CSS), never removed from
+    // the DOM, so every other screen's header is completely unaffected.
+    document.body.classList.toggle('lobby-active', key === 'LOBBY');
   }
 
   function updateFooterStats() {
@@ -169,7 +232,68 @@
     // Only actually re-fetch/re-mount the skill card while the lobby is the
     // visible screen — updateFooterStats() also runs on every in-round
     // transition, and there's no point re-querying game_progress then.
-    if (!screens.LOBBY.classList.contains('hidden')) mountIntelligenceCard();
+    if (!screens.LOBBY.classList.contains('hidden')) { mountIntelligenceCard(); renderDifficultyStats(); }
+  }
+
+  // ---- lobby: per-difficulty high score + 9-letter-word count — THIS
+  // account only (public.anagram_quest_stats' RLS is own-row-or-admin,
+  // never public — see the migration). Rendered from whatever
+  // state.difficultyStats currently holds; loadDifficultyStats() (account
+  // load) and finishGame() (right after a completed game) are the only
+  // two places that ever set it. ----
+  // Small inline icon per difficulty — leaf/hexagon/mountain, matching the
+  // lobby rehaul brief's card art direction. Purely decorative; colour
+  // comes from the .diff-card.<cssClass> CSS, not from these strings.
+  const DIFF_CARD_ICON = {
+    easy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c8 0 14-6 14-16C8 4 4 12 4 20z"/><path d="M5 19C10 14 13 10 17 5"/></svg>',
+    medium: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4.5v11L12 22l-8-4.5v-11z"/></svg>',
+    hard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-11 4 6 2-3 6 8z"/></svg>'
+  };
+  function renderDifficultyStats() {
+    const el = document.getElementById('lobby-diffstats-rows');
+    if (!el) return;
+    if (!state.profile) {
+      el.innerHTML = '<div class="diffstats-empty">Sign in to track your difficulty stats.</div>';
+      return;
+    }
+    const stats = state.difficultyStats || {};
+    el.innerHTML = ['EASY', 'MEDIUM', 'HARD'].map((key) => {
+      const cfg = DIFFICULTIES[key];
+      const s = stats[key] || { highScore: 0, nineCount: 0 };
+      return '<div class="diff-card ' + cfg.cssClass + '">' +
+        '<div class="diff-card-head">' +
+          '<span class="diff-card-icon">' + DIFF_CARD_ICON[cfg.cssClass] + '</span>' +
+          '<span class="diff-card-name">' + cfg.label + '</span>' +
+          '<svg class="diff-card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>' +
+        '</div>' +
+        '<div class="diff-card-body">' +
+          '<div class="diff-card-stat"><span>Best Score</span><b>' + s.highScore + '</b></div>' +
+          '<div class="diff-card-stat"><span>9-Letter Words</span><b>' + s.nineCount + '</b></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Reads this account's own row (or nothing, for a brand new player who's
+  // never completed a game on any difficulty — every field defaults to 0,
+  // same as game_stats/game_progress do elsewhere in this file).
+  async function loadDifficultyStats() {
+    if (!window.QZAuth || !window.QZAuth.client || !state.profile) { state.difficultyStats = null; return; }
+    try {
+      const { data } = await window.QZAuth.client
+        .from('anagram_quest_stats')
+        .select('easy_high_score,medium_high_score,hard_high_score,easy_nine_count,medium_nine_count,hard_nine_count')
+        .eq('user_id', state.profile.id)
+        .maybeSingle();
+      state.difficultyStats = {
+        EASY: { highScore: (data && data.easy_high_score) || 0, nineCount: (data && data.easy_nine_count) || 0 },
+        MEDIUM: { highScore: (data && data.medium_high_score) || 0, nineCount: (data && data.medium_nine_count) || 0 },
+        HARD: { highScore: (data && data.hard_high_score) || 0, nineCount: (data && data.hard_nine_count) || 0 }
+      };
+    } catch (err) {
+      console.warn('Anagram Quest: could not load difficulty stats', err);
+      state.difficultyStats = null;
+    }
   }
 
   // Same reusable component + same public.games/public.game_progress read
@@ -177,8 +301,7 @@
   // fresh (never reuses a cached level), so it can never show a stale
   // value after XP was just awarded.
   // Generic — used for the lobby's own card AND the mid-game/post-round
-  // slots (see items 6/7: those replace what used to be a circular avatar
-  // placeholder). Every call site is this ONE function; there is no second
+  // slots. Every call site is this ONE function; there is no second
   // hand-copied Intelligence display anywhere in this file.
   function mountSkillCard(containerId) {
     const slot = document.getElementById(containerId);
@@ -191,51 +314,52 @@
       fallbackName: 'Intelligence'
     });
   }
-  function mountIntelligenceCard() { mountSkillCard('lobby-skillcard-slot'); }
+  // Lobby-only rich variant (icon + level + XP progress bar + caption) —
+  // see assets/js/skill-card.js's mountFull(). Every OTHER skill-card slot
+  // in this file (sel/active/result HUD strips) still calls the plain
+  // mountSkillCard() above/compact mount() — completely unaffected by the
+  // lobby rehaul, on purpose.
+  function mountIntelligenceCard() {
+    const slot = document.getElementById('lobby-skillcard-slot');
+    if (!slot || !window.QZSkillCard || !window.QZSkillCard.mountFull) return;
+    window.QZSkillCard.mountFull(slot, {
+      client: window.QZAuth && window.QZAuth.client,
+      userId: state.profile ? state.profile.id : null,
+      gameKey: GAME_KEY,
+      iconSrc: '../../assets/img/skills/intelligence.png',
+      fallbackName: 'Intelligence',
+      caption: 'Solve words to earn Intelligence XP'
+    });
+  }
 
-  // ================= player avatar (lobby only) =================
-  // Real, currently-equipped Quest Zone avatar — same renderer
-  // (assets/js/avatar-viewer.js) and same equipped_items/
-  // avatar_customization tables as Profile/Inventory. basePathPrefix:'../'
-  // because this page lives one directory deeper than profile/*.html,
-  // which is what avatar-viewer.js's asset paths assume by default;
-  // staticFront:true because this is a small, still, front-facing circle
-  // next to the username, not the full turntable viewer. No separate
-  // Anagram Quest avatar state exists anywhere — every value below comes
-  // straight from the same tables Profile/Inventory read.
-  let qzAvatar = null;
-  async function loadPlayerAvatar() {
-    const container = document.getElementById('lobby-avatar-3d');
-    if (!container || !window.QZAvatarViewer) return;
-    if (!qzAvatar) qzAvatar = window.QZAvatarViewer.mount(container, { basePathPrefix: '../', staticFront: true });
-    if (!qzAvatar || !state.profile || !window.QZAuth || !window.QZAuth.client) return;
-    try {
-      const client = window.QZAuth.client;
-      const [{ data: equipped }, { data: custom }] = await Promise.all([
-        client.from('equipped_items').select('slot,item_id').eq('user_id', state.profile.id),
-        client.from('avatar_customization').select('gender,skin_colour,hair_style,hair_colour').eq('user_id', state.profile.id).maybeSingle()
-      ]);
-      const catalogById = {};
-      (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
-      const items = {};
-      (equipped || []).forEach((row) => { if (row.item_id && catalogById[row.item_id]) items[row.slot] = catalogById[row.item_id]; });
-      qzAvatar.setAvatarEquipment(items);
-      if (custom) {
-        qzAvatar.setBaseAppearance(custom.gender, custom.skin_colour);
-        qzAvatar.setHairstyle(custom.hair_style, custom.hair_colour);
-      }
-    } catch (err) {
-      console.warn('Anagram Quest: could not load player avatar', err);
-    }
+  // ---- difficulty badges — the small coloured pill shown on Select/
+  // Active/Result/GameOver headers so the player always knows which
+  // difficulty they're mid-game on. Set once per game (selectDifficulty),
+  // never re-derived elsewhere. ----
+  function updateDifficultyChips() {
+    const cfg = state.difficultyConfig;
+    if (!cfg) return;
+    ['sel-diff-chip', 'active-diff-chip', 'result-diff-chip', 'go-diff-chip'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = cfg.label;
+      el.className = 'diff-chip ' + cfg.cssClass;
+    });
   }
 
   // ================= account load/save =================
+  // No player avatar is loaded/mounted anywhere in this file — the lobby
+  // rehaul (Anagram_Quest_Lobby_Rehaul_Brief.docx, section 6) explicitly
+  // removes it. If a future screen in this file ever wants the real
+  // equipped-avatar render back, copy the pattern from profile/index.html
+  // or the game lobby of another Quest Zone game rather than re-adding it
+  // here — this file intentionally carries none of that wiring any more.
   async function loadAccountData() {
-    if (!window.QZAuth || !window.QZAuth.client) { await loadPlayerAvatar(); updateFooterStats(); return; }
+    if (!window.QZAuth || !window.QZAuth.client) { updateFooterStats(); return; }
     try {
       const profile = await window.QZAuth.getProfile();
       state.profile = profile;
-      if (!profile) { await loadPlayerAvatar(); updateFooterStats(); return; }
+      if (!profile) { updateFooterStats(); return; }
 
       const client = window.QZAuth.client;
       const { data: statsRow } = await client
@@ -243,7 +367,7 @@
         .eq('user_id', profile.id).eq('game_key', GAME_KEY).maybeSingle();
       state.highScore = (statsRow && statsRow.high_score) || 0;
       state.gamesPlayed = (statsRow && statsRow.games_played) || 0;
-      await loadPlayerAvatar();
+      await loadDifficultyStats();
     } catch (err) {
       console.warn('Anagram Quest: could not load account data', err);
     }
@@ -253,7 +377,10 @@
   // Called once per COMPLETED game (Game Over), never per round. Score is
   // still computed entirely client-side (no per-round server replay), but
   // the write itself only ever happens through record_game_result() — see
-  // the migration — so a tampered client can't PATCH an arbitrary value in.
+  // the migration — so a tampered client can't PATCH an arbitrary value
+  // in. p_score is POINTS (the shared, difficulty-independent scale), not
+  // XP, so "high score" stays a fair, apples-to-apples measure of word-
+  // finding skill regardless of which difficulty was played.
   async function saveGameResult(finalScore) {
     if (!window.QZAuth || !window.QZAuth.client || !state.profile) return;
     try {
@@ -273,16 +400,24 @@
     }
   }
 
-  // Intelligence XP: exactly 1 XP per point of this run's final score, via
-  // the same award_xp() every game shares — it caps the total and
-  // recalculates level server-side; a tampered client can only ever ask
-  // to "add this run's score" as XP, never set the stored value directly.
-  async function awardIntelligenceXp(finalScore) {
-    if (!window.QZAuth || !window.QZAuth.client || !state.profile || finalScore <= 0) return;
+  // Intelligence XP: xpAmount is the FULLY-CONVERTED amount — this run's
+  // total points times the chosen difficulty's xpPerPoint (see
+  // finishGame) — computed once, client-side, exactly like every other
+  // game's XP always has been. Awarded through the same shared award_xp()
+  // RPC every game uses; it caps the total and recalculates level server-
+  // side, and a tampered client can only ever ask to "add this amount",
+  // never set the stored value directly. award_xp()'s own per-call ceiling
+  // (2,000,000 — see supabase/migrations/20260905040000_security_
+  // hardening.sql) comfortably covers the highest amount a single
+  // completed game can ever produce here: Hard's maximum possible score is
+  // 4*18 (a 9-letter word every one of Rounds 1-4) + 30 (Round 5) = 102
+  // points, times 180 XP/point = 18,360 XP — nowhere close to the cap.
+  async function awardIntelligenceXp(xpAmount) {
+    if (!window.QZAuth || !window.QZAuth.client || !state.profile || xpAmount <= 0) return;
     try {
       const { data, error } = await window.QZAuth.client.rpc('award_xp', {
         p_game_key: GAME_KEY,
-        p_xp_to_add: finalScore
+        p_xp_to_add: xpAmount
       });
       if (error) { console.warn('Anagram Quest: could not save XP', error); return; }
       const row = Array.isArray(data) ? data[0] : data;
@@ -292,7 +427,7 @@
         // pick up the same new level next time it mounts (updateFooterStats
         // below re-mounts it).
         const lvl = window.QZXp.displayLevel(row.xp);
-        goXpLine.textContent = '+' + finalScore.toLocaleString() + ' Intelligence XP (Level ' +
+        goXpLine.textContent = '+' + xpAmount.toLocaleString() + ' Intelligence XP (Level ' +
           lvl.base + (lvl.isVirtual ? ' · Virtual ' + lvl.virtual : '') + ')';
         updateFooterStats();
       }
@@ -342,12 +477,12 @@
     updateFooterStats();
     showScreen('SELECT');
     startSelTimer();
-    mountSkillCard('sel-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar (see item 6)
+    mountSkillCard('sel-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar
   }
 
-  // Wall-clock deadline, same pattern as the 30-second round timer — self-
-  // corrects instantly if the tab was throttled/backgrounded instead of
-  // leaving the countdown frozen.
+  // Wall-clock deadline, same pattern as the round timer — self-corrects
+  // instantly if the tab was throttled/backgrounded instead of leaving
+  // the countdown frozen.
   function startSelTimer() {
     state.selDeadline = Date.now() + VC_SELECT_TIME_SECONDS * 1000;
     updateSelTimerUi(VC_SELECT_TIME_SECONDS);
@@ -367,8 +502,7 @@
   }
   // The 10 seconds ran out before all 9 letters were chosen manually —
   // stop the countdown immediately, auto-complete the rack (preserving
-  // every letter already picked), then go straight into the 30-second
-  // word round.
+  // every letter already picked), then go straight into the word round.
   function onSelTimerExpired() {
     clearInterval(state.selTimerId);
     state.selTimerId = null;
@@ -445,14 +579,14 @@
   btnVowel.addEventListener('click', () => pressVC('V'));
   btnConsonant.addEventListener('click', () => pressVC('C'));
 
-  // ================= active round (build + submit) =================
+  // ================= active round (build + lock in / timeout) =================
   const activeSlotsEl = document.getElementById('active-slots');
   const activeTilesEl = document.getElementById('active-tiles');
   const activeRoundLabel = document.getElementById('active-round-label');
   const activeRoundSub = document.getElementById('active-round-sub');
   const activeMsg = document.getElementById('active-msg');
-  const activeLocked = document.getElementById('active-locked');
-  const activeSubmitBtn = document.getElementById('active-submit');
+  const activeLocked = document.getElementById('active-locked'); // repurposed as a plain rules reminder — see updateRoundHint()
+  const activeLockInBtn = document.getElementById('active-lockin');
   const activeBackspaceBtn = document.getElementById('active-backspace');
   const timerRing = document.getElementById('active-timer-ring');
   const timerNum = document.getElementById('active-timer-num');
@@ -481,16 +615,14 @@
       activeSlotsEl.appendChild(d);
     }
   }
-  // status: true (green — bonus round correct), false (red — rejected/
-  // invalid), or 'neutral' (cyan — a normal-round submission was accepted
-  // MECHANICALLY; deliberately says nothing about whether it will score).
-  function setMsg(text, status) {
-    activeMsg.textContent = text || ' ';
-    activeMsg.classList.toggle('ok', status === true);
-    activeMsg.classList.toggle('neutral', status === 'neutral');
-  }
-  function updateLockedLabel() {
-    activeLocked.textContent = state.submittedWord ? ('Current answer: ' + state.submittedWord) : ' ';
+  // Rounds 1-4 AND Round 5 alike: NEVER reveals whether the in-progress
+  // word is valid, what it would score, or what XP it's worth — see the
+  // balancing spec's "no mid-round validity feedback" rule. This is only
+  // ever used for a neutral rules reminder now, never a live judgement.
+  function updateRoundHint() {
+    activeLocked.textContent = isBonusRound()
+      ? 'Round 5 cannot be skipped — the clock must run out.'
+      : 'Press LOCK IN when you’re happy with your answer, or just let the clock run out.';
   }
 
   function selectTile(index) {
@@ -514,92 +646,58 @@
     return state.currentWord.map((t) => t.letter).join('');
   }
 
-  function submitWord() {
-    const word = currentWordString();
-
-    // Round 5 is explicitly exempt from the hidden-validation rule below
-    // (item 37) — it still validates and can end the round immediately.
-    if (isBonusRound()) {
-      if (word.length !== RACK_SIZE) { setMsg('You must use all 9 letters.', false); playSound('invalid'); return; }
-      if (!isValidAnagramQuestWord(word)) { setMsg('Not accepted.', false); playSound('invalid'); return; }
-      // exact-anagram check: must use precisely the rack's letters (this
-      // also transparently accepts an alternate genuine 9-letter word — or
-      // a real 9-letter place name — made from the same letters, per spec,
-      // since it's a pure multiset compare)
-      const rackSorted = state.rack.map((t) => t.letter).sort().join('');
-      if (word.toUpperCase().split('').sort().join('') !== rackSorted) {
-        setMsg('Not accepted.', false); playSound('invalid'); return;
-      }
-      setMsg('Correct!', true);
-      playSound('valid');
-      fireEvent('bonus-round-solved', { word, timeRemaining: state.timeRemaining });
-      endRound(word);
-      return;
-    }
-
-    // Rounds 1-4: only mechanical rules are enforced HERE (length, and —
-    // by construction, since currentWord can only ever contain clicked
-    // rack tiles — using only available rack letters). Whether the word is
-    // actually real is judged only once, at endRound(), so nothing at
-    // submit time can be used to brute-force the dictionary/geo data (see
-    // items 23-24). Submitting again before the timer ends simply replaces
-    // this as the latest candidate (items 25-26) — an older word, valid or
-    // not, is never preserved once a newer one is submitted.
-    if (word.length < MIN_WORD_LEN) { setMsg('Word must be at least ' + MIN_WORD_LEN + ' letters.', false); playSound('invalid'); return; }
-
-    state.submittedWord = word;
-    updateLockedLabel();
-    setMsg('WORD SUBMITTED', 'neutral');
-    playSound('valid');
-    fireEvent('word-submitted', { word, round: state.currentRound });
-  }
-  activeSubmitBtn.addEventListener('click', submitWord);
-
   // Driven by a wall-clock deadline rather than "subtract 1 each tick" —
   // a backgrounded/inactive browser tab throttles or entirely pauses
   // setInterval (commonly clamped to once a minute or less), which would
   // otherwise leave the displayed timer frozen indefinitely instead of
-  // catching up the moment the tab's ticks resume.
+  // catching up the moment the tab's ticks resume. Duration is difficulty-
+  // and round-dependent: Rounds 1-4 use difficultyConfig.normalRoundSeconds,
+  // Round 5 uses difficultyConfig.round5Seconds — the ONE branch point
+  // between the two anywhere in the timer/scoring code.
   function startTimer() {
-    state.roundDeadline = Date.now() + NORMAL_ROUND_SECONDS * 1000;
-    state.timeRemaining = NORMAL_ROUND_SECONDS;
+    const seconds = isBonusRound() ? state.difficultyConfig.round5Seconds : state.difficultyConfig.normalRoundSeconds;
+    state.roundSecondsTotal = seconds;
+    state.roundDeadline = Date.now() + seconds * 1000;
+    state.timeRemaining = seconds;
     state.warnedThisRound = false;
     updateTimerUi();
     clearInterval(state.timerId);
     state.timerId = setInterval(() => {
       state.timeRemaining = Math.max(0, Math.ceil((state.roundDeadline - Date.now()) / 1000));
       updateTimerUi();
-      if (state.timeRemaining <= 10 && !state.warnedThisRound) { state.warnedThisRound = true; playSound('timer-warning'); }
-      if (state.timeRemaining <= 0) { clearInterval(state.timerId); endRound(null); }
+      const warnAt = Math.min(10, state.roundSecondsTotal);
+      if (state.timeRemaining <= warnAt && state.timeRemaining > 0 && !state.warnedThisRound) { state.warnedThisRound = true; playSound('timer-warning'); }
+      if (state.timeRemaining <= 0) { clearInterval(state.timerId); judgeAndEndRound(); }
     }, 250);
   }
   function updateTimerUi() {
-    const pct = Math.max(0, (state.timeRemaining / NORMAL_ROUND_SECONDS) * 100);
+    const total = state.roundSecondsTotal || 1;
+    const pct = Math.max(0, (state.timeRemaining / total) * 100);
     timerRing.style.setProperty('--pct', pct);
-    timerRing.classList.toggle('warn', state.timeRemaining <= 10);
+    timerRing.classList.toggle('warn', state.timeRemaining <= Math.min(10, total));
     timerNum.textContent = Math.max(0, state.timeRemaining);
     timerText.textContent = Math.max(0, state.timeRemaining);
   }
 
   function startActiveRound() {
     state.currentWord = [];
-    state.submittedWord = null;
-    state.bonusSolved = false;
-    setMsg('', false);
-    updateLockedLabel();
+    activeMsg.textContent = ' '; // no mid-round feedback ever gets written here — see updateRoundHint/judgeAndEndRound
+    updateRoundHint();
     renderActiveTiles();
     renderActiveSlots();
     if (isBonusRound()) {
       activeRoundLabel.textContent = 'Round 5 of 5';
-      activeRoundSub.textContent = 'FIND THE NINE LETTER WORD';
+      activeRoundSub.textContent = 'FIND THE NINE LETTER WORD — no early finish, the clock must run out.';
+      activeLockInBtn.classList.add('hidden'); // NEVER available in Round 5 — see lockInRound()
     } else {
       activeRoundLabel.textContent = 'Round ' + state.currentRound + ' of 5';
       activeRoundSub.textContent = 'Build the longest word you can — English words + real cities/countries.';
+      activeLockInBtn.classList.remove('hidden');
     }
     updateFooterStats();
     showScreen('ACTIVE');
     startTimer();
-    mountSkillCard('active-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar (see item 6)
+    mountSkillCard('active-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar
   }
 
   function startBonusRound() {
@@ -619,8 +717,8 @@
     state.rack = letters.map((letter) => ({ letter, used: false }));
     // Every genuine 9-letter dictionary word this exact rack can spell —
     // guaranteed to include `answer` itself, but may include more. ANY of
-    // these counts as correct (see submitWord's bonus branch) and ALL of
-    // them are shown on the result screen afterwards, win or lose.
+    // these counts as correct (see judgeAndEndRound's bonus branch) and
+    // ALL of them are shown on the result screen afterwards, win or lose.
     state.round5Solutions = computeAnagramSolutions(letters);
     startActiveRound();
   }
@@ -632,59 +730,77 @@
   const resultSubtext = document.getElementById('result-subtext');
   const resultPointsLabel = document.getElementById('result-points-label');
   const resultPoints = document.getElementById('result-points');
+  const resultTotalSoFar = document.getElementById('result-total-so-far');
   const resultTimeLeft = document.getElementById('result-timeleft');
   const resultAnswers = document.getElementById('result-answers');
   const resultAnswersLabel = document.getElementById('result-answers-label');
   const resultAnswersList = document.getElementById('result-answers-list');
   const nextRoundBtn = document.getElementById('btn-next-round');
 
-  function endRound(bonusCorrectWord) {
+  // The ONE place a round ends and is scored — reached either by LOCK IN
+  // (Rounds 1-4 only) or by the timer hitting 0 (every round, including
+  // Round 5, which can NEVER end any other way — see lockInRound(). This
+  // makes Round 5 a mandatory minimum amount of time per completed game,
+  // closing off farming it by rushing Rounds 1-4 then instantly skipping/
+  // ending Round 5 and requeuing).
+  //
+  // Whatever is in the answer boxes AT THIS INSTANT (currentWordString())
+  // is what's judged — never a separately-tracked "last submitted" word —
+  // so a player who builds HOUSE, then backspaces down to HOU and lets
+  // the clock run out, is judged on HOU. Nothing before this call has
+  // ever revealed whether the in-progress word is valid or what it scores
+  // (see updateRoundHint/activeMsg — neither is ever set to a validity
+  // hint anywhere in this file).
+  function judgeAndEndRound() {
     clearInterval(state.timerId);
     const roundIndex = state.currentRound - 1;
     const bonus = isBonusRound();
-    let word, points, valid;
+    const word = currentWordString();
+    let points;
 
     if (bonus) {
-      if (bonusCorrectWord) {
-        valid = true;
-        word = bonusCorrectWord;
-        const speedBonus = Math.floor(state.timeRemaining / BONUS_SPEED_INTERVAL) * BONUS_SPEED_POINTS;
-        points = BONUS_BASE_POINTS + speedBonus;
-      } else {
-        valid = false;
-        word = state.submittedWord || null;
-        points = 0;
-      }
+      const rackSorted = state.rack.map((t) => t.letter).sort().join('');
+      const correct = word.length === RACK_SIZE &&
+        isValidAnagramQuestWord(word) &&
+        word.toUpperCase().split('').sort().join('') === rackSorted;
+      points = correct ? ROUND5_POINTS : 0;
     } else {
-      // Validity is decided HERE, for the very first time — never at
-      // submit time (items 23-26). Only the LATEST submission is judged;
-      // an earlier valid word the player has since overwritten is not
-      // resurrected just because the new one turned out invalid.
-      word = state.submittedWord;
-      valid = !!word && isValidAnagramQuestWord(word);
-      points = valid ? word.length : 0;
+      const realWord = word.length >= MIN_WORD_LEN && isValidAnagramQuestWord(word);
+      points = realWord ? pointsForWord(word.length) : 0;
     }
+    // "valid" (the tick/cross + "that word is correct" wording) always
+    // tracks whether the word actually scored anything — never a separate
+    // notion of "is this a real word" — so a real-but-too-short word (a
+    // valid 3-letter word, worth 0 by the shared point table) is shown
+    // exactly the same as any other 0-point result, matching the point
+    // table's intent precisely instead of contradicting it.
+    const valid = points > 0;
 
     state.roundScores[roundIndex] = points;
     state.totalScore += points;
+    // A valid 9-letter solve counts toward this difficulty's running
+    // 9-letter-word counter — whether it happened in Rounds 1-4 (the
+    // bonus-tier 18-point word) or Round 5 (the flat 30-point solve);
+    // both are "found a 9-letter word" from the player's point of view.
+    // Sent once, alongside the final score, in finishGame() — never per
+    // round (same "award once" rule as XP).
+    if (valid && word.length === 9) state.nineLetterCount += 1;
 
     // ---- word line + exactly one success/failure icon ----
     if (word) {
-      resultLabel.textContent = 'You submitted a ' + word.length + ' letter word:';
+      resultLabel.textContent = 'Your answer (' + word.length + ' letter' + (word.length === 1 ? '' : 's') + '):';
       resultWord.textContent = word.toUpperCase();
     } else {
-      resultLabel.textContent = 'NO WORD SUBMITTED';
+      resultLabel.textContent = 'NO WORD ENTERED';
       resultWord.textContent = '';
     }
     resultIcon.className = valid ? 'tick' : 'cross';
     resultIcon.innerHTML = valid ? '&#10003;' : '&#10060;';
-    // "not accepted" only when a word actually WAS submitted and judged
-    // invalid — true no-submission stays blank (its "NO WORD SUBMITTED"
-    // label above already says everything that case needs).
-    resultSubtext.textContent = valid ? 'That word is correct!' : (word && !bonus ? 'That word was not accepted.' : '');
+    resultSubtext.textContent = valid ? 'That word is correct!' : (word ? 'That word was not accepted.' : '');
 
     resultPointsLabel.textContent = 'Points earned:';
     resultPoints.textContent = points + (points === 1 ? ' POINT' : ' POINTS');
+    resultTotalSoFar.textContent = 'Total score so far: ' + state.totalScore + (state.totalScore === 1 ? ' point' : ' points');
     resultTimeLeft.textContent = Math.max(0, state.timeRemaining);
     nextRoundBtn.textContent = bonus ? 'SEE FINAL SCORE' : 'NEXT ROUND';
 
@@ -703,10 +819,21 @@
       resultAnswersList.textContent = '';
     }
 
+    fireEvent(bonus ? 'bonus-round-ended' : 'round-ended', { word, valid, points, round: state.currentRound, difficulty: state.difficulty });
     updateFooterStats();
     showScreen('RESULT');
-    mountSkillCard('result-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar (see item 7)
+    mountSkillCard('result-skillcard-slot'); // center HUD slot — Intelligence, NOT the avatar
   }
+
+  // Early-finish for Rounds 1-4 only ("LOCK IN" — balancing spec item 4).
+  // Round 5 has no early finish of any kind — see the button being hidden
+  // in startActiveRound(), and this no-op guard as a second, independent
+  // backstop in case anything else ever calls it while Round 5 is active.
+  function lockInRound() {
+    if (isBonusRound()) return;
+    judgeAndEndRound();
+  }
+  activeLockInBtn.addEventListener('click', lockInRound);
 
   nextRoundBtn.addEventListener('click', () => {
     if (state.currentRound < 4) {
@@ -724,20 +851,59 @@
   const goScore2 = document.getElementById('go-score2');
   const goGamesPlayed = document.getElementById('go-gamesplayed');
   const goXpLine = document.getElementById('go-xp-line');
+  const goRoundEls = [1, 2, 3, 4, 5].map((n) => document.getElementById('go-r' + n));
+  const goTotalPoints = document.getElementById('go-total-points');
+  const goXpCalc = document.getElementById('go-xp-calc');
+
+  // Called once per completed game, alongside saveGameResult/
+  // awardIntelligenceXp — records THIS difficulty's high score and adds
+  // this game's 9-letter-word count to that difficulty's running total.
+  // Updates state.difficultyStats straight from the RPC's own fresh
+  // response (same "never trust a stale local copy" pattern as
+  // awardIntelligenceXp's level readback) so the lobby shows the correct
+  // new numbers the instant the player backs out, with no extra re-fetch.
+  async function saveDifficultyStats(difficulty, finalScore, nineLetterCount) {
+    if (!window.QZAuth || !window.QZAuth.client || !state.profile) return;
+    try {
+      const { data, error } = await window.QZAuth.client.rpc('record_anagram_quest_difficulty_result', {
+        p_difficulty: difficulty,
+        p_score: finalScore,
+        p_nine_letter_count: nineLetterCount
+      });
+      if (error) { console.warn('Anagram Quest: could not save difficulty stats', error); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        state.difficultyStats = {
+          EASY: { highScore: row.easy_high_score || 0, nineCount: row.easy_nine_count || 0 },
+          MEDIUM: { highScore: row.medium_high_score || 0, nineCount: row.medium_nine_count || 0 },
+          HARD: { highScore: row.hard_high_score || 0, nineCount: row.hard_nine_count || 0 }
+        };
+      }
+    } catch (err) {
+      console.warn('Anagram Quest: could not save difficulty stats', err);
+    }
+  }
 
   async function finishGame() {
     const finalScore = state.totalScore;
+    const cfg = state.difficultyConfig;
+    const xpEarned = finalScore * cfg.xpPerPoint;
+
     goName.textContent = state.profile ? state.profile.username : 'Guest';
+    goRoundEls.forEach((el, i) => { if (el) el.textContent = state.roundScores[i]; });
+    goTotalPoints.textContent = finalScore;
     goScore.textContent = finalScore;
     goScore2.textContent = finalScore;
+    goXpCalc.textContent = finalScore + ' × ' + cfg.xpPerPoint + ' XP/point = ' + xpEarned.toLocaleString() + ' Intelligence XP';
     goXpLine.textContent = state.profile ? ' ' : 'Sign in to save your score and earn Intelligence XP.';
     showScreen('GAMEOVER');
     playSound('game-over');
-    fireEvent('game-completed', { score: finalScore });
-    // both are per-completed-game, exactly once, here — never per round
+    fireEvent('game-completed', { score: finalScore, difficulty: state.difficulty, xp: xpEarned, nineLetterCount: state.nineLetterCount });
+    // all three are per-completed-game, exactly once, here — never per round
     await Promise.all([
       saveGameResult(finalScore),
-      awardIntelligenceXp(finalScore)
+      awardIntelligenceXp(xpEarned),
+      saveDifficultyStats(state.difficulty, finalScore, state.nineLetterCount)
     ]);
     goGamesPlayed.textContent = state.gamesPlayed;
     updateFooterStats();
@@ -748,27 +914,94 @@
     updateFooterStats();
   });
 
+  // ================= difficulty select + intro/countdown =================
+  function selectDifficulty(key) {
+    state.difficulty = key;
+    state.difficultyConfig = DIFFICULTIES[key];
+    state.totalScore = 0;
+    state.roundScores = [0, 0, 0, 0, 0];
+    state.nineLetterCount = 0;
+    updateDifficultyChips();
+    playIntro();
+  }
+  document.getElementById('btn-diff-easy').addEventListener('click', () => selectDifficulty('EASY'));
+  document.getElementById('btn-diff-medium').addEventListener('click', () => selectDifficulty('MEDIUM'));
+  document.getElementById('btn-diff-hard').addEventListener('click', () => selectDifficulty('HARD'));
+  document.getElementById('btn-diff-back').addEventListener('click', () => showScreen('LOBBY'));
+
+  const introDiffLabel = document.getElementById('intro-diff-label');
+  const introStatus = document.getElementById('intro-status');
+  const introCountdown = document.getElementById('intro-countdown');
+
+  // Purely cosmetic pacing (balancing spec item 24) — no gameplay state
+  // changes here beyond what selectDifficulty() already set; always ends
+  // by handing off to startLetterSelection(1). ~3.7s total (900ms "GAME
+  // STARTING" + 4 x 700ms for 3/2/1/GO), within the spec's 3-5s window.
+  function playIntro() {
+    const cfg = state.difficultyConfig;
+    introDiffLabel.textContent = cfg.label;
+    introDiffLabel.className = 'intro-diff ' + cfg.cssClass;
+    introStatus.textContent = 'GAME STARTING';
+    introCountdown.textContent = ' ';
+    showScreen('INTRO');
+    clearTimeout(state.introTimeoutId);
+    clearInterval(state.introIntervalId);
+    state.introTimeoutId = setTimeout(() => {
+      introStatus.textContent = '';
+      let n = 3;
+      introCountdown.textContent = n;
+      state.introIntervalId = setInterval(() => {
+        n -= 1;
+        if (n > 0) {
+          introCountdown.textContent = n;
+        } else if (n === 0) {
+          introCountdown.textContent = 'GO!';
+        } else {
+          clearInterval(state.introIntervalId);
+          startLetterSelection(1);
+        }
+      }, 700);
+    }, 900);
+  }
+
   // ================= lobby wiring =================
   document.getElementById('btn-start-game').addEventListener('click', async () => {
     await loadDictionary();
-    state.totalScore = 0;
-    state.roundScores = [0, 0, 0, 0, 0];
-    startLetterSelection(1);
+    showScreen('DIFFICULTY');
   });
-  document.getElementById('btn-achievements').addEventListener('click', () => {
-    // Anagram Quest's own scoped achievements page (achievements.html,
-    // same folder) — not the site-wide profile/achievements.html — so
-    // this only ever shows Anagram Quest's own list, with its own
-    // "Back to Game" instead of "Back to Profile".
-    window.location.href = 'achievements.html';
-  });
+  // Achievements is a plain <a href="achievements.html"> in the lobby's
+  // top-right icon row now (Anagram Quest's own scoped achievements page,
+  // same folder — not the site-wide profile/achievements.html) — no JS
+  // click handler needed, the href does it directly.
   // #btn-leaderboards uses data-coming-soon (see site.js) — no listener needed here.
+
+  // ---- Rules accordion (lobby only) — one category open at a time,
+  // native <button>s so it's keyboard-operable for free, aria-expanded
+  // kept in sync for screen readers. Purely a display toggle; nothing
+  // here touches game state. ----
+  const rulesAccordion = document.getElementById('rules-accordion');
+  if (rulesAccordion) {
+    rulesAccordion.querySelectorAll('.rule-acc-item').forEach((item) => {
+      const head = item.querySelector('.rule-acc-head');
+      head.addEventListener('click', () => {
+        const wasOpen = item.classList.contains('open');
+        rulesAccordion.querySelectorAll('.rule-acc-item').forEach((other) => {
+          other.classList.remove('open');
+          other.querySelector('.rule-acc-head').setAttribute('aria-expanded', 'false');
+        });
+        if (!wasOpen) {
+          item.classList.add('open');
+          head.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+  }
 
   // ================= keyboard support =================
   document.addEventListener('keydown', (e) => {
     if (screens.ACTIVE.classList.contains('hidden')) return;
     if (e.key === 'Backspace') { e.preventDefault(); backspace(); return; }
-    if (e.key === 'Enter') { e.preventDefault(); submitWord(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); lockInRound(); return; }
     const key = e.key.toUpperCase();
     if (key.length === 1 && key >= 'A' && key <= 'Z') {
       const idx = state.rack.findIndex((t) => !t.used && t.letter === key);
@@ -783,7 +1016,7 @@
     if (!screens.ACTIVE.classList.contains('hidden') && state.roundDeadline) {
       state.timeRemaining = Math.max(0, Math.ceil((state.roundDeadline - Date.now()) / 1000));
       updateTimerUi();
-      if (state.timeRemaining <= 0) { clearInterval(state.timerId); endRound(null); }
+      if (state.timeRemaining <= 0) { clearInterval(state.timerId); judgeAndEndRound(); }
     } else if (!screens.SELECT.classList.contains('hidden') && state.selDeadline && state.selecting) {
       const remaining = Math.max(0, Math.ceil((state.selDeadline - Date.now()) / 1000));
       updateSelTimerUi(remaining);

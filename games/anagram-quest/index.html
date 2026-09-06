@@ -128,58 +128,214 @@
 
   .row { display: flex; gap: 12px; width: 100%; flex-wrap: wrap; }
 
-  /* ---- Lobby ---- */
-  .lobby-top { display: flex; gap: 20px; flex-wrap: wrap; }
-  .player-card { flex: 2 1 320px; min-width: 260px; }
-  .rules-card { flex: 1 1 240px; min-width: 230px; }
-  .player-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  /* ---- avatar-circle: still used by the Game Over screen's decorative
+     placeholder icon (a plain inline SVG, not a real avatar mount) — the
+     lobby itself no longer shows any avatar at all (see the lobby rehaul
+     block further down, and anagram-quest.js's loadAccountData comment). ---- */
   .avatar-circle {
     width: 72px; height: 72px; border-radius: 50%;
     border: 3px solid var(--cyan); background: radial-gradient(circle at 40% 30%, #1a3a66, #05070f);
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 0 14px rgba(90,200,255,0.4);
     flex-shrink: 0;
-    position: relative; overflow: hidden; /* clips the real avatar render into the circle */
   }
   .avatar-circle svg { width: 40px; height: 40px; fill: var(--cyan); }
 
-  /* ---- real player avatar, lobby only — same renderer as Profile/Skills
-     (assets/js/avatar-viewer.js), mounted staticFront (front pose, no
-     rotation/drag) so it sits still next to the username. These class
-     names are dictated by avatar-viewer.js itself; not shared via
-     site.css because each mounting page's stage size differs. ---- */
-  .avatar-3d { position: absolute; inset: 0; }
-  .avatar-sprite {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
-    padding: 9% 11% 5%; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4));
-    pointer-events: none; user-select: none; -webkit-user-drag: none;
-  }
-  .avatar-equip-layer {
-    position: absolute; left: 50%; height: auto; transform: translateX(-50%);
-    pointer-events: none; user-select: none; -webkit-user-drag: none;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)) drop-shadow(0 0 5px rgba(255,210,90,0.3));
-  }
-  .avatar-loadout { display: none; } /* no room for fallback icon chips at this size */
-
-  /* ---- mid-game / post-round Intelligence card slot — replaces the old
-     circular avatar placeholder in the footer-stats row with real
-     horizontal room for the rectangular SkillCard (see item 41: don't
-     squeeze a rectangular card into a circle). ---- */
+  /* ---- mid-game / post-round Intelligence card slot (Select/Active/
+     Result HUD strips) — the compact skill-card.js box, untouched by the
+     lobby rehaul below. ---- */
   .hud-skillcard-slot { flex: 1 1 220px; max-width: 260px; }
-  .player-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(18px, 3vw, 24px); }
-  .stat-row { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
   .stat { text-align: left; }
   .stat .label { font-size: 12px; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 4px; }
   .stat .value { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 20px; color: var(--gold); }
+  .diffstats-empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 6px 0 2px; }
 
-  .rule-item { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
-  .rule-item .ic { width: 26px; height: 26px; flex-shrink: 0; color: var(--cyan); }
-  .rule-item .t { font-weight: 700; font-size: 14px; }
-  .rule-item .d { font-size: 12.5px; color: var(--text-dim); }
-  .rules-title { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--cyan); text-align: center; margin: 0 0 14px; letter-spacing: 0.03em; }
+  /* ============================================================
+     LOBBY REHAUL — three-column premium sci-fi dashboard.
+     See docs brief: Anagram_Quest_Lobby_Rehaul_Brief.docx.
+     Scoped entirely to #screen-lobby; every other screen (Difficulty
+     Select, Intro, Select/Active/Result, Game Over) is untouched and
+     still uses .wrap's normal 900px-max-width single-column .panel look.
+     ============================================================ */
 
-  .bottom-nav { display: flex; gap: 12px; width: 100%; flex-wrap: wrap; }
-  .bottom-nav .btn-dark { min-width: 140px; }
+  /* This section alone breaks out of .wrap's max-width to use most of
+     the viewport, matching the reference mockup's wide dashboard —
+     nothing else on the page is affected (see .wrap above, unchanged). */
+  #screen-lobby.screen {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    margin-left: -50vw;
+    padding: 14px 20px 30px;
+  }
+  .lobby-inner { max-width: 1440px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* The shared plain .logo pill (every other screen's header) is hidden
+     only while the lobby's own hero header is showing — see showScreen()
+     in anagram-quest.js. */
+  body.lobby-active .logo { display: none; }
+
+  /* ---- hero header: WORDS MAKE A BRIGHTER UNIVERSE / orbital arc +
+     title / sound-settings-achievements icons ---- */
+  .lobby-hero {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 18px;
+    padding: 4px 4px 0;
+  }
+  .lobby-hero-left {
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 10px;
+    letter-spacing: 0.14em; color: var(--text-dim); line-height: 1.7; padding-top: 20px;
+  }
+  .hero-side-rule { width: 34px; height: 2px; background: var(--cyan); opacity: 0.6; margin-top: 8px; }
+  .lobby-hero-center { text-align: center; min-width: 0; }
+  .hero-orbital-arc { display: block; width: min(560px, 46vw); max-width: 100%; height: auto; margin: 0 auto; overflow: visible; }
+  .hero-title {
+    font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(28px, 4.4vw, 54px); letter-spacing: 0.04em;
+    color: #f4faff; margin-top: -22px;
+    text-shadow: 0 0 16px rgba(130,215,255,0.9), 0 0 36px rgba(80,160,255,0.5);
+  }
+  .hero-rule { width: 130px; height: 2px; margin: 10px auto; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.85; }
+  .hero-motto { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: clamp(10px, 1.3vw, 13px); letter-spacing: 0.14em; color: var(--text-dim); }
+  .lobby-hero-right { display: flex; gap: 10px; justify-content: flex-end; padding-top: 2px; }
+  .hero-icon-btn {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    border: 1.5px solid rgba(110,160,220,0.4); background: rgba(10,16,32,0.6);
+    color: var(--cyan); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; text-decoration: none;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .hero-icon-btn svg { width: 18px; height: 18px; }
+  .hero-icon-btn:hover { border-color: var(--cyan); box-shadow: 0 0 12px rgba(110,200,255,0.45); }
+
+  /* ---- main chamfered frame ---- */
+  .lobby-frame {
+    position: relative; z-index: 1; margin-top: 14px;
+    background: linear-gradient(180deg, rgba(11,17,34,0.92), rgba(4,7,15,0.95));
+    border: 1.5px solid rgba(120,190,255,0.5);
+    clip-path: polygon(26px 0, calc(100% - 26px) 0, 100% 26px, 100% calc(100% - 26px), calc(100% - 26px) 100%, 26px 100%, 0 calc(100% - 26px), 0 26px);
+    filter: drop-shadow(0 0 22px rgba(60,150,255,0.22)) drop-shadow(0 0 50px rgba(30,90,180,0.14));
+    padding: clamp(18px, 2.4vw, 32px) clamp(14px, 2vw, 26px);
+    display: grid;
+    grid-template-columns: minmax(220px, 260px) minmax(340px, 1fr) minmax(250px, 300px);
+    gap: 0;
+  }
+  .lobby-col { padding: 0 20px; min-width: 0; }
+  .lobby-col-stats { padding-left: 2px; }
+  .lobby-col-center { padding-left: 26px; padding-right: 26px; border-left: 1px solid rgba(120,160,220,0.16); border-right: 1px solid rgba(120,160,220,0.16); text-align: center; }
+  .lobby-col-rules { padding-right: 2px; }
+
+  .col-header {
+    display: flex; align-items: center; gap: 9px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 12.5px;
+    letter-spacing: 0.09em; color: var(--cyan); margin-bottom: 16px;
+  }
+  .col-header svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .lobby-col-center .col-header { justify-content: center; }
+
+  /* ---- left: difficulty stat cards ---- */
+  .diff-card {
+    border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.12);
+    background: rgba(9,15,28,0.6); padding: 12px 14px; margin-bottom: 12px;
+    transition: box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+  .diff-card-head { display: flex; align-items: center; gap: 9px; }
+  .diff-card-icon { width: 19px; height: 19px; flex-shrink: 0; display: flex; }
+  .diff-card-icon svg { width: 100%; height: 100%; }
+  .diff-card-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 14.5px; letter-spacing: 0.05em; flex: 1; }
+  .diff-card-chevron { width: 15px; height: 15px; opacity: 0.45; flex-shrink: 0; }
+  .diff-card-body { display: flex; gap: 22px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); }
+  .diff-card-stat span { display: block; font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 3px; }
+  .diff-card-stat b { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 19px; color: var(--gold); }
+  .diff-card.easy { border-color: rgba(62,226,122,0.4); }
+  .diff-card.easy:hover { border-color: #3ee27a; box-shadow: 0 0 16px rgba(62,226,122,0.3); }
+  .diff-card.easy .diff-card-icon, .diff-card.easy .diff-card-name { color: #3ee27a; }
+  .diff-card.medium { border-color: rgba(255,207,77,0.4); }
+  .diff-card.medium:hover { border-color: #ffcf4d; box-shadow: 0 0 16px rgba(255,207,77,0.3); }
+  .diff-card.medium .diff-card-icon, .diff-card.medium .diff-card-name { color: #ffcf4d; }
+  .diff-card.hard { border-color: rgba(255,94,106,0.4); }
+  .diff-card.hard:hover { border-color: #ff5e6a; box-shadow: 0 0 16px rgba(255,94,106,0.3); }
+  .diff-card.hard .diff-card-icon, .diff-card.hard .diff-card-name { color: #ff5e6a; }
+
+  .lobby-col-footer {
+    text-align: center; font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim);
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.07); line-height: 1.9;
+  }
+
+  /* ---- center: welcome / global stats / Intelligence / Start ---- */
+  .welcome-label { font-size: 11px; letter-spacing: 0.16em; color: var(--text-dim); font-weight: 700; }
+  .player-name-big { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(22px, 2.6vw, 32px); color: #fff; margin-top: 4px; }
+  .center-rule { width: 64px; height: 2px; background: var(--cyan); opacity: 0.6; margin: 10px auto 16px; }
+
+  .global-stats-row { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 18px; }
+  .global-stat { display: flex; align-items: center; gap: 8px; }
+  .global-stat svg { width: 20px; height: 20px; color: var(--gold); flex-shrink: 0; }
+  .global-stat .g-label { display: block; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); text-align: left; }
+  .global-stat .g-value { display: block; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 20px; color: var(--gold); text-align: left; }
+  .global-stats-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.12); }
+
+  .intel-widget-slot { margin-bottom: 18px; text-align: left; }
+
+  .hero-start-btn { font-size: clamp(16px, 2vw, 20px); padding: 17px 20px; }
+  .hero-start-caption { text-align: center; color: var(--text-dim); font-size: 11px; letter-spacing: 0.1em; margin-top: 10px; }
+
+  /* ---- right: collapsible rules ---- */
+  .rules-accordion { display: flex; flex-direction: column; gap: 10px; }
+  .rule-acc-item { border: 1px solid rgba(110,160,220,0.25); border-radius: 10px; background: rgba(9,15,28,0.5); overflow: hidden; }
+  .rule-acc-head {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    background: none; border: none; color: #eaf3ff; font-family: 'Exo 2', sans-serif;
+    cursor: pointer; text-align: left;
+  }
+  .rule-acc-head svg:first-child { width: 16px; height: 16px; color: var(--cyan); flex-shrink: 0; }
+  .rule-acc-title { flex: 1; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .rule-acc-chevron { width: 15px; height: 15px; color: var(--text-dim); flex-shrink: 0; transition: transform 0.2s ease, color 0.2s ease; }
+  .rule-acc-item.open .rule-acc-head { border-bottom: 1px solid rgba(110,160,220,0.2); }
+  .rule-acc-item.open .rule-acc-chevron { transform: rotate(90deg); color: var(--cyan); }
+  .rule-acc-body-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 220ms ease; }
+  .rule-acc-item.open .rule-acc-body-wrap { grid-template-rows: 1fr; }
+  .rule-acc-body { overflow: hidden; min-height: 0; }
+  .rule-acc-body-inner { padding: 10px 14px 14px 40px; font-size: 12px; color: var(--text-dim); line-height: 1.65; }
+  .rule-acc-body-inner ul { margin: 0; padding-left: 15px; }
+  .rule-acc-body-inner li { margin-bottom: 5px; }
+  .rule-acc-body-inner li:last-child { margin-bottom: 0; }
+
+  /* ---- bottom nav (functional, styled like the reference's decorative
+     bottom strip) + planet horizon ---- */
+  .lobby-bottom-nav {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-top: 18px; font-family: 'Orbitron', sans-serif; font-weight: 700;
+    font-size: 11px; letter-spacing: 0.1em; color: var(--text-dim); position: relative; z-index: 1;
+  }
+  .lobby-bottom-nav a, .lobby-bottom-nav button {
+    background: none; border: none; color: var(--text-dim); font: inherit; letter-spacing: inherit;
+    cursor: pointer; text-decoration: none; padding: 4px 2px; transition: color 0.15s ease;
+  }
+  .lobby-bottom-nav a:hover, .lobby-bottom-nav button:hover { color: var(--cyan); }
+  .lobby-bottom-nav-sep { opacity: 0.4; }
+
+  .planet-horizon {
+    position: fixed; left: 50%; bottom: -970px; transform: translateX(-50%);
+    width: 2400px; height: 1100px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 0%, #1e4172 0%, #123058 30%, #071630 62%, #05070f 82%);
+    box-shadow: 0 -4px 26px 4px rgba(110,200,255,0.55), 0 -2px 90px rgba(70,160,255,0.35);
+    z-index: 0; pointer-events: none;
+  }
+  .planet-horizon::before {
+    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 420px; height: 200px; border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 100%, rgba(255,224,160,1) 0%, rgba(255,190,100,0.55) 45%, transparent 74%);
+    filter: blur(2px);
+  }
+
+  /* ---- responsive: center content first, then stats, then rules ---- */
+  @media (max-width: 980px) {
+    .lobby-frame { grid-template-columns: 1fr; }
+    .lobby-col-center { order: -1; border-left: none; border-right: none; border-bottom: 1px solid rgba(120,160,220,0.16); padding-bottom: 22px; margin-bottom: 18px; }
+    .lobby-col { padding: 0 4px; }
+    .lobby-hero { grid-template-columns: 1fr; text-align: center; }
+    .lobby-hero-left { display: none; }
+    .lobby-hero-right { justify-content: center; margin-top: 10px; }
+  }
 
   /* ---- Round screens ---- */
   .round-label { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--gold); text-align: center; font-size: clamp(20px, 4vw, 30px); margin: 4px 0; }
@@ -284,6 +440,38 @@
 
   .hidden { display: none !important; }
 
+  /* ---- Difficulty select + intro/countdown ---- */
+  .diff-options { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; margin: 6px auto 4px; }
+  .diff-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    width: 100%; padding: 16px 18px; border-radius: 16px; border: 2px solid; cursor: pointer;
+  }
+  .diff-btn .diff-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 22px; letter-spacing: 0.04em; }
+  .diff-btn .diff-meta { font-family: 'Exo 2', sans-serif; font-weight: 600; font-size: 12px; opacity: 0.85; }
+  .diff-btn.easy { background: linear-gradient(180deg,#8dffb0,#2fce6c); border-color: #c9ffdb; color: #04220f; box-shadow: 0 0 16px rgba(60,220,120,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
+  .diff-btn.medium { background: linear-gradient(180deg,#ffe38a,#ffc233); border-color: #ffe9a8; color: #3a2200; box-shadow: 0 0 16px rgba(255,190,60,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
+  .diff-btn.hard { background: linear-gradient(180deg,#ff9a9a,#e0303a); border-color: #ffc4c4; color: #2a0505; box-shadow: 0 0 16px rgba(255,60,70,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
+  .diff-btn:hover { transform: translateY(-2px); }
+
+  /* small pill badge showing the active difficulty — reused on Select/Active/Result/GameOver headers */
+  .diff-chip { display: table; margin: 0 auto 10px; padding: 3px 14px; border-radius: 999px; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 11px; letter-spacing: 0.05em; }
+  .diff-chip.easy { background: rgba(60,220,120,0.16); color: #7CFFA0; border: 1px solid rgba(124,255,160,0.5); }
+  .diff-chip.medium { background: rgba(255,194,51,0.16); color: #ffe38a; border: 1px solid rgba(255,227,138,0.5); }
+  .diff-chip.hard { background: rgba(224,48,58,0.16); color: #ff9a9a; border: 1px solid rgba(255,154,154,0.5); }
+
+  .intro-panel { text-align: center; padding: clamp(30px,8vw,60px) 20px; }
+  .intro-title { font-family: 'Orbitron', sans-serif; font-weight: 900; color: var(--cyan); font-size: clamp(18px,4vw,26px); letter-spacing: 0.06em; }
+  .intro-diff { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(28px,7vw,44px); margin: 10px 0 4px; }
+  .intro-diff.easy { color: #7CFFA0; text-shadow: 0 0 18px rgba(124,255,160,0.6); }
+  .intro-diff.medium { color: var(--gold); text-shadow: 0 0 18px rgba(255,207,77,0.6); }
+  .intro-diff.hard { color: var(--red); text-shadow: 0 0 18px rgba(255,94,106,0.6); }
+  .intro-status { color: var(--text-dim); font-weight: 700; letter-spacing: 0.04em; margin-bottom: 10px; min-height: 18px; }
+  .intro-countdown {
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(52px,16vw,96px);
+    color: var(--gold); text-shadow: 0 0 26px rgba(255,200,60,0.6);
+    min-height: 110px; display: flex; align-items: center; justify-content: center;
+  }
+
   @media (max-width: 560px) {
     .lobby-top { flex-direction: column; }
     .vc-btn { width: 45%; }
@@ -301,49 +489,218 @@
   <div class="logo">ANAGRAM QUEST</div>
 
   <!-- ============== LOBBY ============== -->
+  <!-- Full dashboard rehaul (see docs brief: Anagram_Quest_Lobby_Rehaul_
+       Brief.docx) — a three-column premium sci-fi hub: Difficulty Stats
+       (left) / Player + Intelligence + Start Game (center) / collapsible
+       Rules (right), a planet-horizon + orbital-arc atmosphere, and NO
+       player avatar anywhere on this screen (deliberately removed — see
+       anagram-quest.js, loadPlayerAvatar/qzAvatar no longer exist). This
+       section alone breaks out of .wrap's 900px max-width (see
+       #screen-lobby.screen in the CSS) — every other screen is untouched. -->
   <section id="screen-lobby" class="screen">
-    <div class="panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
-      <div class="gold-heading">GAME LOBBY</div>
-      <div class="subtitle">Sharpen your mind. Find the words. Conquer the quest.</div>
+    <div class="planet-horizon" aria-hidden="true"></div>
 
-      <div class="lobby-top">
-        <div class="player-card panel" style="margin-bottom:0;">
-          <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
-          <div class="player-head">
-            <!-- Real, equipped Quest Zone avatar — same renderer/data as
-                 Profile (assets/js/avatar-viewer.js), mounted staticFront.
-                 Wired up in anagram-quest.js's loadPlayerAvatar(). -->
-            <div class="avatar-circle"><div id="lobby-avatar-3d"></div></div>
-            <div class="player-name" id="lobby-username">Player Name</div>
-          </div>
-          <div class="stat-row">
-            <div class="stat"><div class="label">High Score</div><div class="value" id="lobby-highscore">0</div></div>
-            <div class="stat"><div class="label">Games Played</div><div class="value" id="lobby-gamesplayed">0</div></div>
-          </div>
-          <!-- Same reusable Intelligence skill card as Profile -> Skills
-               (assets/js/skill-card.js) — same icon, name, level, hover
-               tooltip, and underlying games/game_progress data. Mounted/
-               refreshed in anagram-quest.js's updateFooterStats(). -->
-          <div id="lobby-skillcard-slot" style="margin-top:14px;max-width:260px;"></div>
+    <div class="lobby-inner">
+      <div class="lobby-hero">
+        <div class="lobby-hero-left">
+          WORDS<br>MAKE A<br>BRIGHTER<br>UNIVERSE
+          <div class="hero-side-rule"></div>
         </div>
-        <div class="rules-card panel" style="margin-bottom:0;">
-          <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
-          <div class="rules-title">GAME RULES</div>
-          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">Pick 9 letters</div><div class="d">Use V for vowels and C for consonants each round.</div></div></div>
-          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">Build the longest word</div><div class="d">English words + real cities/countries, 4+ letters, in 30 seconds.</div></div></div>
-          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">5 rounds total</div><div class="d">Longer words score more points.</div></div></div>
-          <div class="rule-item"><div class="t">&#9642;</div><div><div class="t">Final round</div><div class="d">Solve the 9-letter word fast for a big bonus!</div></div></div>
+        <div class="lobby-hero-center">
+          <svg class="hero-orbital-arc" viewBox="0 0 600 90" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#6fe3ff" stop-opacity="0.15"/>
+                <stop offset="35%" stop-color="#6fe3ff" stop-opacity="0.85"/>
+                <stop offset="50%" stop-color="#ffe9a8"/>
+                <stop offset="65%" stop-color="#6fe3ff" stop-opacity="0.85"/>
+                <stop offset="100%" stop-color="#6fe3ff" stop-opacity="0.15"/>
+              </linearGradient>
+            </defs>
+            <path d="M 15 82 Q 300 -35 585 82" fill="none" stroke="url(#arcGrad)" stroke-width="3" stroke-linecap="round"/>
+            <g transform="translate(300,4)">
+              <circle r="10" fill="#ffe9a8" opacity="0.35"/>
+              <circle r="4" fill="#fff8e6"/>
+              <path d="M0 -13 L0 13 M-13 0 L13 0" stroke="#ffe9a8" stroke-width="1.5" opacity="0.8"/>
+            </g>
+          </svg>
+          <div class="hero-title">ANAGRAM QUEST</div>
+          <div class="hero-rule"></div>
+          <div class="hero-motto">SOLVE WORDS &bull; SCORE HIGH &bull; EARN INTELLIGENCE XP</div>
+        </div>
+        <div class="lobby-hero-right">
+          <button class="hero-icon-btn" type="button" data-coming-soon="Sound settings are coming soon!" title="Sound">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 0 1 0 8"/></svg>
+          </button>
+          <button class="hero-icon-btn" type="button" data-coming-soon="Settings are coming soon!" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 6.6a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.24a1.7 1.7 0 0 0 1-1.55V2.6a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V6.6a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+          </button>
+          <a class="hero-icon-btn" href="achievements.html" title="Achievements">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H4v2a4 4 0 0 0 4 4"/><path d="M16 5h4v2a4 4 0 0 1-4 4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+          </a>
         </div>
       </div>
+
+      <div class="lobby-frame">
+        <!-- ---- LEFT: Difficulty Stats — this account only ---- -->
+        <div class="lobby-col lobby-col-stats">
+          <div class="col-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="4" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="20" y1="20" x2="20" y2="15"/></svg>
+            <span>DIFFICULTY STATS</span>
+          </div>
+          <!-- Per-difficulty stats — YOUR OWN account only (RLS on
+               public.anagram_quest_stats is own-row-or-admin, never
+               public), never any other player's. Populated by
+               anagram-quest.js's loadDifficultyStats()/
+               renderDifficultyStats(). -->
+          <div id="lobby-diffstats-rows"></div>
+          <div class="lobby-col-footer">BIGGER WORDS<br>BRIGHTER MINDS</div>
+        </div>
+
+        <!-- ---- CENTER: Player / global stats / Intelligence / Start ---- -->
+        <div class="lobby-col lobby-col-center">
+          <div class="welcome-label">WELCOME BACK,</div>
+          <div class="player-name-big" id="lobby-username">Player</div>
+          <div class="center-rule"></div>
+          <div class="global-stats-row">
+            <div class="global-stat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H4v2a4 4 0 0 0 4 4"/><path d="M16 5h4v2a4 4 0 0 1-4 4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+              <span><span class="g-label">High Score</span><span class="g-value" id="lobby-highscore">0</span></span>
+            </div>
+            <div class="global-stats-divider"></div>
+            <div class="global-stat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="11" rx="5"/><line x1="7" y1="10" x2="7" y2="14"/><line x1="5" y1="12" x2="9" y2="12"/><circle cx="16" cy="10.5" r="1"/><circle cx="18.5" cy="13" r="1"/></svg>
+              <span><span class="g-label">Games Played</span><span class="g-value" id="lobby-gamesplayed">0</span></span>
+            </div>
+          </div>
+
+          <!-- Same reusable Intelligence skill-card component as Profile ->
+               Skills (assets/js/skill-card.js), rendered here via its
+               richer mountFull() variant (icon + level + XP progress bar +
+               caption, same underlying games/game_progress data and same
+               hover tooltip as the compact version used elsewhere).
+               Mounted/refreshed in anagram-quest.js's updateFooterStats(). -->
+          <div id="lobby-skillcard-slot" class="intel-widget-slot"></div>
+
+          <button class="btn btn-gold hero-start-btn" id="btn-start-game">&#9654; START GAME</button>
+          <div class="hero-start-caption">A SHARPER YOU AWAITS</div>
+        </div>
+
+        <!-- ---- RIGHT: collapsible Rules ---- -->
+        <div class="lobby-col lobby-col-rules">
+          <div class="col-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
+            <span>RULES</span>
+          </div>
+          <div class="rules-accordion" id="rules-accordion">
+            <div class="rule-acc-item open" data-rule="how-to-play">
+              <button class="rule-acc-head" type="button" aria-expanded="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                <span class="rule-acc-title">How To Play</span>
+                <svg class="rule-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
+                <ul>
+                  <li>Pick 9 letters — press V for a vowel or C for a consonant each round.</li>
+                  <li>Build the longest real word you can from your letters.</li>
+                  <li>Lock in early once you're happy, or let the clock run out.</li>
+                  <li>5 rounds per game, then one big final round.</li>
+                </ul>
+              </div></div></div>
+            </div>
+            <div class="rule-acc-item" data-rule="scoring">
+              <button class="rule-acc-head" type="button" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H4v2a4 4 0 0 0 4 4"/><path d="M16 5h4v2a4 4 0 0 1-4 4"/></svg>
+                <span class="rule-acc-title">Scoring</span>
+                <svg class="rule-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
+                <ul>
+                  <li>4-6 letter words score points equal to their length.</li>
+                  <li>7-letter words score 10, 8-letter score 12, 9-letter score 18.</li>
+                  <li>Invalid words or fewer than 4 letters score 0.</li>
+                  <li>Your total score converts to Intelligence XP based on difficulty.</li>
+                </ul>
+              </div></div></div>
+            </div>
+            <div class="rule-acc-item" data-rule="rounds">
+              <button class="rule-acc-head" type="button" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>
+                <span class="rule-acc-title">Rounds</span>
+                <svg class="rule-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
+                <ul>
+                  <li>Rounds 1-4: pick letters, then build a word before time runs out.</li>
+                  <li>Timer length depends on difficulty (Easy / Medium / Hard).</li>
+                  <li>No hints on validity — whatever's in the boxes when time hits 0 is what counts.</li>
+                </ul>
+              </div></div></div>
+            </div>
+            <div class="rule-acc-item" data-rule="final-round">
+              <button class="rule-acc-head" type="button" aria-expanded="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.9-6.2 3.9 1.6-7-5.4-4.7 7.1-.6z"/></svg>
+                <span class="rule-acc-title">Final Round</span>
+                <svg class="rule-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
+                <ul>
+                  <li>Round 5 is a single scrambled 9-letter word — no letter selection.</li>
+                  <li>Solve it for a flat 30 points — more than a 9-letter word anywhere else.</li>
+                  <li>The clock cannot be skipped or ended early on this round.</li>
+                  <li>Every valid solution is revealed afterwards, win or lose.</li>
+                </ul>
+              </div></div></div>
+            </div>
+          </div>
+          <div class="lobby-col-footer">SAME LETTERS.<br>BIGGER POSSIBILITIES.</div>
+        </div>
+      </div>
+
+      <div class="lobby-bottom-nav">
+        <a href="../../index.html">&#8592; BACK TO ARCADE</a>
+        <span class="lobby-bottom-nav-sep">&bull;</span>
+        <button type="button" id="btn-leaderboards" data-coming-soon="Anagram Quest leaderboards are coming soon!">LEADERBOARDS</button>
+      </div>
     </div>
+  </section>
 
-    <button class="btn btn-gold" id="btn-start-game" style="max-width:520px; margin-bottom:16px;">&#9654; START GAME</button>
+  <!-- ============== DIFFICULTY SELECT ============== -->
+  <!-- The point system (games/anagram-quest/anagram-quest.js's
+       POINTS_BY_LENGTH/ROUND5_POINTS) is IDENTICAL for all three —
+       only the per-round timer and the Intelligence-XP-per-point
+       multiplier change (see DIFFICULTIES in anagram-quest.js). -->
+  <section id="screen-difficulty" class="screen hidden">
+    <div class="panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="gold-heading">CHOOSE YOUR DIFFICULTY</div>
+      <div class="subtitle">Less time, more Intelligence XP per point.</div>
+      <div class="diff-options">
+        <button class="btn diff-btn easy" id="btn-diff-easy">
+          <span class="diff-name">EASY</span>
+          <span class="diff-meta">30s rounds &middot; 30s Round 5 &middot; 20 XP / point</span>
+        </button>
+        <button class="btn diff-btn medium" id="btn-diff-medium">
+          <span class="diff-name">MEDIUM</span>
+          <span class="diff-meta">20s rounds &middot; 30s Round 5 &middot; 60 XP / point</span>
+        </button>
+        <button class="btn diff-btn hard" id="btn-diff-hard">
+          <span class="diff-name">HARD</span>
+          <span class="diff-meta">10s rounds &middot; 20s Round 5 &middot; 180 XP / point</span>
+        </button>
+      </div>
+      <button class="btn btn-dark" id="btn-diff-back" style="max-width:220px;margin:18px auto 0;display:block;">&#8592; BACK</button>
+    </div>
+  </section>
 
-    <div class="bottom-nav">
-      <button class="btn btn-dark" id="btn-achievements">&#127942; ACHIEVEMENTS</button>
-      <button class="btn btn-dark" id="btn-leaderboards" data-coming-soon="Anagram Quest leaderboards are coming soon!">&#127942; LEADERBOARDS</button>
-      <a class="btn btn-dark" href="../../index.html" style="text-decoration:none;">&#8592; BACK TO ARCADE</a>
+  <!-- ============== INTRO / COUNTDOWN ============== -->
+  <section id="screen-intro" class="screen hidden">
+    <div class="panel intro-panel">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="intro-title">ANAGRAM QUEST</div>
+      <div class="intro-diff" id="intro-diff-label">EASY</div>
+      <div class="intro-status" id="intro-status">GAME STARTING</div>
+      <div class="intro-countdown" id="intro-countdown">&nbsp;</div>
     </div>
   </section>
 
@@ -351,6 +708,7 @@
   <section id="screen-select" class="screen hidden">
     <div class="panel">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="diff-chip" id="sel-diff-chip">EASY</div>
       <div class="round-label">Round <span id="sel-round-num">1</span> of 5</div>
       <div class="round-sub">It's your go. Please select nine letters.</div>
 
@@ -388,6 +746,7 @@
   <section id="screen-active" class="screen hidden">
     <div class="panel">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="diff-chip" id="active-diff-chip">EASY</div>
       <div class="round-label" id="active-round-label">Round 1 of 5</div>
       <div class="round-sub" id="active-round-sub">Build the longest word you can.</div>
 
@@ -397,12 +756,19 @@
       </div>
       <div class="tiles-row" id="active-tiles"></div>
 
+      <!-- Deliberately never shows valid/invalid, points, or XP while the
+           round is live (balancing spec item 3) — active-msg stays blank;
+           active-locked is repurposed as a plain rules reminder, not a
+           "current submission" readout (there's no submission step any
+           more — see judgeAndEndRound() in anagram-quest.js). -->
       <div class="msg-inline" id="active-msg">&nbsp;</div>
       <div class="locked-answer" id="active-locked">&nbsp;</div>
 
       <div class="timer-row">
         <div class="timer-ring" id="active-timer-ring" style="--pct:100;"><span class="ring-fg"></span><span class="timer-num" id="active-timer-num">30</span></div>
-        <button class="btn btn-gold submit-btn" id="active-submit">SUBMIT</button>
+        <!-- Rounds 1-4 only — hidden entirely for Round 5, which can never
+             end early (see anagram-quest.js's startActiveRound/lockInRound). -->
+        <button class="btn btn-gold submit-btn" id="active-lockin">LOCK IN</button>
       </div>
 
       <div class="footer-stats">
@@ -420,6 +786,7 @@
   <section id="screen-result" class="screen hidden">
     <div class="panel">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="diff-chip" id="result-diff-chip">EASY</div>
       <div class="result-word-box">
         <div class="result-word-label" id="result-label">You submitted a 6 letter word:</div>
         <!-- exactly ONE icon element, reused every round — see endRound()
@@ -431,6 +798,7 @@
         <div class="label" id="result-points-label">Points earned:</div>
         <div class="value" id="result-points">6 POINTS</div>
       </div>
+      <div style="text-align:center;color:var(--text-dim);font-size:13px;margin-top:6px;" id="result-total-so-far"></div>
       <!-- Round 5 only: always shows every valid 9-letter dictionary
            answer for that rack, win or lose. -->
       <div class="result-answers hidden" id="result-answers">
@@ -455,8 +823,25 @@
     <div class="panel">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="gold-heading">GAME OVER</div>
+      <div class="diff-chip" id="go-diff-chip">EASY</div>
       <div class="final-score-line"><span class="name" id="go-name">Player</span>: <span class="num" id="go-score">0</span></div>
-      <div style="text-align:center;color:var(--gold);font-size:13px;font-weight:700;min-height:18px;margin:-6px 0 6px;" id="go-xp-line">&nbsp;</div>
+
+      <!-- Round-by-round points breakdown -> total -> XP conversion
+           (balancing spec item 27). Points are identical across
+           difficulties; only the XP/point multiplier below differs. -->
+      <div style="max-width:300px;margin:14px auto 0;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--text-dim);">
+        <div style="display:flex;justify-content:space-between;"><span>ROUND 1</span><span id="go-r1">0</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>ROUND 2</span><span id="go-r2">0</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>ROUND 3</span><span id="go-r3">0</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>ROUND 4</span><span id="go-r4">0</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>ROUND 5</span><span id="go-r5">0</span></div>
+        <div style="display:flex;justify-content:space-between;font-family:'Orbitron',sans-serif;font-weight:900;font-size:15px;color:var(--gold);border-top:1px solid rgba(120,160,220,0.25);padding-top:6px;margin-top:2px;">
+          <span>TOTAL POINTS</span><span id="go-total-points">0</span>
+        </div>
+      </div>
+      <div style="text-align:center;color:var(--cyan);font-weight:700;font-size:13px;margin-top:10px;" id="go-xp-calc">0 &times; 20 XP/point = 0 Intelligence XP</div>
+
+      <div style="text-align:center;color:var(--gold);font-size:13px;font-weight:700;min-height:18px;margin:6px 0 6px;" id="go-xp-line">&nbsp;</div>
       <button class="btn btn-gold" id="btn-back-lobby" style="max-width:320px;margin:10px auto 20px;display:block;">BACK TO LOBBY</button>
 
       <div class="footer-stats">
@@ -473,8 +858,6 @@
 <script src="../../assets/js/qz-auth.js"></script>
 <script src="../../assets/js/qz-xp.js"></script>
 <script src="../../assets/js/skill-card.js"></script>
-<script src="../../assets/js/inventory-data.js"></script>
-<script src="../../assets/js/avatar-viewer.js"></script>
 <script src="../../assets/js/site.js"></script>
 <script src="../../assets/js/stars-plain.js"></script>
 <script src="anagram-data.js"></script>
