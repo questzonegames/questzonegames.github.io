@@ -92,19 +92,29 @@
     box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
   }
   .player-avatar-thumb svg { width: 22px; height: 22px; color: #9ab6ea; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-  /* Real avatar thumbnail — avatar-viewer.js mounts into this and adds its
-     own `avatar-3d` class; sized and shifted up so a body-length render
-     crops down to a head-and-shoulders "profile picture" inside the small
-     circle instead of showing a tiny full body. See assets/js/avatar-
-     viewer.js's mount() for what it expects (.avatar-sprite children,
-     object-fit: contain within THIS element's own box). */
-  .player-avatar-thumb-mount {
-    position: absolute; width: 230%; height: 230%; left: -65%; top: -20%;
+  /* Real avatar thumbnail — a flat PNG snapshot (see snapshotAvatar() below)
+     of the exact same avatar-viewer.js render used on the profile page,
+     taken at a normal, full render size and then displayed here scaled
+     down as a plain image. This is deliberate: mounting a LIVE avatar-
+     viewer instance directly into a 44px circle at a large CSS zoom used
+     to throw off equipped items positioned in absolute pixels (computed
+     against that tiny container's own size), so a crown that sits
+     correctly on the real profile came out visibly offset in the small
+     circle. A flat snapshot can't drift from the real render — it IS the
+     real render, just scaled — and plain image scaling can't misplace a
+     layer relative to another the way re-running layout math at a
+     different container size could. */
+  .player-avatar-thumb img.snapshot {
+    position: absolute; width: 100%; height: 100%;
+    object-fit: cover; object-position: 50% 18%;
   }
-  .player-avatar-thumb-mount .avatar-sprite {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: contain; padding: 9% 11% 5%; pointer-events: none;
-  }
+  /* The hidden, full-size render snapshotAvatar() mounts each avatar into
+     before capturing it — needs the SAME padding avatar-viewer.js's real
+     .avatar-sprite CSS uses everywhere else (profile/index.html, skills.
+     html, etc.), since computeContentBox() reads it back via
+     getComputedStyle() to know where the sprite content box actually
+     starts. Nothing here is ever visible; the element sits off-screen. */
+  .qz-avatar-snapshot-rig .avatar-sprite { padding: 9% 11% 5%; }
   .player-row-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .player-row-name {
     font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px;
@@ -219,51 +229,125 @@
   }
 
   function showState(icon, title, body) {
-    teardownThumbs();
+    renderGen++; // invalidate any snapshot still being rendered for the previous results
     stateEl.innerHTML = '<div class="icon">' + icon + '</div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body);
     stateEl.hidden = false;
     resultsEl.hidden = true;
   }
 
-  // Each result's real front-facing avatar, mounted via the SAME
-  // avatar-viewer.js module the profile pages use (staticFront: true —
-  // these are inert thumbnails, never rotating, regardless of
-  // window.QZ_AVATAR_MODE). Instances from the previous render are torn
-  // down first so a fast typist doesn't leak one avatar-viewer per
-  // keystroke.
-  let mountedThumbs = [];
-  function teardownThumbs() {
-    mountedThumbs.forEach((m) => { try { m.destroy(); } catch (e) {} });
-    mountedThumbs = [];
+  // Each result's real front-facing avatar shown as a flat PNG snapshot —
+  // see the CSS comment above .player-avatar-thumb img.snapshot for why a
+  // snapshot instead of mounting a live avatar-viewer straight into the
+  // small circle. `renderGen` guards against a slow, still-in-flight
+  // snapshot from an OLDER search landing after a newer one has already
+  // replaced the results list (a fast typist's earlier keystroke finishing
+  // its render work after a later one).
+  let renderGen = 0;
+  const SNAPSHOT_W = 240, SNAPSHOT_H = 320;
+
+  // Polls until every image avatar-viewer.js actually intends to show
+  // (opacity !== '0' — it briefly creates hidden images for other poses/
+  // broken items) has finished loading, or gives up after timeoutMs so one
+  // broken/slow image can never hang a whole search result forever.
+  function waitForAvatarImages(container, timeoutMs) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      (function poll() {
+        const imgs = Array.from(container.querySelectorAll('img')).filter((img) => {
+          return img.getAttribute('src') && getComputedStyle(img).opacity !== '0';
+        });
+        const ready = imgs.length > 0 && imgs.every((img) => img.complete);
+        if (ready || Date.now() - start > timeoutMs) {
+          // two rAFs: one for this frame's style/layout to settle, one to
+          // be sure the browser has actually painted before we read rects
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        } else {
+          setTimeout(poll, 40);
+        }
+      })();
+    });
   }
 
-  function mountThumb(el, row) {
-    if (!window.QZAvatarViewer) { el.innerHTML = PERSON_ICON; return; }
+  // Renders one account's avatar at a normal, full size off-screen (same
+  // code path, same relative proportions as the real profile page —
+  // avatar-viewer.js never even knows this render is destined for a tiny
+  // circle), then flattens it into a single PNG data URL by drawing each
+  // visible layer onto a canvas in the same order/positions it's actually
+  // showing on screen. avatar-sprite layers (base body, hair, pre-baked
+  // equip-frame overlays) use object-fit:contain letterboxing, so those
+  // use avatar-viewer.js's own computeContentBox/computeRenderedImageRect
+  // math (the same formula the real renderer and Avatar Rig editor share)
+  // rather than the element's own box. Live-calibrated equip layers
+  // (avatar-equip-live, e.g. the crown) are already absolutely positioned
+  // in real pixels by avatar-viewer.js itself, so their own
+  // getBoundingClientRect() is exactly right as-is.
+  async function snapshotAvatar(row) {
+    if (!window.QZAvatarViewer) return null;
+    const AV = window.QZAvatarViewer;
     const mountEl = document.createElement('div');
-    mountEl.className = 'player-avatar-thumb-mount';
-    el.appendChild(mountEl);
-    const avatar = window.QZAvatarViewer.mount(mountEl, { staticFront: true });
-    mountedThumbs.push(avatar);
+    mountEl.className = 'qz-avatar-snapshot-rig';
+    mountEl.style.cssText = 'position:fixed; left:-9999px; top:-9999px; width:' + SNAPSHOT_W + 'px; height:' + SNAPSHOT_H + 'px; pointer-events:none;';
+    document.body.appendChild(mountEl);
+    const avatar = AV.mount(mountEl, { staticFront: true });
+    try {
+      const catalogById = {};
+      (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+      const equipped = {};
+      (row.equipped_items || []).forEach((r) => { if (r.item_id && catalogById[r.item_id]) equipped[r.slot] = catalogById[r.item_id]; });
+      avatar.setAvatarEquipment(equipped);
+      if (avatar.setBaseAppearance && row.avatar_gender) {
+        avatar.setBaseAppearance(row.avatar_gender, row.avatar_skin_colour);
+        if (avatar.setHairstyle) avatar.setHairstyle(row.avatar_hair_style, row.avatar_hair_colour);
+      }
 
-    const catalogById = {};
-    (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
-    const equipped = {};
-    (row.equipped_items || []).forEach((r) => { if (r.item_id && catalogById[r.item_id]) equipped[r.slot] = catalogById[r.item_id]; });
-    avatar.setAvatarEquipment(equipped);
-    if (avatar.setBaseAppearance && row.avatar_gender) {
-      avatar.setBaseAppearance(row.avatar_gender, row.avatar_skin_colour);
-      if (avatar.setHairstyle) avatar.setHairstyle(row.avatar_hair_style, row.avatar_hair_colour);
+      await waitForAvatarImages(mountEl, 1200);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = SNAPSHOT_W;
+      canvas.height = SNAPSHOT_H;
+      const ctx = canvas.getContext('2d');
+      const containerRect = mountEl.getBoundingClientRect();
+      Array.from(mountEl.querySelectorAll('img')).forEach((img) => {
+        if (!img.complete || !img.naturalWidth) return;
+        if (getComputedStyle(img).opacity === '0') return;
+        try {
+          if (img.classList.contains('avatar-sprite')) {
+            const box = AV.computeContentBox(mountEl, img);
+            const r = AV.computeRenderedImageRect(box, img.naturalWidth, img.naturalHeight);
+            ctx.drawImage(img, r.left, r.top, r.width, r.height);
+          } else {
+            const r = img.getBoundingClientRect();
+            ctx.drawImage(img, r.left - containerRect.left, r.top - containerRect.top, r.width, r.height);
+          }
+        } catch (e) { /* one layer failing to draw shouldn't blank the rest */ }
+      });
+      return canvas.toDataURL('image/png');
+    } finally {
+      try { avatar.destroy(); } catch (e) {}
+      mountEl.remove();
     }
   }
 
+  async function fillThumb(el, row, myGen) {
+    const dataUrl = await snapshotAvatar(row).catch(() => null);
+    if (myGen !== renderGen || !el.isConnected) return; // superseded or scrolled away
+    if (!dataUrl) { el.innerHTML = PERSON_ICON; return; }
+    const img = document.createElement('img');
+    img.className = 'snapshot';
+    img.alt = '';
+    img.src = dataUrl;
+    el.innerHTML = '';
+    el.appendChild(img);
+  }
+
   function renderResults(rows) {
-    teardownThumbs();
+    const myGen = ++renderGen;
     resultsEl.innerHTML = rows.map((row, i) => {
       const badge = row.is_banned
         ? '<span class="player-banned-badge">Temporarily Banned</span>'
         : '';
       return '<a class="player-row" href="index.html?player=' + encodeURIComponent(row.username) + '">' +
-        '<span class="player-avatar-thumb" id="player-thumb-' + i + '"></span>' +
+        '<span class="player-avatar-thumb" id="player-thumb-' + i + '">' + PERSON_ICON + '</span>' +
         '<span class="player-row-main"><span class="player-row-name">' + escapeHtml(row.username) + '</span>' + badge + '</span>' +
         '<span class="player-row-arrow">›</span>' +
       '</a>';
@@ -272,7 +356,7 @@
     resultsEl.hidden = false;
     rows.forEach((row, i) => {
       const el = document.getElementById('player-thumb-' + i);
-      if (el) mountThumb(el, row);
+      if (el) fillThumb(el, row, myGen);
     });
   }
 
@@ -302,7 +386,6 @@
     clearTimeout(debounceTimer);
     if (!q) {
       requestSeq++; // invalidate any in-flight request
-      teardownThumbs();
       showState('🔎', 'Find a Player', 'Search for a Quest Zone username to view their profile.');
       return;
     }
