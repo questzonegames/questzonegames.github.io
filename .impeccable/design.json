@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-06T00:00:00Z",
+  "title": "Design System: Quest Zone",
+  "extensions": {
+    "colorMeta": {
+      "blue": { "role": "primary", "displayName": "Command Blue", "canonical": "#3b82f6", "tonalRamp": ["#0a1530", "#122152", "#1a2f74", "#22439a", "#3b82f6", "#6ba1f8", "#a3c4fa", "#d6e6fd"] },
+      "gunmetal": { "role": "neutral", "displayName": "Gunmetal", "canonical": "#171d30" },
+      "bg-deep": { "role": "neutral", "displayName": "Void Black", "canonical": "#000000" },
+      "text": { "role": "neutral", "displayName": "Star White", "canonical": "#e8ecff" },
+      "green": { "role": "status-success", "displayName": "Signal Green", "canonical": "#39ff8f" },
+      "seam": { "role": "accent", "displayName": "Seam Glow", "canonical": "rgba(90,150,255,0.75)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles, HUD-style headings." },
+      "label": { "displayName": "Label", "purpose": "Nav tabs, table headers, stat labels — short and structural." },
+      "body": { "displayName": "Body", "purpose": "Buttons, inputs, descriptions, sentence-length copy." }
+    },
+    "shadows": [
+      { "name": "bevel-highlight", "value": "inset 0 1px 0 rgba(190,210,255,0.16)", "purpose": "Top-edge light catch on every metal surface at rest." },
+      { "name": "bevel-shadow", "value": "inset 0 -1px 0 rgba(0,0,0,0.4)", "purpose": "Paired dark bottom edge, at rest." },
+      { "name": "hover-glow", "value": "0 0 14px rgba(59,130,246,0.3)", "purpose": "Outer glow, hover/focus only." },
+      { "name": "press-shadow", "value": "inset 0 2px 6px rgba(0,0,0,0.6)", "purpose": "Replaces bevel-highlight on :active, sells physical sink-in." }
+    ],
+    "motion": [
+      { "name": "shimmer-sweep", "value": "0.85s ease, diagonal translate", "purpose": "One-time diagonal light sweep across a metal surface on hover." },
+      { "name": "press-spring", "value": "0.05s ease, translateY(1px) scale(0.97)", "purpose": "Physical sink-in on :active, springs back on release." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "560px" },
+      { "name": "md", "value": "900px" },
+      { "name": "lg", "value": "1360px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Chrome Button (Blue)",
+      "kind": "button",
+      "refersTo": "btn-chrome-blue",
+      "description": "Primary action button: blue-to-navy chrome gradient with a diagonal shimmer sweep on hover and a physical press.",
+      "html": "<a class=\"ds-btn-chrome-blue\" href=\"#\">Signup</a>",
+      "css": ".ds-btn-chrome-blue { position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 6px; padding: 11px 22px; border-radius: 10px; border: 2px solid transparent; font-family: 'Exo 2', sans-serif; font-weight: 700; letter-spacing: 0.02em; color: #fff; text-decoration: none; background-image: linear-gradient(180deg, #5b86ff 0%, #2a55dc 42%, #1a2f8f 78%, #291f6b 100%), linear-gradient(135deg, #f2f5fb 0%, #bdccff 14%, #5b76d6 30%, #24306e 45%, #7fa8ff 58%, #9a7fff 66%, #24306e 78%, #c3cad6 92%, #f2f5fb 100%); background-clip: padding-box, border-box; background-origin: padding-box, border-box; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -6px 12px -6px rgba(0,10,50,0.6), 0 0 26px rgba(70,120,255,0.5); transition: transform 0.05s ease, box-shadow 0.2s ease; } .ds-btn-chrome-blue:active { transform: translateY(1px) scale(0.97); box-shadow: inset 0 2px 6px rgba(0,10,40,0.8); }"
+    },
+    {
+      "name": "Nav Tab",
+      "kind": "nav",
+      "refersTo": "nav-tab",
+      "description": "One tab in the site-wide gunmetal navigation strip: icon + label, shimmer on hover, glowing ring when active.",
+      "html": "<a class=\"ds-nav-tab ds-nav-tab--active\" href=\"#\"><span>Home</span></a>",
+      "css": ".ds-nav-tab { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; font-family: 'Exo 2', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: #aab6d6; text-decoration: none; background: linear-gradient(180deg, rgba(140,170,255,0.14) 0%, rgba(140,170,255,0) 14%, rgba(0,0,10,0) 76%, rgba(0,0,20,0.3) 100%); box-shadow: inset 0 1px 0 rgba(180,205,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.4); } .ds-nav-tab--active { color: #fff; background-color: rgba(4,8,20,0.5); box-shadow: inset 0 2px 6px rgba(0,0,0,0.7), inset 0 0 10px rgba(59,130,246,0.3); }"
+    },
+    {
+      "name": "Game Card",
+      "kind": "card",
+      "refersTo": "game-card",
+      "description": "Square game tile: gunmetal-blue frame, radial glow anchored bottom, cursor-follow light + shimmer on hover.",
+      "html": "<a class=\"ds-game-card\" href=\"#\"><span class=\"ds-game-card-number\">01</span></a>",
+      "css": ".ds-game-card { position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 1/1; border-radius: 10px; border: 2px solid transparent; text-decoration: none; overflow: hidden; background: radial-gradient(ellipse at 50% 120%, rgba(60,130,255,0.1), transparent 60%), linear-gradient(180deg, #202840 0%, #12172a 45%, #080a14 100%) padding-box, linear-gradient(180deg, rgba(190,215,255,0.5) 0%, rgba(130,160,255,0.2) 16%, rgba(40,50,80,0.32) 55%, rgba(130,160,255,0.28) 100%) border-box; box-shadow: inset 0 1px 0 rgba(190,210,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.5); transition: box-shadow 0.2s ease, transform 0.15s ease-out; } .ds-game-card:hover { box-shadow: inset 0 1px 0 rgba(200,220,255,0.24), inset 0 -1px 0 rgba(0,0,0,0.4), inset 0 0 16px rgba(90,150,255,0.2), 0 8px 20px rgba(0,0,0,0.45), 0 0 20px rgba(59,130,246,0.32); } .ds-game-card:active { transform: scale(0.97); box-shadow: inset 0 2px 8px rgba(0,0,0,0.65), inset 0 0 12px rgba(59,130,246,0.3); } .ds-game-card-number { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 16px; background: linear-gradient(180deg, #ffffff 0%, #d3ddf0 45%, #9fb0d0 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Flagship Bridge",
+    "overview": "Quest Zone reads as the command bridge of a starship, not a website chrome-plated for effect: a real universe fills the void behind everything (a canvas starfield with twinkling stars, drifting nebula wisps, and rare distant galaxies, its exact composition re-rolled every page load), and every interactive surface — nav bar, buttons, game tiles, panels — is machined from the same brushed-titanium/gunmetal material, lit from a cold blue seam rather than a warm studio light. The bridge metaphor is literal at the component level: the nav bar is built from angular, riveted plates with cyan seam-lighting between segments, exactly like a physical control console, not a flat CSS bar wearing a gradient. The system is deliberately restrained given how much surface area it covers: the metallic material family is the one recurring texture used everywhere rather than a different treatment per section, so fifteen-plus pages spanning the homepage, Highscores, the full Profile suite, and the Admin Zone all read as one machine. Motion is a small, repeated vocabulary — a diagonal shimmer sweep on hover, a physical sink-in-and-spring-back on click, a soft cursor-follow glow — reused verbatim on every interactive element rather than invented fresh per component.",
+    "keyCharacteristics": [
+      "A live, randomized deep-space canvas background behind every page, never a static image",
+      "One shared brushed-gunmetal + blue-seam-light material used for the nav bar, every button variant, and every game/content tile",
+      "A diagonal shimmer sweep + tactile press-and-spring physical feedback on every clickable metal surface",
+      "Orbitron for anything that announces itself; Exo 2 for anything read in a sentence",
+      "Status/semantic color (green, red, gold) is reserved and never used for ordinary chrome"
+    ],
+    "rules": [
+      { "name": "The Cold-Light Rule", "body": "Every light source in this system — glow, highlight, seam, shimmer — is blue-white, never warm.", "section": "colors" },
+      { "name": "The Reserved-Status-Color Rule", "body": "Green and gold never appear on ordinary chrome, only on the specific status or reward they signal.", "section": "colors" },
+      { "name": "The One-Voice-Per-Job Rule", "body": "Orbitron announces; Exo 2 explains. A control never mixes the two faces in the same string.", "section": "typography" },
+      { "name": "The Rest-Is-Quiet Rule", "body": "No component glows or casts an outer shadow at rest — only the beveled inset pair. Glow is a response to state, never ambient decoration.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build every new interactive surface from the same metal-bevel + shimmer + press vocabulary already used by the nav, buttons, and game tiles.",
+      "Do keep the starfield canvas as the one full-bleed background element on every page.",
+      "Do reserve outer glow/shadow for state changes.",
+      "Do use Orbitron for anything structural or numeric and Exo 2 for anything read in a sentence."
+    ],
+    "donts": [
+      "Don't introduce a warm accent color anywhere in the chrome.",
+      "Don't use a flat, un-beveled, drop-shadow-only card style anywhere meant to feel premium.",
+      "Don't add a hover effect that isn't already in the vocabulary.",
+      "Don't put game-genre-category tabs or any other nav content that isn't a real, working destination into the primary nav."
+    ]
+  }
+}
