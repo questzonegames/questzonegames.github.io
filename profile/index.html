@@ -51,6 +51,34 @@
   }
   .admin-blocked-state .icon { font-size: 34px; margin-bottom: 12px; }
 
+  /* ---------- public-view banner (Players search -> ?player=<username>) ----------
+     Same shape/reasoning as the admin-view banner above, just a neutral
+     blue "you're looking at someone else's read-only profile" tone rather
+     than the admin-orange "you have elevated access" one — this view needs
+     no login and no permission at all, it's the public showcase. */
+  .public-view-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: rgba(59,130,246,0.1);
+    border: 1.5px solid rgba(90,150,255,0.4);
+    color: var(--blue-light);
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .public-view-banner[hidden] { display: none; }
+  .public-view-banner strong { font-family: 'Orbitron', sans-serif; letter-spacing: 0.06em; color: #cfe0ff; }
+  .public-view-banner .back-link { margin-left: auto; color: var(--blue-light); font-size: 12px; text-decoration: none; }
+  .public-view-banner .back-link:hover { text-decoration: underline; }
+  .public-view-banned-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 6px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+    background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.45);
+    box-shadow: 0 0 10px rgba(240,70,70,0.2);
+  }
+  .public-view-banned-pill[hidden] { display: none; }
+
   .admin-info-panel {
     margin-top: clamp(16px, 2.4vw, 24px);
     border-radius: 11px;
@@ -780,10 +808,7 @@
       <li><a href="../guidebook.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M5.6,3 H18.4 A1.6,1.6 0 0 1 20,4.6 V19.4 A1.6,1.6 0 0 1 18.4,21 H5.6 A1.6,1.6 0 0 1 4,19.4 V4.6 A1.6,1.6 0 0 1 5.6,3 Z M6.6,3 H7.6 V21 H6.6 Z M13,9.6 L15.4,12 L13,14.4 L10.6,12 Z"/></svg></span> Guidebook</a></li>
       <li><a href="../highscores.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20h5v-6H3v6Z" opacity=".75"/><path d="M9.5 20h5V9h-5v11Z"/><path d="M16 20h5v-4h-5v4Z" opacity=".55"/></svg></span> Highscores</a></li>
       <li><a href="#" data-coming-soon="The Shop is coming soon &mdash; spend Quest Points or real money on cosmetics!"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8,8 V6.5 A4,4 0 0 1 16,6.5 V8 H14.4 V6.5 A2.4,2.4 0 0 0 9.6,6.5 V8 Z M4.5,8 H19.5 L20.3,20 A1.2,1.2 0 0 1 19.1,21.3 H4.9 A1.2,1.2 0 0 1 3.7,20 Z"/></svg></span> Shop</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">⚽</span> Sports</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">👥</span> Multiplayer</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">🗺️</span> Adventure</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">🏆</span> Top Games</a></li>
+      <li><a href="players.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4.8 4.8 0 1 0 0-9.6 4.8 4.8 0 0 0 0 9.6Z"/><path d="M4 20.5c0-3.9 3.6-6.5 8-6.5s8 2.6 8 6.5V21H4v-.5Z"/></svg></span> Players</a></li>
     </ul>
   </div>
 </nav>
@@ -798,6 +823,12 @@
     <div class="admin-view-banner" id="admin-view-banner" hidden>
       🛡️ <span><strong>ADMIN VIEW</strong> — <span id="admin-view-username">—</span>. You're viewing this account's profile as an administrator; you're still signed in as yourself.</span>
       <a class="back-link" href="admin.html">← Back to Admin Zone</a>
+    </div>
+
+    <div class="public-view-banner" id="public-view-banner" hidden>
+      👁️ <span><strong>PLAYER PROFILE</strong> — viewing <span id="public-view-username">—</span>'s public profile. Read-only.</span>
+      <span class="public-view-banned-pill" id="public-view-banned-pill" hidden>Temporarily Banned</span>
+      <a class="back-link" href="players.html">← Back to Players</a>
     </div>
 
     <div class="admin-blocked-state" id="admin-blocked-state" hidden></div>
@@ -1009,6 +1040,7 @@
 <script src="../assets/js/qz-config.js"></script>
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/email-verify-modal.js"></script>
 <script src="../assets/js/qz-xp.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
@@ -1190,6 +1222,110 @@
     return '<div class="admin-info-item"><div class="l">' + escapeAdminHtml(label) + '</div><div class="v">' + valueHtml + '</div></div>';
   }
 </script>
+<script>
+  // ===== Public-view resolver (Players search -> ?player=<username>) =====
+  // Genuinely public and read-only — unlike admin-view above, this needs
+  // no login and no permission check at all: get_public_player_profile()
+  // (see supabase/migrations/20260906060000_players_search_and_public_
+  // profiles.sql) is a SECURITY DEFINER RPC that hand-picks only the public
+  // columns (username, quest_points, avatar showcase, temp-ban status) and
+  // already excludes permanently banned/hidden/deleted accounts server-side
+  // — an unknown, hidden, or permanently-banned username comes back as
+  // "not found" here, same as it does from that RPC directly.
+  //
+  // ?admin_view always wins if both params are somehow present — an admin
+  // opening a real admin-view link should never accidentally fall back to
+  // the stripped-down public showcase.
+  //
+  // Every other script on this page that decides "whose data to show"
+  // (avatar equipment, quest points/username, pinned achievements) awaits
+  // this AFTER checking window.QZAdminViewReady first, so admin-view still
+  // takes priority when both could apply.
+  window.QZPublicViewReady = (async function resolvePublicView() {
+    const result = { active: false, username: null, targetId: null, profile: null, error: null };
+    const params = new URLSearchParams(location.search);
+    if (params.get('admin_view')) return result;
+    const uname = params.get('player');
+    if (!uname) return result;
+    if (!window.QZAuth || !window.QZAuth.configured || !window.QZAuth.client) {
+      result.error = 'not-configured';
+      renderPublicViewUI(result);
+      return result;
+    }
+
+    const { data, error } = await window.QZAuth.client.rpc('get_public_player_profile', { p_username: uname });
+    const row = data && data[0];
+    if (error || !row) { result.error = 'not-found'; renderPublicViewUI(result); return result; }
+
+    result.active = true;
+    result.username = row.username;
+    result.targetId = row.user_id;
+    result.profile = row;
+    window.QZPublicView = result;
+    renderPublicViewUI(result);
+    return result;
+  })();
+
+  function renderPublicViewUI(view) {
+    const previewBanner = document.getElementById('preview-banner');
+    if (previewBanner) previewBanner.style.display = 'none';
+
+    if (!view.active) {
+      if (!view.error) return; // no ?player= at all — leave the page alone
+      const messages = {
+        'not-found': ['⚠️', 'That player could not be found.'],
+        'not-configured': ['⚠️', 'Accounts aren’t configured on this deployment yet.']
+      };
+      const [icon, text] = messages[view.error] || ['⚠️', 'Could not open this profile.'];
+      const blocked = document.getElementById('admin-blocked-state');
+      const frame = document.getElementById('profile-frame-main');
+      if (blocked) {
+        blocked.innerHTML = '<div class="icon">' + icon + '</div>' + escapeAdminHtml(text) +
+          '<br><br><a class="btn btn-chrome-blue" href="players.html">← Back to Players</a>';
+        blocked.hidden = false;
+      }
+      if (frame) frame.style.display = 'none';
+      return;
+    }
+
+    const p = view.profile;
+    document.title = p.username + ' — Quest Zone';
+
+    const banner = document.getElementById('public-view-banner');
+    const bannerName = document.getElementById('public-view-username');
+    if (bannerName) bannerName.textContent = p.username;
+    if (banner) banner.hidden = false;
+    const bannedPill = document.getElementById('public-view-banned-pill');
+    if (bannedPill) bannedPill.hidden = !p.is_banned;
+
+    // Skills is the only nav tile that still goes anywhere — forward
+    // ?player= so it opens the SAME player's public skill levels there
+    // (see profile/skills.html's own public-view branch).
+    const skillsTile = document.getElementById('skills-tile');
+    if (skillsTile) skillsTile.setAttribute('href', 'skills.html?player=' + encodeURIComponent(p.username));
+
+    // Inventory/Achievements are private in full (every owned item, every
+    // unlocked achievement) — never shown on someone else's public profile,
+    // regardless of admin tiles, which also never show here.
+    ['inventory-tile', 'achievements-tile'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    });
+
+    // Quest Points and Pinned Achievements stay visible as public stats,
+    // but stop being links — wallet.html has purchase history and
+    // achievements.html lists everything a player has ever unlocked, both
+    // private. The pinned achievement icons still open their own
+    // inspection pop-out independently of this tile being a link.
+    ['quest-points-tile', 'pinned-achievements-tile'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.removeAttribute('href');
+      el.style.cursor = 'default';
+    });
+
+  }
+</script>
 <script src="../assets/js/avatar-mode.js"></script>
 <script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script type="module">
@@ -1215,6 +1351,32 @@
     if (!window.qzAvatar || !window.QZAuth || !window.QZAuth.client) return;
     const view = await window.QZAdminViewReady;
     if (view.error) return; // blocked admin-view state — nothing to render
+
+    // Public view (Players search -> ?player=<username>): equipped_items
+    // and avatar_customization are own-or-admin-only tables, so a random
+    // visitor's client can't query them directly for someone else — the
+    // showcase data instead comes pre-fetched from get_public_player_
+    // profile() via QZPublicViewReady (see the resolver above).
+    if (!view.active) {
+      const pub = window.QZPublicViewReady ? await window.QZPublicViewReady : { active: false, error: null };
+      if (pub.error) return; // not-found/not-configured — nothing to render
+      if (pub.active) {
+        const p = pub.profile;
+        const catalogById = {};
+        (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+        const equipped = {};
+        (p.equipped_items || []).forEach((row) => {
+          if (row.item_id && catalogById[row.item_id]) equipped[row.slot] = catalogById[row.item_id];
+        });
+        window.qzAvatar.setAvatarEquipment(equipped);
+        if (window.qzAvatar.setBaseAppearance && p.avatar_gender) {
+          window.qzAvatar.setBaseAppearance(p.avatar_gender, p.avatar_skin_colour);
+          if (window.qzAvatar.setHairstyle) window.qzAvatar.setHairstyle(p.avatar_hair_style, p.avatar_hair_colour);
+        }
+        return;
+      }
+    }
+
     let targetUserId = view.active ? view.targetId : null;
     if (!targetUserId) {
       const session = await window.QZAuth.getSession();
@@ -1292,10 +1454,49 @@
         if (qpEl) qpEl.textContent = Number(view.targetProfile.quest_points || 0).toLocaleString();
         return;
       }
+
+      // Public view (Players search -> ?player=<username>): show the
+      // TARGET account's username/points, same idea as admin-view above,
+      // just sourced from the public RPC's already-fetched profile instead
+      // of a direct (RLS-blocked) table read.
+      const pub = window.QZPublicViewReady ? await window.QZPublicViewReady : { active: false, error: null };
+      if (pub.error) return; // renderPublicViewUI already showed why
+      if (pub.active) {
+        const nameEl = document.getElementById('profile-username');
+        if (nameEl) nameEl.textContent = pub.profile.username;
+        const qpEl = document.getElementById('quest-points-value');
+        if (qpEl) qpEl.textContent = Number(pub.profile.quest_points || 0).toLocaleString();
+        return;
+      }
+
       const session = await window.QZAuth.getSession();
       if (!session) return;
       const profile = await window.QZAuth.getProfile();
       if (!profile) return;
+
+      // Locked until the account's email is confirmed (see
+      // supabase/migrations/20260906080000_email_verification.sql) — the
+      // page exists, but shows nothing except a way to confirm. Reuses the
+      // exact same "blocked state" element admin-view uses for its own
+      // access-denied cases, just with a different message/action.
+      if (!profile.email_verified_at) {
+        const blocked = document.getElementById('admin-blocked-state');
+        const frame = document.getElementById('profile-frame-main');
+        if (blocked) {
+          blocked.innerHTML = '<div class="icon">📧</div>Confirm your email to unlock your profile.' +
+            '<br><br><button type="button" class="btn btn-chrome-blue" id="locked-verify-btn">Confirm Email</button>';
+          blocked.hidden = false;
+          const btn = document.getElementById('locked-verify-btn');
+          if (btn) btn.addEventListener('click', () => {
+            if (window.QZEmailVerify) window.QZEmailVerify.open(session.user.email);
+          });
+        }
+        if (frame) frame.style.display = 'none';
+        const banner = document.getElementById('preview-banner');
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+
       const nameEl = document.getElementById('profile-username');
       if (nameEl) nameEl.textContent = profile.username;
       const qpEl = document.getElementById('quest-points-value');
@@ -1399,6 +1600,15 @@
         const view = window.QZAdminViewReady ? await window.QZAdminViewReady : { active: false, error: null };
         if (view.error) return pinnedBySlot; // blocked admin-view state — nothing to show
         let targetUserId = view.active ? view.targetId : null;
+        if (!targetUserId) {
+          // Public view (Players search): pinned_achievements is already
+          // public-select (see supabase/schema.sql), so this same direct
+          // query works fine for a random visitor too — just needs the
+          // right target id, which comes from the public RPC's result.
+          const pub = window.QZPublicViewReady ? await window.QZPublicViewReady : { active: false, error: null };
+          if (pub.error) return pinnedBySlot;
+          if (pub.active) targetUserId = pub.targetId;
+        }
         if (!targetUserId) {
           const session = await window.QZAuth.getSession();
           if (session) targetUserId = session.user.id;

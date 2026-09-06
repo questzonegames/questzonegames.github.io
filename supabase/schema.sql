@@ -23,8 +23,19 @@
 -- 20260905040000_security_hardening.sql,
 -- 20260905050000_public_highscores.sql,
 -- 20260905050100_fix_hiscores_null_level_bug.sql,
--- 20260905050200_fix_hiscores_xp_type.sql, and
--- 20260905060000_hide_test_accounts_from_highscores.sql).
+-- 20260905050200_fix_hiscores_xp_type.sql,
+-- 20260905060000_hide_test_accounts_from_highscores.sql,
+-- 20260906010000_avatar_rig_editor.sql,
+-- 20260906020000_anagram_quest_difficulty_stats.sql,
+-- 20260906030000_fix_anagram_quest_stats_ambiguous_column.sql,
+-- 20260906050000_admin_hide_and_delete_accounts.sql,
+-- 20260906060000_players_search_and_public_profiles.sql,
+-- 20260906070000_players_search_avatar_thumbnails.sql, and
+-- 20260906080000_email_verification.sql).
+-- As of 06/09/2026 this list was cross-checked against `supabase migration
+-- list` (every local migration file's timestamp matches an applied remote
+-- migration, zero drift) and every function/table below was folded in from
+-- the actual migration file content, not retyped from memory.
 -- Going forward, new changes land as new files under supabase/migrations/
 -- AND get folded back into this file, so this stays an accurate
 -- single-file snapshot too.
@@ -1470,6 +1481,117 @@ $$;
 
 grant execute on function public.admin_set_test_account(uuid, boolean) to authenticated;
 
+-- Mark the current, known Claude-created test accounts (created across
+-- earlier sessions while testing signup/ban/XP flows) — a fresh install
+-- of this file has no such accounts to mark; this is a no-op then.
+update public.profiles
+   set is_test_account = true
+ where lower(username) in (
+   'qz_testplayer1', 'qz_freshtest2', 'qz_confirmtest3', 'qz_resendtest1', 'qz_bantest1'
+ );
+
+-- ============================================================================
+-- Admin: Hide Account + Delete Account (see
+-- supabase/migrations/20260906050000_admin_hide_and_delete_accounts.sql).
+--
+-- The four account states an admin can put an account into:
+--   - Active             — normal, shows everywhere.
+--   - Temp-banned        — still shows on Highscores/Players (with
+--                          is_banned = true so the client renders a
+--                          "BANNED"/"Temporarily Banned" tag), can't log in
+--                          until banned_until passes. Username stays
+--                          reserved (the row still exists).
+--   - Permanently banned — excluded from Highscores/Players entirely, can
+--                          never log in again unless unbanned. The row
+--                          (and its username) still exists, so nobody else
+--                          can ever register that username while banned.
+--   - Hidden             — fully reversible, cosmetic-only: doesn't show on
+--                          Highscores/Players, but the account works
+--                          completely normally otherwise. Distinct from a
+--                          ban: no login block, no is_banned() involvement.
+--   - Deleted (not a flag — the row is gone) — every table cascades from
+--                          auth.users(id) on delete cascade, so deleting
+--                          the auth.users row removes everything and frees
+--                          the username for reuse from scratch.
+-- ============================================================================
+
+alter table public.profiles add column if not exists is_hidden boolean not null default false;
+
+create or replace function public.admin_hide_user(p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+  update public.profiles set is_hidden = true where id = p_user;
+  if not found then
+    raise exception 'No such account.';
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_hide_user(uuid) to authenticated;
+
+create or replace function public.admin_unhide_user(p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+  update public.profiles set is_hidden = false where id = p_user;
+  if not found then
+    raise exception 'No such account.';
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_unhide_user(uuid) to authenticated;
+
+-- Permanently deletes an account and every trace of its data, freeing its
+-- username for reuse. SECURITY DEFINER so it can reach into auth.users (a
+-- normal authenticated role has no privileges there) — deletes auth.users
+-- directly (not just public.profiles) since every user-owned table
+-- references auth.users(id) on delete cascade. There is no undo — the
+-- confirmation lives entirely in the admin UI (profile/admin.html).
+create or replace function public.admin_delete_account(p_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+  if p_user = auth.uid() then
+    raise exception 'You cannot delete your own account.';
+  end if;
+
+  delete from auth.users where id = p_user;
+
+  if not found then
+    raise exception 'No such account.';
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_delete_account(uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- Highscores — final, current versions (superseding the pre-is_banned/
+-- pre-is_hidden versions from 20260905050000/20260905060000): a temp ban no
+-- longer hides an account from Highscores/Players (it shows with
+-- is_banned = true instead), but a permanent ban and a hidden account both
+-- stay excluded entirely.
+-- ----------------------------------------------------------------------------
 create or replace function public.hiscores_overall(p_limit int default 25, p_offset int default 0)
 returns table (
   rank bigint,
@@ -1477,6 +1599,7 @@ returns table (
   username text,
   total_level bigint,
   total_xp bigint,
+  is_banned boolean,
   total_count bigint
 )
 language sql
@@ -1490,16 +1613,18 @@ as $$
       p.username,
       (select count(*) from public.games)
         + coalesce(sum(least(gp.level, 99) - 1) filter (where gp.user_id is not null), 0) as total_level,
-      coalesce(sum(gp.xp) filter (where gp.user_id is not null), 0)::bigint as total_xp
+      coalesce(sum(gp.xp) filter (where gp.user_id is not null), 0)::bigint as total_xp,
+      (p.banned_until is not null and p.banned_until > now()) as is_banned
     from public.profiles p
     left join public.game_progress gp on gp.user_id = p.id
-    where not public.is_banned(p.id)
+    where not p.banned_permanently
+      and not p.is_hidden
       and (not p.is_test_account or public.is_admin())
-    group by p.id, p.username
+    group by p.id, p.username, p.banned_until
   )
   select
     row_number() over (order by total_level desc, total_xp desc, username asc) as rank,
-    user_id, username, total_level, total_xp,
+    user_id, username, total_level, total_xp, is_banned,
     count(*) over () as total_count
   from totals
   order by total_level desc, total_xp desc, username asc
@@ -1519,6 +1644,7 @@ returns table (
   username text,
   level int,
   xp bigint,
+  is_banned boolean,
   total_count bigint
 )
 language sql
@@ -1527,16 +1653,18 @@ stable
 set search_path = public
 as $$
   with rows as (
-    select p.id as user_id, p.username, gp.level, gp.xp
+    select p.id as user_id, p.username, gp.level, gp.xp,
+      (p.banned_until is not null and p.banned_until > now()) as is_banned
     from public.game_progress gp
     join public.profiles p on p.id = gp.user_id
     where gp.game_key = p_game_key
-      and not public.is_banned(p.id)
+      and not p.banned_permanently
+      and not p.is_hidden
       and (not p.is_test_account or public.is_admin())
   )
   select
     row_number() over (order by level desc, xp desc, username asc) as rank,
-    user_id, username, level, xp,
+    user_id, username, level, xp, is_banned,
     count(*) over () as total_count
   from rows
   order by level desc, xp desc, username asc
@@ -1546,14 +1674,13 @@ $$;
 
 grant execute on function public.hiscores_skill(text, int, int) to anon, authenticated;
 
--- Powers Search and Compare: case-insensitive exact username match (same
--- convention as email_for_username/ban_message_for_login), returns zero
--- rows for "no such account", "account is banned", AND "account is a test
--- account and caller isn't an admin" alike — none of those are
--- distinguishable from each other to a non-admin caller. `skills` is a
--- jsonb map of every real game_key -> {level, xp, rank} (rank null = never
--- played that skill) so adding a new skill to public.games later needs no
--- change here.
+-- Powers Search and Compare, and (via the client calling it directly)
+-- Players' public skill view: case-insensitive exact username match, zero
+-- rows for "no such account", "permanently banned", "hidden", AND "test
+-- account and caller isn't an admin" alike — none distinguishable from each
+-- other to a non-admin caller. `skills` is a jsonb map of every real
+-- game_key -> {level, xp, rank} (rank null = never played that skill) so
+-- adding a new skill to public.games later needs no change here.
 create or replace function public.hiscores_player_stats(p_username text)
 returns table (
   user_id uuid,
@@ -1561,6 +1688,7 @@ returns table (
   total_level bigint,
   total_xp bigint,
   overall_rank bigint,
+  is_banned boolean,
   skills jsonb
 )
 language plpgsql
@@ -1571,15 +1699,18 @@ as $$
 declare
   v_user_id uuid;
   v_caller_is_admin boolean := public.is_admin();
+  v_is_banned boolean;
 begin
-  select p.id into v_user_id
+  select p.id, (p.banned_until is not null and p.banned_until > now())
+    into v_user_id, v_is_banned
   from public.profiles p
   where lower(p.username) = lower(p_username)
-    and not public.is_banned(p.id)
+    and not p.banned_permanently
+    and not p.is_hidden
     and (not p.is_test_account or v_caller_is_admin);
 
   if v_user_id is null then
-    return;
+    return; -- empty result set = "not found" to the caller
   end if;
 
   return query
@@ -1592,7 +1723,8 @@ begin
       coalesce(sum(gp.xp) filter (where gp.user_id is not null), 0)::bigint as txp
     from public.profiles p
     left join public.game_progress gp on gp.user_id = p.id
-    where not public.is_banned(p.id)
+    where not p.banned_permanently
+      and not p.is_hidden
       and (not p.is_test_account or v_caller_is_admin)
     group by p.id, p.username
   ),
@@ -1606,7 +1738,8 @@ begin
       row_number() over (partition by gp.game_key order by gp.level desc, gp.xp desc, pr.username asc) as srank
     from public.game_progress gp
     join public.profiles pr on pr.id = gp.user_id
-    where not public.is_banned(gp.user_id)
+    where not pr.banned_permanently
+      and not pr.is_hidden
       and (not pr.is_test_account or v_caller_is_admin)
   ),
   skillmap as (
@@ -1617,7 +1750,7 @@ begin
     from public.games g
     left join skill_ranks sr on sr.game_key = g.game_key and sr.user_id = v_user_id
   )
-  select r.uid, r.uname, r.tlevel, r.txp, r.rnk, sm.skills
+  select r.uid, r.uname, r.tlevel, r.txp, r.rnk, v_is_banned, sm.skills
   from ranked r, skillmap sm
   where r.uid = v_user_id;
 end;
@@ -1625,12 +1758,524 @@ $$;
 
 grant execute on function public.hiscores_player_stats(text) to anon, authenticated;
 
--- Mark the current, known Claude-created test accounts (created across
--- earlier sessions while testing signup/ban/XP flows) — a fresh install
--- of this file has no such accounts to mark; this is a no-op then.
-update public.profiles
-   set is_test_account = true
- where lower(username) in (
-   'qz_testplayer1', 'qz_freshtest2', 'qz_confirmtest3', 'qz_resendtest1', 'qz_bantest1'
- );
+-- ============================================================================
+-- Avatar Rig Editor — canonical, admin-editable avatar calibration data
+-- (see supabase/migrations/20260906010000_avatar_rig_editor.sql).
+--
+-- This is the ONE place item placement (Admin Crown today, any future
+-- head/necklace/body/legs/boots/gloves/back/mainHand/offHand/accessory item
+-- tomorrow) and the base rig anchors (SKULL/ABOVE_HEAD/FOREHEAD/NECK per
+-- direction) live. assets/js/avatar-viewer.js (the REAL renderer every
+-- player sees) reads these same rows -- the admin editor and the live game
+-- are one reader (the editor UI) and one writer (the admin RPCs below) of
+-- the same tables, never two systems that can drift.
+--
+-- Security model: RLS SELECT is public (`using (true)`) on both tables --
+-- every visitor's browser needs to read this to render ANY player wearing
+-- the item correctly, not just admins (this data was already effectively
+-- public, baked into PNG pixels/CSS before this). There is NO insert/
+-- update/delete RLS policy on either table -- the only way to change a row
+-- is through a SECURITY DEFINER RPC that re-checks is_admin() itself.
+-- ============================================================================
+
+create table if not exists public.avatar_rig_anchors (
+  body_type text not null default 'male',
+  direction text not null check (direction in ('front','right','back','left')),
+  anchor_type text not null check (anchor_type in ('above_head','skull','forehead','neck')),
+  canvas_w int not null check (canvas_w > 0),
+  canvas_h int not null check (canvas_h > 0),
+  center_x_pct numeric not null check (center_x_pct between 0 and 100),
+  y_pct numeric not null check (y_pct between -20 and 120),
+  width_pct numeric not null check (width_pct between 0 and 200),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  primary key (body_type, direction, anchor_type)
+);
+alter table public.avatar_rig_anchors enable row level security;
+
+drop policy if exists "avatar_rig_anchors_select_public" on public.avatar_rig_anchors;
+create policy "avatar_rig_anchors_select_public"
+  on public.avatar_rig_anchors for select
+  using (true);
+-- deliberately no insert/update/delete policy -- see header comment.
+
+create table if not exists public.avatar_rig_items (
+  body_type text not null default 'male',
+  slot text not null check (slot in ('head','necklace','body','legs','boots','gloves','back','mainHand','offHand','accessory')),
+  item_id text not null,
+  direction text not null check (direction in ('front','right','back','left')),
+  anchor_type text not null check (anchor_type in ('above_head','skull','forehead','neck')),
+  offset_x numeric not null default 0 check (offset_x between -2000 and 2000),
+  offset_y numeric not null default 0 check (offset_y between -2000 and 2000),
+  scale numeric not null default 1 check (scale between 0.05 and 5),
+  rotation numeric not null default 0 check (rotation between -180 and 180),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null,
+  primary key (body_type, slot, item_id, direction)
+);
+alter table public.avatar_rig_items enable row level security;
+
+drop policy if exists "avatar_rig_items_select_public" on public.avatar_rig_items;
+create policy "avatar_rig_items_select_public"
+  on public.avatar_rig_items for select
+  using (true);
+-- deliberately no insert/update/delete policy -- see header comment.
+
+create table if not exists public.avatar_rig_audit_log (
+  id bigint generated always as identity primary key,
+  admin_id uuid not null references auth.users(id) on delete cascade,
+  action text not null,
+  body_type text,
+  slot text,
+  item_id text,
+  direction text,
+  detail jsonb,
+  created_at timestamptz not null default now()
+);
+alter table public.avatar_rig_audit_log enable row level security;
+
+drop policy if exists "avatar_rig_audit_log_select_admin" on public.avatar_rig_audit_log;
+create policy "avatar_rig_audit_log_select_admin"
+  on public.avatar_rig_audit_log for select
+  using (public.is_admin());
+-- no insert/update/delete policy -- RPC-only, see header comment.
+
+-- admin_save_avatar_rig_item() -- the ONLY way an item's calibration
+-- changes. Upserts one (body_type, slot, item_id, direction) row.
+create or replace function public.admin_save_avatar_rig_item(
+  p_body_type text, p_slot text, p_item_id text, p_direction text,
+  p_anchor_type text, p_offset_x numeric, p_offset_y numeric,
+  p_scale numeric, p_rotation numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+  if p_item_id is null or length(trim(p_item_id)) = 0 then
+    raise exception 'Missing item id.';
+  end if;
+
+  insert into public.avatar_rig_items
+    (body_type, slot, item_id, direction, anchor_type, offset_x, offset_y, scale, rotation, updated_at, updated_by)
+  values
+    (coalesce(p_body_type, 'male'), p_slot, p_item_id, p_direction, p_anchor_type, p_offset_x, p_offset_y, p_scale, p_rotation, now(), auth.uid())
+  on conflict (body_type, slot, item_id, direction) do update set
+    anchor_type = excluded.anchor_type,
+    offset_x = excluded.offset_x,
+    offset_y = excluded.offset_y,
+    scale = excluded.scale,
+    rotation = excluded.rotation,
+    updated_at = now(),
+    updated_by = auth.uid();
+
+  insert into public.avatar_rig_audit_log (admin_id, action, body_type, slot, item_id, direction, detail)
+  values (auth.uid(), 'save_item', p_body_type, p_slot, p_item_id, p_direction,
+    jsonb_build_object('anchorType', p_anchor_type, 'offsetX', p_offset_x, 'offsetY', p_offset_y, 'scale', p_scale, 'rotation', p_rotation));
+end;
+$$;
+
+grant execute on function public.admin_save_avatar_rig_item(text, text, text, text, text, numeric, numeric, numeric, numeric) to authenticated;
+
+-- admin_reset_avatar_rig_item_to_factory() -- deletes the calibration
+-- row(s) for an item, so it falls back to the built-in JS default
+-- transform. p_direction = null resets all 4 directions at once.
+create or replace function public.admin_reset_avatar_rig_item_to_factory(
+  p_body_type text, p_slot text, p_item_id text, p_direction text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+
+  delete from public.avatar_rig_items
+    where body_type = coalesce(p_body_type, 'male')
+      and slot = p_slot
+      and item_id = p_item_id
+      and (p_direction is null or direction = p_direction);
+
+  insert into public.avatar_rig_audit_log (admin_id, action, body_type, slot, item_id, direction)
+  values (auth.uid(), 'reset_item_to_factory', p_body_type, p_slot, p_item_id, p_direction);
+end;
+$$;
+
+grant execute on function public.admin_reset_avatar_rig_item_to_factory(text, text, text, text) to authenticated;
+
+-- admin_save_avatar_rig_anchor() -- RIG ANCHOR mode: changes the underlying
+-- body anchor itself (affects every item using that anchor type).
+create or replace function public.admin_save_avatar_rig_anchor(
+  p_body_type text, p_direction text, p_anchor_type text,
+  p_center_x_pct numeric, p_y_pct numeric, p_width_pct numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Not authorized.';
+  end if;
+
+  insert into public.avatar_rig_anchors
+    (body_type, direction, anchor_type, canvas_w, canvas_h, center_x_pct, y_pct, width_pct, updated_at, updated_by)
+  select
+    coalesce(p_body_type, 'male'), p_direction, p_anchor_type,
+    canvas_w, canvas_h, p_center_x_pct, p_y_pct, p_width_pct, now(), auth.uid()
+  from public.avatar_rig_anchors
+  where body_type = coalesce(p_body_type, 'male') and direction = p_direction and anchor_type = p_anchor_type
+  on conflict (body_type, direction, anchor_type) do update set
+    center_x_pct = excluded.center_x_pct,
+    y_pct = excluded.y_pct,
+    width_pct = excluded.width_pct,
+    updated_at = now(),
+    updated_by = auth.uid();
+
+  if not found then
+    raise exception 'Unknown anchor row -- canvas_w/canvas_h must already exist for this body/direction/anchor.';
+  end if;
+
+  insert into public.avatar_rig_audit_log (admin_id, action, body_type, direction, detail)
+  values (auth.uid(), 'save_anchor', p_body_type, p_direction,
+    jsonb_build_object('anchorType', p_anchor_type, 'centerXPct', p_center_x_pct, 'yPct', p_y_pct, 'widthPct', p_width_pct));
+end;
+$$;
+
+grant execute on function public.admin_save_avatar_rig_anchor(text, text, text, numeric, numeric, numeric) to authenticated;
+
+-- Seed data -- the male body's 4 anchors x 4 directions, taken verbatim
+-- from assets/js/avatar-rig.js's HEAD_ANCHORS (measured off the bald
+-- base's own alpha channel), plus the Admin Crown's already-visually-
+-- verified calibration -- a fresh install renders identically to the live
+-- site.
+insert into public.avatar_rig_anchors (body_type, direction, anchor_type, canvas_w, canvas_h, center_x_pct, y_pct, width_pct) values
+  ('male','front','above_head', 636,1514, 50.31, 0.66,  25.47),
+  ('male','front','skull',      636,1514, 50.31, 6.66,  25.47),
+  ('male','front','forehead',   636,1514, 50.31, 9.58,  32.23),
+  ('male','front','neck',       636,1514, 50.31, 14.86, 17.61),
+  ('male','back', 'above_head', 584,1514, 49.49, 0.66,  28.42),
+  ('male','back', 'skull',      584,1514, 49.49, 6.66,  28.42),
+  ('male','back', 'forehead',   584,1514, 49.49, 9.71,  34.25),
+  ('male','back', 'neck',       584,1514, 49.49, 14.86, 18.49),
+  ('male','right','above_head', 302,1515, 54.64, 0.66,  66.89),
+  ('male','right','skull',      302,1515, 54.64, 7.26,  66.89),
+  ('male','right','forehead',   302,1515, 54.64, 9.90,  66.89),
+  ('male','right','neck',       302,1515, 54.64, 15.84, 53.64),
+  ('male','left', 'above_head', 302,1515, 45.03, 0.66,  66.89),
+  ('male','left', 'skull',      302,1515, 45.03, 7.26,  66.89),
+  ('male','left', 'forehead',   302,1515, 45.03, 9.90,  66.89),
+  ('male','left', 'neck',       302,1515, 45.03, 15.84, 53.64)
+on conflict (body_type, direction, anchor_type) do nothing;
+
+insert into public.avatar_rig_items (body_type, slot, item_id, direction, anchor_type, offset_x, offset_y, scale, rotation) values
+  ('male','head','admin-crown','front', 'skull', 0,    11.2, 0.833, 0),
+  ('male','head','admin-crown','back',  'skull', 0,    13.2, 0.831, 0),
+  ('male','head','admin-crown','right', 'skull', 0,   -2.0,  0.619, 0),
+  ('male','head','admin-crown','left',  'skull', 0,   -2.0,  0.619, 0)
+on conflict (body_type, slot, item_id, direction) do nothing;
+
+-- ============================================================================
+-- Anagram Quest -- per-difficulty high scores + 9-letter-word counters (see
+-- supabase/migrations/20260906020000_anagram_quest_difficulty_stats.sql,
+-- corrected by 20260906030000_fix_anagram_quest_stats_ambiguous_column.sql
+-- -- the function below is already that corrected version).
+-- ============================================================================
+
+create table if not exists public.anagram_quest_stats (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  easy_high_score int not null default 0,
+  medium_high_score int not null default 0,
+  hard_high_score int not null default 0,
+  easy_nine_count int not null default 0,
+  medium_nine_count int not null default 0,
+  hard_nine_count int not null default 0,
+  updated_at timestamptz not null default now()
+);
+alter table public.anagram_quest_stats enable row level security;
+
+-- Personal stats, not a leaderboard -- own row or admin only.
+drop policy if exists "anagram_quest_stats_select_own_or_admin" on public.anagram_quest_stats;
+create policy "anagram_quest_stats_select_own_or_admin"
+  on public.anagram_quest_stats for select
+  using (auth.uid() = user_id or public.is_admin());
+-- Deliberately no insert/update/delete policy -- the RPC below is the only
+-- way this table changes.
+
+-- record_anagram_quest_difficulty_result() -- the ONLY way this table
+-- changes. Called once per completed game, alongside (not instead of) the
+-- existing record_game_result()/award_xp() calls.
+create or replace function public.record_anagram_quest_difficulty_result(
+  p_difficulty text,
+  p_score int,
+  p_nine_letter_count int
+)
+returns table (
+  easy_high_score int, medium_high_score int, hard_high_score int,
+  easy_nine_count int, medium_nine_count int, hard_nine_count int
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_score int := greatest(0, least(coalesce(p_score, 0), 100000));
+  v_nine int := greatest(0, least(coalesce(p_nine_letter_count, 0), 5));
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+  if public.is_banned(v_uid) then
+    raise exception 'This account is banned.';
+  end if;
+  if p_difficulty not in ('EASY', 'MEDIUM', 'HARD') then
+    raise exception 'Invalid difficulty: %', p_difficulty;
+  end if;
+
+  insert into public.anagram_quest_stats (user_id)
+  values (v_uid)
+  on conflict (user_id) do nothing;
+
+  if p_difficulty = 'EASY' then
+    update public.anagram_quest_stats t
+      set easy_high_score = greatest(t.easy_high_score, v_score),
+          easy_nine_count = t.easy_nine_count + v_nine,
+          updated_at = now()
+      where t.user_id = v_uid;
+  elsif p_difficulty = 'MEDIUM' then
+    update public.anagram_quest_stats t
+      set medium_high_score = greatest(t.medium_high_score, v_score),
+          medium_nine_count = t.medium_nine_count + v_nine,
+          updated_at = now()
+      where t.user_id = v_uid;
+  else
+    update public.anagram_quest_stats t
+      set hard_high_score = greatest(t.hard_high_score, v_score),
+          hard_nine_count = t.hard_nine_count + v_nine,
+          updated_at = now()
+      where t.user_id = v_uid;
+  end if;
+
+  return query
+    select gs.easy_high_score, gs.medium_high_score, gs.hard_high_score,
+           gs.easy_nine_count, gs.medium_nine_count, gs.hard_nine_count
+    from public.anagram_quest_stats gs
+    where gs.user_id = v_uid;
+end;
+$$;
+
+grant execute on function public.record_anagram_quest_difficulty_result(text, int, int) to authenticated;
+
+-- ============================================================================
+-- Players -- public player search + public player profiles (see
+-- supabase/migrations/20260906060000_players_search_and_public_profiles.sql
+-- and 20260906070000_players_search_avatar_thumbnails.sql -- the
+-- search_public_players() below is already that final, thumbnail-carrying
+-- version).
+--
+-- Same controlled-read pattern as Highscores above: RLS on profiles/
+-- equipped_items/avatar_customization is (correctly) locked to "your own
+-- row or an admin", so these two SECURITY DEFINER RPCs exist specifically
+-- to let an anonymous or logged-in visitor look up ANOTHER account's public
+-- showcase -- each one hand-picks EXACTLY the public columns it returns.
+-- Both are READ-ONLY. Exclusion rules match Highscores exactly (active and
+-- temp-banned included, permanently banned/hidden excluded, deleted rows
+-- simply don't exist, test accounts admin-only).
+-- ============================================================================
+
+-- search_public_players() -- powers the live Players search box. Matching
+-- is case-insensitive substring via position()/lower() (not ILIKE, so a
+-- literal `%`/`_` in the query is plain text, not a wildcard), ordered with
+-- prefix matches first, then alphabetically. Also returns each match's
+-- avatar showcase fields, so a search result can show that account's real
+-- front-facing avatar instead of a placeholder icon. An empty/blank query
+-- returns zero rows deliberately.
+create or replace function public.search_public_players(p_query text, p_limit int default 20, p_offset int default 0)
+returns table (
+  user_id uuid,
+  username text,
+  is_banned boolean,
+  avatar_gender text,
+  avatar_skin_colour text,
+  avatar_hair_style text,
+  avatar_hair_colour text,
+  equipped_items jsonb,
+  total_count bigint
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_q text := lower(trim(coalesce(p_query, '')));
+begin
+  if v_q = '' then
+    return;
+  end if;
+
+  return query
+  with matches as (
+    select
+      p.id as uid,
+      p.username as uname,
+      (p.banned_until is not null and p.banned_until > now()) as banned,
+      ac.gender as gender,
+      ac.skin_colour as skin_colour,
+      ac.hair_style as hair_style,
+      ac.hair_colour as hair_colour,
+      coalesce(
+        (select jsonb_agg(jsonb_build_object('slot', e.slot, 'item_id', e.item_id))
+         from public.equipped_items e
+         where e.user_id = p.id),
+        '[]'::jsonb
+      ) as items,
+      (position(v_q in lower(p.username)) = 1) as is_prefix
+    from public.profiles p
+    left join public.avatar_customization ac on ac.user_id = p.id
+    where not p.banned_permanently
+      and not p.is_hidden
+      and (not p.is_test_account or public.is_admin())
+      and position(v_q in lower(p.username)) > 0
+  )
+  select uid, uname, banned, gender, skin_colour, hair_style, hair_colour, items,
+    count(*) over () as total_count
+  from matches
+  order by is_prefix desc, uname asc
+  limit least(greatest(coalesce(p_limit, 20), 1), 50)
+  offset greatest(coalesce(p_offset, 0), 0);
+end;
+$$;
+
+grant execute on function public.search_public_players(text, int, int) to anon, authenticated;
+
+-- get_public_player_profile() -- powers the public Player Profile page.
+-- Case-insensitive EXACT username match -- a profile lookup, not a search.
+-- Returns zero rows for "not found", "permanently banned", "hidden", and
+-- "deleted" alike, on purpose: a public profile URL must not be able to
+-- distinguish those from each other. equipped_items is returned as a jsonb
+-- array of {slot, item_id} only -- the client already owns the full item
+-- catalog client-side (assets/js/inventory-data.js) and looks up art/name/
+-- etc. from that.
+create or replace function public.get_public_player_profile(p_username text)
+returns table (
+  user_id uuid,
+  username text,
+  is_banned boolean,
+  quest_points integer,
+  avatar_gender text,
+  avatar_skin_colour text,
+  avatar_hair_style text,
+  avatar_hair_colour text,
+  equipped_items jsonb
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+begin
+  select p.id into v_user_id
+  from public.profiles p
+  where lower(p.username) = lower(trim(coalesce(p_username, '')))
+    and not p.banned_permanently
+    and not p.is_hidden
+    and (not p.is_test_account or public.is_admin());
+
+  if v_user_id is null then
+    return; -- empty result set = "not found" to the caller
+  end if;
+
+  return query
+  select
+    p.id,
+    p.username,
+    (p.banned_until is not null and p.banned_until > now()) as is_banned,
+    p.quest_points,
+    ac.gender,
+    ac.skin_colour,
+    ac.hair_style,
+    ac.hair_colour,
+    coalesce(
+      (select jsonb_agg(jsonb_build_object('slot', e.slot, 'item_id', e.item_id))
+       from public.equipped_items e
+       where e.user_id = p.id),
+      '[]'::jsonb
+    ) as equipped_items
+  from public.profiles p
+  left join public.avatar_customization ac on ac.user_id = p.id
+  where p.id = v_user_id;
+end;
+$$;
+
+grant execute on function public.get_public_player_profile(text) to anon, authenticated;
+
+-- ============================================================================
+-- Email verification -- decoupled from Supabase Auth's own confirmation
+-- gate (see supabase/migrations/20260906080000_email_verification.sql).
+--
+-- Why decoupled: Supabase Auth's native "Confirm email" setting makes the
+-- ENTIRE signUp() call fail -- no account created at all -- if sending the
+-- confirmation email errors (confirmed live on this project: signups
+-- 500'd with "Error sending confirmation email" and left zero rows in
+-- auth.users). That's the opposite of what's wanted: signup must always
+-- succeed and log the player in immediately, with verification tracked
+-- and retryable afterward rather than blocking anything up front.
+--
+-- So auth.email.enable_confirmations stays OFF (see supabase/config.toml
+-- -- accounts are auto-confirmed by Supabase's own bookkeeping at signup,
+-- which is why auth.users.email_confirmed_at can't be reused as "did this
+-- player actually verify their real inbox" -- it's always set
+-- immediately). This adds Quest Zone's OWN verification flag instead:
+--   1. assets/js/qz-auth.js sends a 6-digit email OTP via
+--      client.auth.signInWithOtp() right after signup (best-effort) and
+--      again on demand from the "Resend" button in the email-verification
+--      modal (assets/js/email-verify-modal.js).
+--   2. The player enters that code in the modal; the client verifies it
+--      via client.auth.verifyOtp({ type: 'email', ... }) -- Supabase's own
+--      auth server is the one that actually checks the code.
+--   3. Only on a SUCCESSFUL verifyOtp() does the client call
+--      mark_email_verified() below.
+--
+-- Every account that already existed as of this migration signed up under
+-- the OLD (real Supabase confirmation) flow and was actively in use -- it
+-- is grandfathered in as already-verified (email_verified_at = created_at)
+-- rather than suddenly locked out of its own profile. A fresh install has
+-- no such accounts to grandfather; that UPDATE is then a no-op.
+-- ============================================================================
+
+alter table public.profiles add column if not exists email_verified_at timestamptz;
+
+update public.profiles set email_verified_at = created_at where email_verified_at is null;
+
+-- mark_email_verified() -- the ONLY way this flag is ever set. Only ever
+-- moves null -> now(); calling it again once already verified is a no-op,
+-- not an error (idempotent, safe to call defensively from the client).
+create or replace function public.mark_email_verified()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  update public.profiles set email_verified_at = now()
+    where id = auth.uid() and email_verified_at is null;
+end;
+$$;
+
+grant execute on function public.mark_email_verified() to authenticated;
 

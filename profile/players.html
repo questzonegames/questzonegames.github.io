@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Players — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  main.players { padding: 26px 0 60px; position: relative; z-index: 1; }
+
+  .players-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 30px clamp(16px, 3vw, 40px) 36px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .players-frame::after {
+    content: '';
+    position: absolute; left: 8%; right: 8%; bottom: -3px; height: 2px;
+    background: var(--edge-blue);
+    box-shadow: 0 0 14px 2px rgba(90,180,255,0.5);
+    pointer-events: none;
+  }
+  .players-heading {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    margin: 0 0 clamp(18px, 2.6vw, 26px);
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(20px, 3vw, 30px); letter-spacing: 0.12em; text-align: center;
+    background: linear-gradient(180deg, #fff 0%, #cfd9ee 40%, #93a3c4 60%, #eef3fc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,170,255,0.6), 0 2px 1px rgba(0,0,0,0.6);
+  }
+  .players-heading .dash {
+    flex: 1 1 60px; max-width: 90px; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--blue-light), transparent);
+    opacity: 0.9;
+  }
+
+  /* ---- search box ---- */
+  .players-search-wrap { max-width: 560px; margin: 0 auto 28px; position: relative; }
+  .players-search-wrap::before {
+    content: '🔍'; position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+    font-size: 16px; opacity: 0.55; pointer-events: none;
+  }
+  #players-search-input {
+    width: 100%; padding: 15px 18px 15px 46px; border-radius: 12px;
+    border: 1.5px solid var(--border-strong);
+    background: linear-gradient(180deg, rgba(140,170,255,0.09) 0%, rgba(140,170,255,0) 26%, #070b16 100%);
+    color: var(--text); font-size: 15px; font-family: 'Exo 2', sans-serif;
+    box-shadow: inset 0 1px 0 rgba(190,210,255,0.1), 0 0 0 rgba(59,130,246,0);
+    transition: border-color 0.15s ease, box-shadow 0.2s ease;
+  }
+  #players-search-input::placeholder { color: var(--text-faint); }
+  #players-search-input:focus {
+    outline: none; border-color: var(--blue-light);
+    box-shadow: inset 0 1px 0 rgba(200,220,255,0.16), 0 0 0 4px rgba(59,130,246,0.16), 0 0 18px rgba(70,140,255,0.25);
+  }
+
+  /* ---- states (empty prompt / no results / loading) ---- */
+  .players-state {
+    max-width: 480px; margin: 40px auto; text-align: center;
+    color: var(--text-dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .players-state .icon { font-size: 34px; margin-bottom: 12px; filter: drop-shadow(0 0 14px rgba(120,170,255,0.45)); }
+  .players-state strong { display: block; color: var(--text); font-family: 'Orbitron', sans-serif; letter-spacing: 0.06em; font-size: 13px; margin-bottom: 6px; text-transform: uppercase; }
+
+  /* ---- results list ---- */
+  .players-results { display: flex; flex-direction: column; gap: 10px; max-width: 560px; margin: 0 auto; }
+  .player-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 16px; border-radius: 11px;
+    border: 1.5px solid var(--border-strong);
+    background: linear-gradient(180deg, rgba(140,170,255,0.07) 0%, rgba(140,170,255,0) 30%, #080c18 100%);
+    color: var(--text); text-decoration: none;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  }
+  .player-row:hover {
+    border-color: var(--blue-light);
+    background: linear-gradient(180deg, rgba(59,130,246,0.14) 0%, rgba(140,170,255,0) 30%, #080c18 100%);
+    transform: translateY(-1px);
+  }
+  .player-row:active { transform: translateY(0); }
+  .player-avatar-thumb {
+    flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+    position: relative; overflow: hidden;
+    background: radial-gradient(circle at 35% 30%, rgba(140,170,255,0.22), rgba(6,10,20,0.9) 70%);
+    border: 1.5px solid rgba(140,195,255,0.35);
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
+  }
+  .player-avatar-thumb svg { width: 22px; height: 22px; color: #9ab6ea; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+  /* Real avatar thumbnail — avatar-viewer.js mounts into this and adds its
+     own `avatar-3d` class; sized and shifted up so a body-length render
+     crops down to a head-and-shoulders "profile picture" inside the small
+     circle instead of showing a tiny full body. See assets/js/avatar-
+     viewer.js's mount() for what it expects (.avatar-sprite children,
+     object-fit: contain within THIS element's own box). */
+  .player-avatar-thumb-mount {
+    position: absolute; width: 230%; height: 230%; left: -65%; top: -20%;
+  }
+  .player-avatar-thumb-mount .avatar-sprite {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; padding: 9% 11% 5%; pointer-events: none;
+  }
+  .player-row-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .player-row-name {
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px;
+    letter-spacing: 0.02em; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .player-banned-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 6px;
+    font-family: 'Orbitron', sans-serif; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
+    background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.45);
+    box-shadow: 0 0 10px rgba(240,70,70,0.2);
+    white-space: nowrap;
+  }
+  .player-row-arrow { flex: 0 0 auto; color: var(--text-faint); font-size: 16px; }
+
+  .players-load-more { text-align: center; margin-top: 18px; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html">
+      <img src="../assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="../index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="#" class="btn btn-chrome-blue" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-chrome-dark" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<nav class="site-nav">
+  <div class="container">
+    <ul>
+      <li><a href="../index.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg></span> Home</a></li>
+      <li><a href="../guidebook.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M5.6,3 H18.4 A1.6,1.6 0 0 1 20,4.6 V19.4 A1.6,1.6 0 0 1 18.4,21 H5.6 A1.6,1.6 0 0 1 4,19.4 V4.6 A1.6,1.6 0 0 1 5.6,3 Z M6.6,3 H7.6 V21 H6.6 Z M13,9.6 L15.4,12 L13,14.4 L10.6,12 Z"/></svg></span> Guidebook</a></li>
+      <li><a href="../highscores.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20h5v-6H3v6Z" opacity=".75"/><path d="M9.5 20h5V9h-5v11Z"/><path d="M16 20h5v-4h-5v4Z" opacity=".55"/></svg></span> Highscores</a></li>
+      <li><a href="#" data-coming-soon="The Shop is coming soon &mdash; spend Quest Points or real money on cosmetics!"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8,8 V6.5 A4,4 0 0 1 16,6.5 V8 H14.4 V6.5 A2.4,2.4 0 0 0 9.6,6.5 V8 Z M4.5,8 H19.5 L20.3,20 A1.2,1.2 0 0 1 19.1,21.3 H4.9 A1.2,1.2 0 0 1 3.7,20 Z"/></svg></span> Shop</a></li>
+      <li><a href="players.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4.8 4.8 0 1 0 0-9.6 4.8 4.8 0 0 0 0 9.6Z"/><path d="M4 20.5c0-3.9 3.6-6.5 8-6.5s8 2.6 8 6.5V21H4v-.5Z"/></svg></span> Players</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="players">
+  <div class="container">
+    <div class="players-frame bezel-lg">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <h1 class="players-heading"><span class="dash"></span>Players<span class="dash"></span></h1>
+
+      <div class="players-search-wrap">
+        <input type="text" id="players-search-input" placeholder="Search players..." autocomplete="off" spellcheck="false" aria-label="Search players">
+      </div>
+
+      <div id="players-state" class="players-state">
+        <div class="icon">🔎</div>
+        <strong>Find a Player</strong>
+        Search for a Quest Zone username to view their profile.
+      </div>
+
+      <div id="players-results" class="players-results" hidden></div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container"><div class="footer-bottom">
+    <span>© 2026 Quest Zone. All rights reserved.</span>
+    <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+  </div></div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/email-verify-modal.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/inventory-data.js"></script>
+<script type="module" src="../assets/js/avatar-viewer.js"></script>
+<script>
+(function () {
+  // Live player search — debounced ~250ms so a fast typist doesn't fire a
+  // database request per keystroke, and backed entirely by the
+  // search_public_players() RPC (see supabase/migrations/
+  // 20260906060000_players_search_and_public_profiles.sql), which already
+  // excludes permanently banned, hidden, and deleted accounts server-side.
+  // This page never queries public.profiles directly.
+  const PERSON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.4"/><path d="M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6"/></svg>';
+  const DEBOUNCE_MS = 250;
+  const RESULT_LIMIT = 20;
+
+  const input = document.getElementById('players-search-input');
+  const stateEl = document.getElementById('players-state');
+  const resultsEl = document.getElementById('players-results');
+
+  let debounceTimer = null;
+  let requestSeq = 0; // guards against an older, slower request overwriting a newer one
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  function showState(icon, title, body) {
+    teardownThumbs();
+    stateEl.innerHTML = '<div class="icon">' + icon + '</div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body);
+    stateEl.hidden = false;
+    resultsEl.hidden = true;
+  }
+
+  // Each result's real front-facing avatar, mounted via the SAME
+  // avatar-viewer.js module the profile pages use (staticFront: true —
+  // these are inert thumbnails, never rotating, regardless of
+  // window.QZ_AVATAR_MODE). Instances from the previous render are torn
+  // down first so a fast typist doesn't leak one avatar-viewer per
+  // keystroke.
+  let mountedThumbs = [];
+  function teardownThumbs() {
+    mountedThumbs.forEach((m) => { try { m.destroy(); } catch (e) {} });
+    mountedThumbs = [];
+  }
+
+  function mountThumb(el, row) {
+    if (!window.QZAvatarViewer) { el.innerHTML = PERSON_ICON; return; }
+    const mountEl = document.createElement('div');
+    mountEl.className = 'player-avatar-thumb-mount';
+    el.appendChild(mountEl);
+    const avatar = window.QZAvatarViewer.mount(mountEl, { staticFront: true });
+    mountedThumbs.push(avatar);
+
+    const catalogById = {};
+    (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+    const equipped = {};
+    (row.equipped_items || []).forEach((r) => { if (r.item_id && catalogById[r.item_id]) equipped[r.slot] = catalogById[r.item_id]; });
+    avatar.setAvatarEquipment(equipped);
+    if (avatar.setBaseAppearance && row.avatar_gender) {
+      avatar.setBaseAppearance(row.avatar_gender, row.avatar_skin_colour);
+      if (avatar.setHairstyle) avatar.setHairstyle(row.avatar_hair_style, row.avatar_hair_colour);
+    }
+  }
+
+  function renderResults(rows) {
+    teardownThumbs();
+    resultsEl.innerHTML = rows.map((row, i) => {
+      const badge = row.is_banned
+        ? '<span class="player-banned-badge">Temporarily Banned</span>'
+        : '';
+      return '<a class="player-row" href="index.html?player=' + encodeURIComponent(row.username) + '">' +
+        '<span class="player-avatar-thumb" id="player-thumb-' + i + '"></span>' +
+        '<span class="player-row-main"><span class="player-row-name">' + escapeHtml(row.username) + '</span>' + badge + '</span>' +
+        '<span class="player-row-arrow">›</span>' +
+      '</a>';
+    }).join('');
+    stateEl.hidden = true;
+    resultsEl.hidden = false;
+    rows.forEach((row, i) => {
+      const el = document.getElementById('player-thumb-' + i);
+      if (el) mountThumb(el, row);
+    });
+  }
+
+  async function runSearch(query) {
+    const mySeq = ++requestSeq;
+    if (!window.QZAuth || !window.QZAuth.configured || !window.QZAuth.client) {
+      showState('⚠️', 'Search unavailable', 'Accounts aren’t configured on this deployment yet.');
+      return;
+    }
+    const { data, error } = await window.QZAuth.client.rpc('search_public_players', {
+      p_query: query, p_limit: RESULT_LIMIT, p_offset: 0
+    });
+    if (mySeq !== requestSeq) return; // a newer keystroke's request already landed
+    if (error) {
+      showState('⚠️', 'Something went wrong', 'Could not search players right now — try again shortly.');
+      return;
+    }
+    if (!data || !data.length) {
+      showState('🚫', 'No Players Found', 'Try another username.');
+      return;
+    }
+    renderResults(data);
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    clearTimeout(debounceTimer);
+    if (!q) {
+      requestSeq++; // invalidate any in-flight request
+      teardownThumbs();
+      showState('🔎', 'Find a Player', 'Search for a Quest Zone username to view their profile.');
+      return;
+    }
+    debounceTimer = setTimeout(() => runSearch(q), DEBOUNCE_MS);
+  });
+})();
+</script>
+</body>
+</html>

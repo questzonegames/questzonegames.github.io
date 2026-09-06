@@ -22,7 +22,14 @@
 //                                                 only signs in by email
 //   QZAuth.signOut()
 //   QZAuth.getSession()   -> Supabase session or null
-//   QZAuth.getProfile()   -> { id, username, is_admin, created_at } or null
+//   QZAuth.getProfile()   -> { id, username, is_admin, created_at,
+//                              email_verified_at, ... } or null
+//   QZAuth.sendVerificationCode(email)   — sends/resends the 6-digit email
+//                                          verification code (see
+//                                          assets/js/email-verify-modal.js)
+//   QZAuth.verifyEmailCode(email, code)  — checks that code and, on
+//                                          success, marks the account
+//                                          verified server-side
 (function () {
   const configured = !!(window.QZ_SUPABASE_URL && window.QZ_SUPABASE_ANON_KEY);
   if (!configured) {
@@ -58,7 +65,48 @@
       options: { data: { username } }
     });
     if (error) throw error;
+
+    // Best-effort first verification email — deliberately not awaited-and-
+    // thrown: signup must succeed and log the player in even if sending
+    // this fails (see mark_email_verified()/20260906080000_email_
+    // verification.sql for why). The "Email Not Confirmed" button's Resend
+    // action is the real, retryable path if this one doesn't land.
+    sendVerificationCode(email).catch(() => {});
+
     return data;
+  }
+
+  // Sends a 6-digit email OTP the player can enter in the email-
+  // verification modal (assets/js/email-verify-modal.js). Reused for both
+  // the first, best-effort send right after signup and every later
+  // "Resend" click — same call, same code path, nothing special about
+  // either one. shouldCreateUser: false because this is only ever called
+  // for an account that already exists.
+  async function sendVerificationCode(email) {
+    const c = requireClient();
+    const { error } = await c.auth.signInWithOtp({
+      email: String(email || '').trim(),
+      options: { shouldCreateUser: false }
+    });
+    if (error) throw error;
+  }
+
+  // Verifies the code from that email. Supabase's own auth server is the
+  // one actually checking it's correct and not expired — a wrong/expired
+  // code throws here and mark_email_verified() (see the migration above)
+  // is never reached. On success this also naturally refreshes/re-
+  // establishes the caller's session (verifyOtp is a real sign-in), which
+  // is fine — same account, same email.
+  async function verifyEmailCode(email, code) {
+    const c = requireClient();
+    const { error } = await c.auth.verifyOtp({
+      email: String(email || '').trim(),
+      token: String(code || '').trim(),
+      type: 'email'
+    });
+    if (error) throw error;
+    const { error: rpcError } = await c.rpc('mark_email_verified');
+    if (rpcError) throw rpcError;
   }
 
   async function signIn(usernameOrEmail, password) {
@@ -164,6 +212,7 @@
 
   window.QZAuth = {
     client, configured, isEmail, signUp, signIn, signOut, getSession, getProfile,
-    isBannedProfile, banMessageFor, enforceNotBanned
+    isBannedProfile, banMessageFor, enforceNotBanned,
+    sendVerificationCode, verifyEmailCode
   };
 })();

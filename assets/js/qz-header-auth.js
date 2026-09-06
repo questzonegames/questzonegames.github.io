@@ -43,15 +43,32 @@
     btn.appendChild(sweep);
   }
 
-  function renderLoggedIn(actions, prefix, profile) {
+  function renderLoggedIn(actions, prefix, profile, email) {
     actions.innerHTML = '';
 
-    const profileBtn = document.createElement('a');
-    profileBtn.href = prefix + 'profile/index.html';
-    profileBtn.className = 'btn btn-chrome-dark';
-    profileBtn.textContent = '👤 ' + (profile ? profile.username : 'Account');
-    actions.appendChild(profileBtn);
-    addChromeSweep(profileBtn);
+    // Unverified email: no Profile link at all — the profile page is
+    // locked until confirmed (see profile/index.html), so there's nothing
+    // useful to send them to yet. This button opens the verification
+    // modal (assets/js/email-verify-modal.js) directly instead of
+    // navigating anywhere.
+    if (profile && !profile.email_verified_at) {
+      const verifyBtn = document.createElement('button');
+      verifyBtn.type = 'button';
+      verifyBtn.className = 'btn btn-chrome-dark';
+      verifyBtn.textContent = '⚠️ Email Not Confirmed';
+      verifyBtn.addEventListener('click', () => {
+        if (window.QZEmailVerify) window.QZEmailVerify.open(email);
+      });
+      actions.appendChild(verifyBtn);
+      addChromeSweep(verifyBtn);
+    } else {
+      const profileBtn = document.createElement('a');
+      profileBtn.href = prefix + 'profile/index.html';
+      profileBtn.className = 'btn btn-chrome-dark';
+      profileBtn.textContent = '👤 ' + (profile ? profile.username : 'Account');
+      actions.appendChild(profileBtn);
+      addChromeSweep(profileBtn);
+    }
 
     if (profile && profile.is_admin) {
       const adminBtn = document.createElement('a');
@@ -100,7 +117,7 @@
       return;
     }
 
-    renderLoggedIn(actions, prefix, profile);
+    renderLoggedIn(actions, prefix, profile, session.user.email);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);

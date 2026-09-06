@@ -29,6 +29,20 @@
     text-shadow: 0 0 16px rgba(120,170,255,0.5);
   }
   .skills-top-spacer { flex: 0 0 auto; width: 96px; }
+  .skills-banned-pill {
+    display: inline-flex; align-items: center; gap: 4px; vertical-align: middle;
+    padding: 3px 10px; border-radius: 6px; margin-left: 8px;
+    font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+    background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.45);
+    box-shadow: 0 0 10px rgba(240,70,70,0.2);
+  }
+  .skills-banned-pill[hidden] { display: none; }
+  .skills-state {
+    max-width: 480px; margin: 40px auto; text-align: center;
+    color: var(--text-dim); font-size: 13.5px; line-height: 1.6;
+  }
+  .skills-state .icon { font-size: 32px; margin-bottom: 12px; }
+  .skills-layout[hidden] { display: none; }
 
   .skills-layout {
     display: grid;
@@ -157,10 +171,7 @@
       <li><a href="../guidebook.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M5.6,3 H18.4 A1.6,1.6 0 0 1 20,4.6 V19.4 A1.6,1.6 0 0 1 18.4,21 H5.6 A1.6,1.6 0 0 1 4,19.4 V4.6 A1.6,1.6 0 0 1 5.6,3 Z M6.6,3 H7.6 V21 H6.6 Z M13,9.6 L15.4,12 L13,14.4 L10.6,12 Z"/></svg></span> Guidebook</a></li>
       <li><a href="../highscores.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20h5v-6H3v6Z" opacity=".75"/><path d="M9.5 20h5V9h-5v11Z"/><path d="M16 20h5v-4h-5v4Z" opacity=".55"/></svg></span> Highscores</a></li>
       <li><a href="#" data-coming-soon="The Shop is coming soon &mdash; spend Quest Points or real money on cosmetics!"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8,8 V6.5 A4,4 0 0 1 16,6.5 V8 H14.4 V6.5 A2.4,2.4 0 0 0 9.6,6.5 V8 Z M4.5,8 H19.5 L20.3,20 A1.2,1.2 0 0 1 19.1,21.3 H4.9 A1.2,1.2 0 0 1 3.7,20 Z"/></svg></span> Shop</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">⚽</span> Sports</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">👥</span> Multiplayer</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">🗺️</span> Adventure</a></li>
-      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">🏆</span> Top Games</a></li>
+      <li><a href="players.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4.8 4.8 0 1 0 0-9.6 4.8 4.8 0 0 0 0 9.6Z"/><path d="M4 20.5c0-3.9 3.6-6.5 8-6.5s8 2.6 8 6.5V21H4v-.5Z"/></svg></span> Players</a></li>
     </ul>
   </div>
 </nav>
@@ -171,12 +182,14 @@
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
 
       <div class="skills-top">
-        <a href="index.html" class="btn btn-chrome-dark back-btn">← Profile</a>
-        <h1 class="skills-heading">Skills</h1>
+        <a href="index.html" class="btn btn-chrome-dark back-btn" id="skills-back-btn">← Profile</a>
+        <h1 class="skills-heading">Skills <span class="skills-banned-pill" id="skills-banned-pill" hidden>Temporarily Banned</span></h1>
         <span class="skills-top-spacer"></span>
       </div>
 
-      <div class="skills-layout">
+      <div id="skills-state" class="skills-state" hidden></div>
+
+      <div class="skills-layout" id="skills-layout">
         <div class="avatar-col">
           <div class="avatar-stage bezel-sm" id="avatar-stage">
             <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
@@ -213,6 +226,7 @@
 <script src="../assets/js/qz-config.js"></script>
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/email-verify-modal.js"></script>
 <script src="../assets/js/qz-xp.js"></script>
 <script src="../assets/js/inventory-data.js"></script>
 <script src="../assets/js/item-notify.js"></script>
@@ -231,9 +245,10 @@
     intelligence: '../assets/img/skills/intelligence.png'
   };
 
-  // ---- avatar (mirrors profile/index.html's own mount, minus admin-view
-  // impersonation — this page only ever shows the signed-in account's own
-  // skills) ----
+  // ---- avatar (mirrors profile/index.html's own mount) ----
+  // ?player=<username> (from Players search) shows that account's public
+  // skills read-only instead of the signed-in account's own — see
+  // initPublicView() below.
   // Front-view-only per window.QZ_AVATAR_MODE (assets/js/avatar-mode.js) —
   // see that file for how to bring the old rotating/draggable viewer back.
   const FRONT_ONLY = window.QZ_AVATAR_MODE !== 'multi-angle';
@@ -349,7 +364,98 @@
     }
   }
 
+  // ---- public view (Players search -> ?player=<username>) ----
+  // Read-only, no login required. Skill levels come from the existing
+  // public.hiscores_player_stats() RPC (already public — see
+  // supabase/migrations/20260905050000_public_highscores.sql) rather than
+  // querying game_progress directly (which is own-or-admin-only); the
+  // avatar showcase comes from get_public_player_profile() (see
+  // supabase/migrations/20260906060000_players_search_and_public_profiles.
+  // sql), same as profile/index.html's own public-view branch.
+  async function loadAvatarPublic(pub) {
+    if (!qzAvatar) return;
+    const catalogById = {};
+    (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
+    const items = {};
+    (pub.equipped_items || []).forEach((row) => { if (row.item_id && catalogById[row.item_id]) items[row.slot] = catalogById[row.item_id]; });
+    qzAvatar.setAvatarEquipment(items);
+    if (qzAvatar.setBaseAppearance && pub.avatar_gender) {
+      qzAvatar.setBaseAppearance(pub.avatar_gender, pub.avatar_skin_colour);
+      if (qzAvatar.setHairstyle) qzAvatar.setHairstyle(pub.avatar_hair_style, pub.avatar_hair_colour);
+    }
+  }
+
+  async function loadSkillsFromStats(stats) {
+    const grid = document.getElementById('skill-grid');
+    if (!window.QZAuth || !window.QZAuth.client) return;
+    const client = window.QZAuth.client;
+
+    const { data: games, error: gamesError } = await client
+      .from('games')
+      .select('game_key,name,sort_order')
+      .order('sort_order', { ascending: true });
+    if (gamesError || !games) return;
+
+    const skillsMap = (stats && stats.skills) || {};
+    const skills = games.map((g) => {
+      const s = skillsMap[g.game_key];
+      return { game_key: g.game_key, name: g.name, xp: (s && s.xp) || 0, level: (s && s.level) || 1 };
+    });
+    skills.sort((a, b) => {
+      const an = SKILL_ICONS[a.game_key] ? 0 : 1;
+      const bn = SKILL_ICONS[b.game_key] ? 0 : 1;
+      return an - bn;
+    });
+
+    grid.innerHTML = '';
+    skills.forEach((s) => grid.appendChild(renderSkillBox(s)));
+    for (let i = skills.length; i < TOTAL_SKILL_SLOTS; i++) grid.appendChild(renderPlaceholderBox());
+
+    document.getElementById('total-level-value').textContent =
+      Number((stats && stats.total_level) || skills.length).toLocaleString();
+  }
+
+  function showSkillsState(icon, text) {
+    document.getElementById('skills-state').innerHTML = '<div class="icon">' + icon + '</div>' + text;
+    document.getElementById('skills-state').hidden = false;
+    document.getElementById('skills-layout').hidden = true;
+  }
+
+  async function initPublicView(username) {
+    const backBtn = document.getElementById('skills-back-btn');
+    if (backBtn) backBtn.setAttribute('href', 'index.html?player=' + encodeURIComponent(username));
+
+    if (!window.QZAuth || !window.QZAuth.client) {
+      showSkillsState('⚠️', 'Accounts aren’t configured on this deployment yet.');
+      return;
+    }
+    const client = window.QZAuth.client;
+    const [{ data: statsRows }, { data: pubRows }] = await Promise.all([
+      client.rpc('hiscores_player_stats', { p_username: username }),
+      client.rpc('get_public_player_profile', { p_username: username })
+    ]);
+    const stats = statsRows && statsRows[0];
+    const pub = pubRows && pubRows[0];
+    if (!stats && !pub) {
+      showSkillsState('⚠️', 'That player could not be found.');
+      return;
+    }
+
+    const resolvedName = (pub && pub.username) || (stats && stats.username) || username;
+    document.getElementById('skills-username').textContent = resolvedName;
+    document.title = resolvedName + ' — Skills — Quest Zone';
+    const bannedPill = document.getElementById('skills-banned-pill');
+    if (bannedPill) bannedPill.hidden = !(pub && pub.is_banned);
+
+    if (pub) await loadAvatarPublic(pub);
+    await loadSkillsFromStats(stats);
+  }
+
   async function init() {
+    const params = new URLSearchParams(location.search);
+    const playerParam = params.get('player');
+    if (playerParam) { await initPublicView(playerParam); return; }
+
     if (!window.QZAuth || !window.QZAuth.client) { await loadSkills(null); return; }
     const profile = await window.QZAuth.getProfile();
     document.getElementById('skills-username').textContent = profile ? profile.username : 'Guest';
