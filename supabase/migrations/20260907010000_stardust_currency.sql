@@ -1,0 +1,26 @@
+-- ============================================================================
+-- Stardust — new premium currency, separate from Quest Points.
+-- ============================================================================
+-- Quest Points (public.profiles.quest_points) are earned by playing games.
+-- Stardust is a second, completely independent balance meant to be bought
+-- with real money through the future Shop — nothing spends or grants it
+-- yet, this migration only adds the column so the private profile page has
+-- somewhere real to read/display a balance from.
+--
+-- Added the exact same way quest_points originally was (see
+-- 20260903004123_initial_schema.sql): a plain `alter table ... add column
+-- if not exists ... default 0`, so every existing account picks up
+-- stardust = 0 automatically with zero data loss to any other column, and
+-- new signups get it for free via the same `insert into profiles` that
+-- already runs in handle_new_user() (no trigger change needed — a new row
+-- simply takes the column default like quest_points already does).
+--
+-- RLS: profiles_select_own_or_admin/profiles_update_own already govern the
+-- whole row, not specific columns, so no policy change is needed for a
+-- signed-in user to read their own stardust the same way they already read
+-- quest_points. This column is NOT added to get_public_player_profile(),
+-- search_public_players(), or hiscores_player_stats() — Stardust stays
+-- private account info, never exposed on the public showcase.
+-- ============================================================================
+
+alter table public.profiles add column if not exists stardust integer not null default 0;

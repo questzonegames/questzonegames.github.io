@@ -35,7 +35,10 @@
 -- 20260906090000_profile_pictures.sql,
 -- 20260906100000_hiscores_profile_picture.sql, and
 -- 20260906110000_agility_driving_skills.sql, and
--- 20260906120000_top_total_level_players.sql).
+-- 20260906120000_top_total_level_players.sql,
+-- 20260907010000_stardust_currency.sql,
+-- 20260907020000_hide_currencies_from_public_profile.sql, and
+-- 20260907030000_restore_pfp_id_on_public_profile.sql).
 -- As of 06/09/2026 this list was cross-checked against `supabase migration
 -- list` (every local migration file's timestamp matches an applied remote
 -- migration, zero drift) and every function/table below was folded in from
@@ -2182,13 +2185,17 @@ grant execute on function public.search_public_players(text, int, int) to anon, 
 -- array of {slot, item_id} only -- the client already owns the full item
 -- catalog client-side (assets/js/inventory-data.js) and looks up art/name/
 -- etc. from that. Final version (superseding the pre-profile-picture one
--- from 20260906060000): also returns equipped_profile_picture_id.
+-- from 20260906060000, and the quest_points-returning one from
+-- 20260906090000): no currency of any kind is returned any more -- Quest
+-- Points and Stardust are both private, account-owner-only balances (see
+-- 20260907020000_hide_currencies_from_public_profile.sql /
+-- 20260907030000_restore_pfp_id_on_public_profile.sql) -- still returns
+-- equipped_profile_picture_id.
 create or replace function public.get_public_player_profile(p_username text)
 returns table (
   user_id uuid,
   username text,
   is_banned boolean,
-  quest_points integer,
   avatar_gender text,
   avatar_skin_colour text,
   avatar_hair_style text,
@@ -2220,7 +2227,6 @@ begin
     p.id,
     p.username,
     (p.banned_until is not null and p.banned_until > now()) as is_banned,
-    p.quest_points,
     ac.gender,
     ac.skin_colour,
     ac.hair_style,
@@ -2550,4 +2556,13 @@ as $$
 $$;
 
 grant execute on function public.get_top_total_level_players(int) to anon, authenticated;
+
+-- ============================================================================
+-- Stardust — new premium currency, separate from Quest Points (see
+-- supabase/migrations/20260907010000_stardust_currency.sql). Private
+-- profile page only — never added to get_public_player_profile(),
+-- search_public_players(), or hiscores_player_stats() above.
+-- ============================================================================
+
+alter table public.profiles add column if not exists stardust integer not null default 0;
 

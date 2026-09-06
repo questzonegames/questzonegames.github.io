@@ -329,7 +329,7 @@
   .profile-top-spacer { visibility: hidden; }
   .profile-pfp-slot { display: flex; justify-content: flex-end; align-items: center; }
   .profile-pfp-btn {
-    width: 40px; height: 40px; border-radius: 50%; padding: 0; cursor: pointer;
+    width: 50px; height: 50px; border-radius: 50%; padding: 0; cursor: pointer;
     border: 2px solid rgba(140,195,255,0.4); background: #0a0e18; overflow: hidden;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
@@ -363,6 +363,47 @@
     background: linear-gradient(90deg, transparent, var(--blue-light), transparent);
     box-shadow: 0 0 8px rgba(120,170,255,0.6);
     opacity: 0.9;
+  }
+
+  /* ---- compact currency boxes (Quest Points / Stardust) — private
+     profile only. Sits where the old "Profile" title used to, between the
+     Customise button and the profile-picture button. ---- */
+  .profile-currencies {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(10px, 1.8vw, 16px);
+    flex-wrap: wrap;
+  }
+  .currency-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border-strong);
+    background:
+      radial-gradient(ellipse at 50% 120%, rgba(60,130,255,0.1), transparent 60%),
+      linear-gradient(165deg, #0e1a30 0%, #081020 60%, #060b16 100%);
+  }
+  .currency-box[hidden] { display: none; }
+  .currency-box .cur-icon {
+    flex: 0 0 auto; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    color: #cfe4ff;
+    filter: drop-shadow(0 0 6px rgba(120,190,255,0.55));
+  }
+  .currency-box .cur-icon svg { width: 100%; height: 100%; }
+  .currency-box.currency-stardust .cur-icon { color: #ffd76a; filter: drop-shadow(0 0 6px rgba(255,215,106,0.55)); }
+  .currency-box .cur-text { display: flex; flex-direction: column; line-height: 1.25; }
+  .currency-box .cur-label {
+    font-family: 'Orbitron', sans-serif; font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue-light); opacity: 0.9;
+  }
+  .currency-box .cur-value {
+    font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 16px;
+    color: #fff; text-shadow: 0 0 10px rgba(120,170,255,0.4);
   }
 
   .profile-grid {
@@ -523,7 +564,11 @@
   /* ---------- right-side tiles ---------- */
   .profile-sections { display: flex; flex-direction: column; gap: clamp(14px, 2vw, 20px); height: 100%; }
   .section-row { display: grid; gap: clamp(14px, 2vw, 20px); flex: 1; }
-  .section-row.points-row { grid-template-columns: 0.85fr 1.4fr; }
+  /* Quest Points moved up into the compact currency boxes in .profile-top
+     (see .profile-currencies above) — this row now holds only the Pinned
+     Achievements tile, stretched across the full width to its right of
+     the avatar. */
+  .section-row.pinned-row { grid-template-columns: 1fr; }
   .section-row.nav-row { grid-template-columns: repeat(3, 1fr); }
   /* 3 base tiles + up to 3 admin-only tiles (admin inventory / avatar rig /
      3D avatar storage) = up to 6 tiles when viewing your own admin profile;
@@ -621,19 +666,6 @@
     opacity: 0.9;
   }
 
-  .tile-points { justify-content: center; }
-  .tile-value {
-    margin-top: 8px;
-    font-family: 'Orbitron', sans-serif;
-    font-weight: 800;
-    font-size: clamp(26px, 3.4vw, 36px);
-    background: linear-gradient(180deg, #ffffff 0%, #d3ddf0 45%, #9fb0d0 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 0 16px rgba(120,170,255,0.55);
-  }
-
   .tile-pinned { justify-content: flex-start; }
 
   /* ---- pinned achievements: 7-slot showcase ----
@@ -649,8 +681,11 @@
     margin-top: 14px;
     flex: 1;
     align-items: center;
-    justify-content: center;
-    padding: 4px 2px;
+    /* wide panel now (Quest Points moved up into the header currency
+       boxes — see .profile-currencies) — space-evenly keeps all 7 slots
+       balanced across the full width instead of clumping in the middle */
+    justify-content: space-evenly;
+    padding: 4px 12px;
   }
   .pin-slot {
     position: relative;
@@ -777,7 +812,11 @@
   @media (max-width: 780px) {
     .profile-grid { grid-template-columns: 1fr; }
     .avatar-stage { max-width: 280px; margin: 0 auto; }
-    .section-row.points-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .profile-top { flex-wrap: wrap; justify-content: center; row-gap: 12px; }
+    .profile-top-side { min-width: 0; }
+    .profile-currencies { order: 3; flex-basis: 100%; }
   }
   @media (max-width: 480px) {
     .section-row.nav-row, .section-row.nav-row.nav-row-admin { grid-template-columns: 1fr; }
@@ -847,7 +886,26 @@
 
       <div class="profile-top">
         <a href="customise.html" class="btn btn-chrome-dark profile-top-side" id="customise-btn" hidden>🎨 Customise</a>
-        <h1 class="profile-heading"><span class="dash"></span>Profile<span class="dash"></span></h1>
+        <div class="profile-currencies">
+          <a href="wallet.html" class="currency-box currency-quest-points" id="quest-points-tile" aria-label="Open your wallet">
+            <span class="cur-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 9-9 9-9-9z"/></svg>
+            </span>
+            <span class="cur-text">
+              <span class="cur-label">Quest Points</span>
+              <span class="cur-value" id="quest-points-value">1,250</span>
+            </span>
+          </a>
+          <div class="currency-box currency-stardust" id="stardust-box" hidden>
+            <span class="cur-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2L12 2z"/></svg>
+            </span>
+            <span class="cur-text">
+              <span class="cur-label">Stardust</span>
+              <span class="cur-value" id="stardust-value">0</span>
+            </span>
+          </div>
+        </div>
         <div class="profile-top-side profile-pfp-slot">
           <button type="button" class="profile-pfp-btn" id="profile-pfp-btn" hidden title="Change profile picture">
             <img id="profile-pfp-btn-img" src="" alt="">
@@ -873,12 +931,7 @@
 
         <!-- Main sections — later: populated from account data -->
         <div class="profile-sections">
-          <div class="section-row points-row">
-            <a href="wallet.html" class="tile tile-points bezel-sm" id="quest-points-tile" aria-label="Open your wallet">
-              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
-              <span class="tile-label">Quest Points</span>
-              <span class="tile-value" id="quest-points-value">1,250</span>
-            </a>
+          <div class="section-row pinned-row">
             <a href="achievements.html" class="tile tile-pinned bezel-sm" id="pinned-achievements-tile" aria-label="Open your achievements">
               <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
               <span class="tile-label">Pinned Achievements</span>
@@ -1241,9 +1294,11 @@
   // Genuinely public and read-only — unlike admin-view above, this needs
   // no login and no permission check at all: get_public_player_profile()
   // (see supabase/migrations/20260906060000_players_search_and_public_
-  // profiles.sql) is a SECURITY DEFINER RPC that hand-picks only the public
-  // columns (username, quest_points, avatar showcase, temp-ban status) and
-  // already excludes permanently banned/hidden/deleted accounts server-side
+  // profiles.sql, most recently narrowed by 20260907020000_hide_
+  // currencies_from_public_profile.sql) is a SECURITY DEFINER RPC that
+  // hand-picks only the public columns (username, avatar showcase,
+  // temp-ban status — no currency of any kind) and already excludes
+  // permanently banned/hidden/deleted accounts server-side
   // — an unknown, hidden, or permanently-banned username comes back as
   // "not found" here, same as it does from that RPC directly.
   //
@@ -1326,18 +1381,24 @@
       if (el) el.hidden = true;
     });
 
-    // Quest Points and Pinned Achievements stay visible as public stats,
-    // but stop being links — wallet.html has purchase history and
-    // achievements.html lists everything a player has ever unlocked, both
-    // private. The pinned achievement icons still open their own
-    // inspection pop-out independently of this tile being a link.
-    ['quest-points-tile', 'pinned-achievements-tile'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.removeAttribute('href');
-      el.style.cursor = 'default';
-    });
+    // Quest Points and Stardust are both currencies — private account
+    // info, not shown on anyone's public profile (get_public_player_
+    // profile() doesn't even return either balance any more — see
+    // supabase/migrations/20260907020000_hide_currencies_from_public_
+    // profile.sql). Stardust's box already starts hidden by default; this
+    // just also hides the Quest Points box here.
+    const qpBox = document.getElementById('quest-points-tile');
+    if (qpBox) qpBox.hidden = true;
 
+    // Pinned Achievements stays visible as a public stat, but stops being
+    // a link — achievements.html lists everything a player has ever
+    // unlocked, which is private. The pinned achievement icons still open
+    // their own inspection pop-out independently of this tile being a link.
+    const pinnedTile = document.getElementById('pinned-achievements-tile');
+    if (pinnedTile) {
+      pinnedTile.removeAttribute('href');
+      pinnedTile.style.cursor = 'default';
+    }
   }
 </script>
 <script src="../assets/js/avatar-mode.js"></script>
@@ -1470,16 +1531,17 @@
       }
 
       // Public view (Players search -> ?player=<username>): show the
-      // TARGET account's username/points, same idea as admin-view above,
-      // just sourced from the public RPC's already-fetched profile instead
-      // of a direct (RLS-blocked) table read.
+      // TARGET account's username, same idea as admin-view above, just
+      // sourced from the public RPC's already-fetched profile instead of
+      // a direct (RLS-blocked) table read. No currency to populate here —
+      // get_public_player_profile() doesn't return quest_points or
+      // stardust, and renderPublicViewUI() already hides the Quest Points
+      // box outright (Stardust's box is hidden by default).
       const pub = window.QZPublicViewReady ? await window.QZPublicViewReady : { active: false, error: null };
       if (pub.error) return; // renderPublicViewUI already showed why
       if (pub.active) {
         const nameEl = document.getElementById('profile-username');
         if (nameEl) nameEl.textContent = pub.profile.username;
-        const qpEl = document.getElementById('quest-points-value');
-        if (qpEl) qpEl.textContent = Number(pub.profile.quest_points || 0).toLocaleString();
         return;
       }
 
@@ -1515,6 +1577,17 @@
       if (nameEl) nameEl.textContent = profile.username;
       const qpEl = document.getElementById('quest-points-value');
       if (qpEl) qpEl.textContent = Number(profile.quest_points || 0).toLocaleString();
+
+      // Stardust — own profile only, same as Customise/the profile-picture
+      // button below: never shown in admin-view or public-view (see
+      // supabase/migrations/20260907010000_stardust_currency.sql — it's
+      // deliberately not returned by get_public_player_profile()/
+      // admin_get_account_info() at all).
+      const stardustBox = document.getElementById('stardust-box');
+      const stardustEl = document.getElementById('stardust-value');
+      if (stardustEl) stardustEl.textContent = Number(profile.stardust || 0).toLocaleString();
+      if (stardustBox) stardustBox.hidden = false;
+
       const banner = document.getElementById('preview-banner');
       if (banner) banner.style.display = 'none';
       showAdminInventoryTile(profile.is_admin, null); // own profile — grant to self
