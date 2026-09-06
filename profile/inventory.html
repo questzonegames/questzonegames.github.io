@@ -191,6 +191,10 @@
     filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3));
   }
 
+  /* Front-only mode hides these via the `hidden` attribute; .avatar-arrow's
+     own `display: flex` below would otherwise out-specificity the
+     browser's default [hidden]{display:none}. */
+  .avatar-arrow[hidden] { display: none; }
   .avatar-arrow {
     position: absolute;
     top: 50%;
@@ -616,6 +620,7 @@
 <script src="../assets/js/site.js"></script>
 <script src="../assets/js/inventory-data.js"></script>
 <script src="../assets/js/item-notify.js"></script>
+<script src="../assets/js/avatar-mode.js"></script>
 <script src="../assets/js/avatar-viewer.js"></script>
 <script src="../assets/js/inventory.js"></script>
 </body>

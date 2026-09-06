@@ -529,21 +529,31 @@
     if (avatar.setHairstyle) avatar.setHairstyle(custom.hair_style, custom.hair_colour);
   }
 
+  // Front-view-only per window.QZ_AVATAR_MODE (assets/js/avatar-mode.js) —
+  // the Armory avatar on this page equips items the same way the
+  // multi-angle viewer always did, just without rotation while that flag
+  // is 'front-only'. Flip it back to 'multi-angle' to restore the arrows.
   function mountAvatar() {
+    const FRONT_ONLY = window.QZ_AVATAR_MODE !== 'multi-angle';
     const avatarContainer = document.getElementById('armory-avatar-3d');
     if (avatarContainer && window.QZAvatarViewer) {
-      avatar = window.QZAvatarViewer.mount(avatarContainer);
+      avatar = window.QZAvatarViewer.mount(avatarContainer, { staticFront: FRONT_ONLY });
       window.qzAvatar = avatar;
       applyBaseAppearance();
     }
     const arrowLeft = document.getElementById('armory-arrow-left');
     const arrowRight = document.getElementById('armory-arrow-right');
-    if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
-    if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
+    if (FRONT_ONLY) {
+      if (arrowLeft) arrowLeft.hidden = true;
+      if (arrowRight) arrowRight.hidden = true;
+    } else {
+      if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
+      if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
+    }
 
     window.addEventListener('pageshow', (e) => {
       if (e.persisted && avatarContainer && window.QZAvatarViewer && !avatarContainer.querySelector('img')) {
-        avatar = window.QZAvatarViewer.mount(avatarContainer);
+        avatar = window.QZAvatarViewer.mount(avatarContainer, { staticFront: FRONT_ONLY });
         window.qzAvatar = avatar;
         if (avatar) avatar.setAvatarEquipment(expandedEquipped());
         applyBaseAppearance();

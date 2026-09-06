@@ -428,6 +428,11 @@
   }
 
   /* ---- left/right pose-rotation arrows ---- */
+  /* Front-only mode hides these via the `hidden` attribute; without this,
+     .avatar-arrow's own `display: flex` below would out-specificity the
+     browser's default [hidden]{display:none} and the arrow would still
+     show (see the identical .tile[hidden] fix above for tiles). */
+  .avatar-arrow[hidden] { display: none; }
   .avatar-arrow {
     position: absolute;
     top: 50%;
@@ -483,7 +488,11 @@
   .section-row { display: grid; gap: clamp(14px, 2vw, 20px); flex: 1; }
   .section-row.points-row { grid-template-columns: 0.85fr 1.4fr; }
   .section-row.nav-row { grid-template-columns: repeat(3, 1fr); }
-  .section-row.nav-row.nav-row-admin { grid-template-columns: repeat(4, 1fr); }
+  /* 3 base tiles + up to 3 admin-only tiles (admin inventory / avatar rig /
+     3D avatar storage) = up to 6 tiles when viewing your own admin profile;
+     3 columns keeps tile width matching the base nav-row above it instead of
+     shrinking to fit a wider count. */
+  .section-row.nav-row.nav-row-admin { grid-template-columns: repeat(3, 1fr); }
 
   /* author-origin "display: flex" below would otherwise outrank the
      browser's own [hidden]{display:none} default regardless of the
@@ -896,6 +905,18 @@
               </span>
               <span class="tile-title">Avatar Rig</span>
             </a>
+            <a href="admin-avatar-storage.html" class="tile tile-nav bezel-sm" id="admin-avatar-storage-tile" hidden>
+              <span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>
+              <span class="tile-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7l9-4 9 4-9 4-9-4z"/>
+                  <path d="M3 7v10l9 4 9-4V7"/>
+                  <path d="M3 7l9 4 9-4"/>
+                  <path d="M12 11v10"/>
+                </svg>
+              </span>
+              <span class="tile-title">3D Avatar Storage</span>
+            </a>
           </div>
         </div>
       </div>
@@ -1156,10 +1177,20 @@
     tile.hidden = false;
   }
 
+  // 3D Avatar Storage archives the old multi-angle system (see
+  // assets/js/avatar-mode.js) — same "shared catalog, not any one
+  // player's data" reasoning as Avatar Rig, so it's own-profile only too.
+  function showAdminAvatarStorageTile(isAdmin) {
+    const tile = document.getElementById('admin-avatar-storage-tile');
+    if (!tile || !isAdmin) return;
+    tile.hidden = false;
+  }
+
   function infoItem(label, valueHtml) {
     return '<div class="admin-info-item"><div class="l">' + escapeAdminHtml(label) + '</div><div class="v">' + valueHtml + '</div></div>';
   }
 </script>
+<script src="../assets/js/avatar-mode.js"></script>
 <script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script type="module">
   // Mount the avatar viewer into the existing avatar-stage box. Kept as
@@ -1168,9 +1199,12 @@
   // part is just "this page's one call to it." Module scripts run in
   // document order, so avatar-viewer.js (loaded just above) has already
   // set window.QZAvatarViewer by the time this runs.
+  // Front-view-only per window.QZ_AVATAR_MODE (assets/js/avatar-mode.js) —
+  // see that file for how to bring the old rotating/draggable viewer back.
+  const FRONT_ONLY = window.QZ_AVATAR_MODE !== 'multi-angle';
   const container = document.getElementById('avatar-3d');
   if (container && window.QZAvatarViewer) {
-    window.qzAvatar = window.QZAvatarViewer.mount(container);
+    window.qzAvatar = window.QZAvatarViewer.mount(container, { staticFront: FRONT_ONLY });
   }
 
   // Whatever this account currently has equipped (from the Inventory
@@ -1219,17 +1253,24 @@
   // down — re-mount so the avatar doesn't come back broken/blank.
   window.addEventListener('pageshow', (e) => {
     if (e.persisted && container && window.QZAvatarViewer && !container.querySelector('img')) {
-      window.qzAvatar = window.QZAvatarViewer.mount(container);
+      window.qzAvatar = window.QZAvatarViewer.mount(container, { staticFront: FRONT_ONLY });
       applyRealEquipment();
     }
   });
 
-  // Left/right pose-rotation arrows. Looked up lazily (not captured once)
-  // so a bfcache remount's fresh window.qzAvatar is always the one used.
+  // Left/right pose-rotation arrows — hidden outright in front-only mode
+  // rather than just left unwired, so there's no dead control sitting in
+  // the UI. Looked up lazily (not captured once) so a bfcache remount's
+  // fresh window.qzAvatar is always the one used.
   const arrowLeft = document.getElementById('avatar-arrow-left');
   const arrowRight = document.getElementById('avatar-arrow-right');
-  if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
-  if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
+  if (FRONT_ONLY) {
+    if (arrowLeft) arrowLeft.hidden = true;
+    if (arrowRight) arrowRight.hidden = true;
+  } else {
+    if (arrowLeft) arrowLeft.addEventListener('click', () => window.qzAvatar && window.qzAvatar.prev());
+    if (arrowRight) arrowRight.addEventListener('click', () => window.qzAvatar && window.qzAvatar.next());
+  }
 </script>
 <script>
   // Swap the demo "Username" / Preview Mode banner for the real signed-in
@@ -1263,6 +1304,7 @@
       if (banner) banner.style.display = 'none';
       showAdminInventoryTile(profile.is_admin, null); // own profile — grant to self
       showAdminAvatarRigTile(profile.is_admin);
+      showAdminAvatarStorageTile(profile.is_admin);
       const customiseBtn = document.getElementById('customise-btn');
       if (customiseBtn) customiseBtn.hidden = false; // own profile only — never in admin-view (that's someone else's character)
     }

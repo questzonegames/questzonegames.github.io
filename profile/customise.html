@@ -128,6 +128,10 @@
     pointer-events: none; user-select: none; -webkit-user-drag: none;
     filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3));
   }
+  /* Front-only mode hides these via the `hidden` attribute; .avatar-arrow's
+     own `display: flex` below would otherwise out-specificity the
+     browser's default [hidden]{display:none}. */
+  .avatar-arrow[hidden] { display: none; }
   .avatar-arrow {
     position: absolute; top: 50%; z-index: 3; width: 34px; height: 34px;
     display: flex; align-items: center; justify-content: center;
@@ -329,6 +333,7 @@
 <script src="../assets/js/inventory-data.js"></script>
 <script src="../assets/js/character-data.js"></script>
 <script src="../assets/js/item-notify.js"></script>
+<script src="../assets/js/avatar-mode.js"></script>
 <script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script type="module">
   // ===== Character Creation =====
@@ -447,11 +452,22 @@
   async function mountAvatar() {
     const container = document.getElementById('cc-avatar-3d');
     if (!container || !window.QZAvatarViewer) return;
-    avatar = window.QZAvatarViewer.mount(container);
+    // Front-view-only per window.QZ_AVATAR_MODE (assets/js/avatar-mode.js)
+    // — see that file for how to bring the old rotating/draggable viewer
+    // back.
+    const FRONT_ONLY = window.QZ_AVATAR_MODE !== 'multi-angle';
+    avatar = window.QZAvatarViewer.mount(container, { staticFront: FRONT_ONLY });
     avatar.setBaseAppearance(current.gender, current.skin_colour);
     avatar.setHairstyle(current.hair_style, current.hair_colour);
-    document.getElementById('cc-arrow-left').addEventListener('click', () => avatar && avatar.prev());
-    document.getElementById('cc-arrow-right').addEventListener('click', () => avatar && avatar.next());
+    const ccArrowLeft = document.getElementById('cc-arrow-left');
+    const ccArrowRight = document.getElementById('cc-arrow-right');
+    if (FRONT_ONLY) {
+      if (ccArrowLeft) ccArrowLeft.hidden = true;
+      if (ccArrowRight) ccArrowRight.hidden = true;
+    } else {
+      if (ccArrowLeft) ccArrowLeft.addEventListener('click', () => avatar && avatar.prev());
+      if (ccArrowRight) ccArrowRight.addEventListener('click', () => avatar && avatar.next());
+    }
 
     // show real equipped items on the preview, same as everywhere else the
     // avatar renders, so this looks like YOUR avatar, not a blank default

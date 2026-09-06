@@ -65,6 +65,19 @@
   }
   .rig-dir-btn.active { color: #fff; border-color: var(--blue-light); background: rgba(59,130,246,0.22); box-shadow: 0 0 10px rgba(70,140,255,0.4); }
   .rig-dir-btn.dirty::after { content: ' •'; color: #ffb454; }
+  /* Right/Back/Left are archived (see QZ_AVATAR_MODE in
+     assets/js/avatar-mode.js and profile/admin-avatar-storage.html) —
+     visibly greyed out and genuinely unclickable (a real `disabled`
+     attribute, not just a style), so calibration on live pages can't
+     accidentally happen against a direction nothing renders anymore.
+     Nothing about their underlying data changes; this is presentational
+     only. */
+  .rig-dir-btn:disabled {
+    color: var(--text-faint); border-color: rgba(120,160,220,0.15);
+    background: rgba(4,8,16,0.3); cursor: not-allowed; opacity: 0.55;
+  }
+  .rig-dir-btn .rig-dir-sub { display: block; font-size: 8px; letter-spacing: 0.06em; margin-top: 2px; opacity: 0.8; }
+  .rig-dir-btn.active .rig-dir-sub { color: #8fd6ff; }
   .rig-toggle-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
   .rig-toggle-row input { accent-color: var(--blue-light); }
   .rig-mirror-hint { font-size: 10.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
@@ -219,11 +232,12 @@
             <div class="rig-field">
               <label>Direction</label>
               <div class="rig-dir-row">
-                <button type="button" class="rig-dir-btn active" data-dir="front">Front</button>
-                <button type="button" class="rig-dir-btn" data-dir="right">Right</button>
-                <button type="button" class="rig-dir-btn" data-dir="back">Back</button>
-                <button type="button" class="rig-dir-btn" data-dir="left">Left</button>
+                <button type="button" class="rig-dir-btn active" data-dir="front">Front<span class="rig-dir-sub">Active</span></button>
+                <button type="button" class="rig-dir-btn" data-dir="right" disabled title="Archived — see Admin Zone → 3D Avatar Storage">Right<span class="rig-dir-sub">Disabled</span></button>
+                <button type="button" class="rig-dir-btn" data-dir="back" disabled title="Archived — see Admin Zone → 3D Avatar Storage">Back<span class="rig-dir-sub">Disabled</span></button>
+                <button type="button" class="rig-dir-btn" data-dir="left" disabled title="Archived — see Admin Zone → 3D Avatar Storage">Left<span class="rig-dir-sub">Disabled</span></button>
               </div>
+              <p class="rig-mirror-hint" style="margin-top:8px;">Quest Zone is currently front-view-only on the live site. Right/Back/Left calibration is preserved but disabled here — see <a href="admin-avatar-storage.html" style="color:var(--blue-light);">3D Avatar Storage</a>.</p>
             </div>
             <div class="rig-field" id="mirror-box" hidden>
               <label>Mirror Left ↔ Right</label>

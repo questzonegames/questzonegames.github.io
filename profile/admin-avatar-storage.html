@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Avatar Storage — Quest Zone</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  main.storage { padding: 26px 0 60px; position: relative; z-index: 1; }
+
+  .storage-frame {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 16px;
+    padding: 24px clamp(14px, 3vw, 30px) 30px;
+    background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  }
+  .storage-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 20px; flex-wrap: wrap; }
+  .storage-heading {
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 18px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(17px, 2.4vw, 25px); letter-spacing: 0.09em; text-align: center; margin: 0;
+    background: linear-gradient(180deg, #fff 0%, #cfd9ee 40%, #93a3c4 60%, #eef3fc 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 18px rgba(120,170,255,0.6), 0 2px 1px rgba(0,0,0,0.6);
+  }
+  .storage-heading .dash { flex: 1 1 40px; max-width: 70px; height: 2px; background: linear-gradient(90deg, transparent, var(--blue-light), transparent); opacity: 0.9; }
+
+  .storage-state { max-width: 480px; margin: 30px auto; text-align: center; color: var(--text-dim); font-size: 13.5px; line-height: 1.6; }
+  .storage-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+  .archive-note {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px 16px; margin-bottom: 22px; border-radius: 11px;
+    border: 1.5px solid rgba(255,190,90,0.35);
+    background: linear-gradient(180deg, rgba(255,180,60,0.1) 0%, rgba(255,180,60,0.03) 100%);
+    font-size: 12.5px; color: var(--text-dim); line-height: 1.55;
+  }
+  .archive-note .icon { font-size: 20px; flex: 0 0 auto; }
+  .archive-note b { color: #ffcf8a; }
+  .archive-note code { font-size: 11.5px; color: var(--blue-light); }
+
+  .archive-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 26px; }
+  @media (max-width: 780px) { .archive-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 420px) { .archive-grid { grid-template-columns: 1fr; } }
+
+  .archive-card { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 12px; padding: 12px; text-align: center; }
+  .archive-card.active-front { border-color: rgba(90,200,255,0.5); box-shadow: 0 0 14px rgba(70,160,255,0.25); }
+  .archive-card-title { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); margin-bottom: 4px; }
+  .archive-card-sub { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+  .archive-card-sub.live { color: #6be3a0; }
+  .archive-card-sub.archived { color: var(--text-faint); }
+  .archive-stage {
+    position: relative; width: 100%; aspect-ratio: 3/4;
+    background: #0a0e18; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  .archive-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 9% 11% 5%; }
+  .archive-card-counts { margin-top: 8px; font-size: 10.5px; color: var(--text-dim); }
+
+  .storage-panel { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 12px; padding: 14px; margin-bottom: 18px; }
+  .storage-panel-title { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: 13px; letter-spacing: 0.05em; color: var(--text); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .storage-panel-title .n { font-family: 'Exo 2', sans-serif; font-weight: 400; font-style: normal; font-size: 11px; color: var(--text-dim); text-transform: none; letter-spacing: 0; }
+
+  .archive-table-wrap { overflow-x: auto; border-radius: 9px; border: 1px solid var(--border-strong); }
+  table.archive-table { width: 100%; border-collapse: collapse; font-size: 11.5px; min-width: 640px; }
+  table.archive-table th, table.archive-table td {
+    padding: 8px 12px; text-align: left; white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  table.archive-table th {
+    font-family: 'Orbitron', sans-serif; font-size: 9.5px; letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--text-dim);
+    background: linear-gradient(180deg, #171d30 0%, #10152a 100%);
+  }
+  table.archive-table td.mono { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+  .dir-tag { display: inline-block; padding: 1px 7px; border-radius: 5px; font-family: 'Orbitron', sans-serif; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .dir-tag.front { background: rgba(90,220,150,0.16); color: #6be3a0; border: 1px solid rgba(90,220,150,0.35); }
+  .dir-tag.right, .dir-tag.back, .dir-tag.left { background: rgba(140,160,190,0.12); color: var(--text-dim); border: 1px solid rgba(140,160,190,0.25); }
+  .archive-empty { padding: 16px; text-align: center; color: var(--text-faint); font-size: 12px; }
+
+  .storage-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="../index.html"><img src="../assets/img/logo.png" alt="Quest Zone"></a>
+    <div class="site-search"><form action="../index.html"><input type="text" name="q" placeholder="Search games..." autocomplete="off"><button type="submit" aria-label="Search">🔍</button></form></div>
+    <div class="header-actions">
+      <a href="index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="../signup.html" class="btn btn-chrome-blue" data-coming-soon="">Signup</a>
+      <a href="../login.html" class="btn btn-chrome-dark" data-coming-soon="">Login</a>
+    </div>
+  </div>
+</header>
+
+<nav class="site-nav">
+  <div class="container">
+    <ul>
+      <li><a href="../index.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg></span> Home</a></li>
+      <li><a href="../guidebook.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M5.6,3 H18.4 A1.6,1.6 0 0 1 20,4.6 V19.4 A1.6,1.6 0 0 1 18.4,21 H5.6 A1.6,1.6 0 0 1 4,19.4 V4.6 A1.6,1.6 0 0 1 5.6,3 Z M6.6,3 H7.6 V21 H6.6 Z M13,9.6 L15.4,12 L13,14.4 L10.6,12 Z"/></svg></span> Guidebook</a></li>
+      <li><a href="../highscores.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20h5v-6H3v6Z" opacity=".75"/><path d="M9.5 20h5V9h-5v11Z"/><path d="M16 20h5v-4h-5v4Z" opacity=".55"/></svg></span> Highscores</a></li>
+      <li><a href="#" data-coming-soon="The Shop is coming soon &mdash; spend Quest Points or real money on cosmetics!"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8,8 V6.5 A4,4 0 0 1 16,6.5 V8 H14.4 V6.5 A2.4,2.4 0 0 0 9.6,6.5 V8 Z M4.5,8 H19.5 L20.3,20 A1.2,1.2 0 0 1 19.1,21.3 H4.9 A1.2,1.2 0 0 1 3.7,20 Z"/></svg></span> Shop</a></li>
+      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">⚽</span> Sports</a></li>
+      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">👥</span> Multiplayer</a></li>
+      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">🗺️</span> Adventure</a></li>
+      <li><a href="#" data-coming-soon="More categories coming soon!"><span class="ic">🏆</span> Top Games</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="storage">
+  <div class="container">
+    <div class="storage-frame bezel-lg">
+      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
+      <div class="storage-top">
+        <a href="admin.html" class="btn btn-chrome-dark">‹ Admin Zone</a>
+        <h1 class="storage-heading"><span class="dash"></span>3D Avatar Storage<span class="dash"></span></h1>
+        <span style="min-width:118px;"></span>
+      </div>
+
+      <div id="storage-state" class="storage-state">Checking access…</div>
+
+      <div id="storage-content" hidden>
+        <div class="archive-note">
+          <span class="icon">🗄️</span>
+          <div>
+            <div style="margin-bottom:4px;"><b>MULTI-ANGLE AVATAR ARCHIVE</b> — this system is currently archived.</div>
+            Quest Zone uses front-view-only avatars on live user-facing pages (Profile, Customize Avatar). The old rotating
+            avatar — front/right/back/left art, drag-to-turn, the arrow controls, and all of its calibration data in
+            <code>avatar_rig_anchors</code> / <code>avatar_rig_items</code> — has not been deleted. It's kept fully intact here
+            so it can be restored later by flipping <code>window.QZ_AVATAR_MODE</code> back to <code>'multi-angle'</code> in
+            <code>assets/js/avatar-mode.js</code>, with zero rebuild needed. Nothing on this page is editable; use
+            <a href="admin-avatar-rig.html" style="color:var(--blue-light);">Avatar Rig</a> for that (Front only, live).
+          </div>
+        </div>
+
+        <div class="archive-grid" id="archive-grid"></div>
+
+        <div class="storage-panel">
+          <div class="storage-panel-title">Rig Anchors <span class="n" id="anchors-count"></span></div>
+          <div class="archive-table-wrap">
+            <table class="archive-table">
+              <thead><tr><th>Body</th><th>Direction</th><th>Anchor Type</th><th>Center X %</th><th>Y %</th><th>Width %</th></tr></thead>
+              <tbody id="anchors-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="storage-panel">
+          <div class="storage-panel-title">Item Calibration <span class="n" id="items-count"></span></div>
+          <div class="archive-table-wrap">
+            <table class="archive-table">
+              <thead><tr><th>Body</th><th>Slot</th><th>Item</th><th>Direction</th><th>Anchor</th><th>Offset X</th><th>Offset Y</th><th>Scale</th><th>Rotation</th></tr></thead>
+              <tbody id="items-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="storage-links">
+          <a href="admin-avatar-rig.html" class="btn btn-chrome-dark">Avatar Rig (live, Front only)</a>
+          <a href="admin.html" class="btn btn-chrome-dark">‹ Back to Admin Zone</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container"><div class="footer-bottom">
+    <span>© 2026 Quest Zone. All rights reserved.</span>
+    <span><a href="../index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+  </div></div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../assets/js/qz-config.js"></script>
+<script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-header-auth.js"></script>
+<script src="../assets/js/avatar-mode.js"></script>
+<script src="../assets/js/starfield.js"></script>
+<script src="../assets/js/site.js"></script>
+<script type="module" src="../assets/js/avatar-viewer.js"></script>
+<script>
+(function () {
+  // This page is a read-only archive viewer — it never writes to
+  // avatar_rig_anchors / avatar_rig_items, it only displays what
+  // AV.loadRigData() (the same loader the live renderer and Avatar Rig
+  // editor both use) already returns. See assets/js/avatar-mode.js for the
+  // switch that controls what the live site actually renders.
+  const POSES = ['front', 'right', 'back', 'left'];
+  const stateEl = document.getElementById('storage-state');
+  const contentEl = document.getElementById('storage-content');
+
+  function setState(html) { stateEl.innerHTML = html; stateEl.hidden = false; contentEl.hidden = true; }
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtNum(n) { return (n === null || n === undefined || n === '') ? '—' : Number(n).toString(); }
+
+  function renderGrid() {
+    const grid = document.getElementById('archive-grid');
+    grid.innerHTML = POSES.map((dir) => {
+      const isFront = dir === 'front';
+      return '<div class="archive-card' + (isFront ? ' active-front' : '') + '">'
+        + '<div class="archive-card-title">' + dir.charAt(0).toUpperCase() + dir.slice(1) + '</div>'
+        + '<div class="archive-card-sub ' + (isFront ? 'live' : 'archived') + '">' + (isFront ? 'Live' : 'Archived') + '</div>'
+        + '<div class="archive-stage"><img src="../assets/img/avatar/avatar-' + dir + '.png" alt="' + dir + ' body sprite" loading="lazy"></div>'
+        + '<div class="archive-card-counts" id="counts-' + dir + '"></div>'
+        + '</div>';
+    }).join('');
+  }
+
+  function fillCounts(rigData) {
+    POSES.forEach((dir) => {
+      let anchorCount = 0, itemCount = 0;
+      Object.keys(rigData.anchors || {}).forEach((body) => {
+        const byDir = rigData.anchors[body][dir];
+        if (byDir) anchorCount += Object.keys(byDir).length;
+      });
+      Object.keys(rigData.items || {}).forEach((body) => {
+        Object.keys(rigData.items[body] || {}).forEach((slot) => {
+          Object.keys(rigData.items[body][slot] || {}).forEach((itemId) => {
+            if (rigData.items[body][slot][itemId][dir]) itemCount++;
+          });
+        });
+      });
+      const el = document.getElementById('counts-' + dir);
+      if (el) el.textContent = anchorCount + ' anchor' + (anchorCount === 1 ? '' : 's') + ' · ' + itemCount + ' item' + (itemCount === 1 ? '' : 's');
+    });
+  }
+
+  function renderAnchorsTable(rigData) {
+    const rows = [];
+    Object.keys(rigData.anchors || {}).forEach((body) => {
+      POSES.forEach((dir) => {
+        const byDir = rigData.anchors[body][dir];
+        if (!byDir) return;
+        Object.keys(byDir).forEach((anchorType) => {
+          const r = byDir[anchorType];
+          rows.push('<tr><td>' + escapeHtml(body) + '</td>'
+            + '<td><span class="dir-tag ' + dir + '">' + dir + '</span></td>'
+            + '<td>' + escapeHtml(anchorType) + '</td>'
+            + '<td class="mono">' + fmtNum(r.center_x_pct) + '</td>'
+            + '<td class="mono">' + fmtNum(r.y_pct) + '</td>'
+            + '<td class="mono">' + fmtNum(r.width_pct) + '</td></tr>');
+        });
+      });
+    });
+    document.getElementById('anchors-count').textContent = '(' + rows.length + ')';
+    document.getElementById('anchors-tbody').innerHTML = rows.length
+      ? rows.join('')
+      : '<tr><td colspan="6" class="archive-empty">No rig anchor rows found.</td></tr>';
+  }
+
+  function renderItemsTable(rigData) {
+    const rows = [];
+    Object.keys(rigData.items || {}).forEach((body) => {
+      Object.keys(rigData.items[body] || {}).forEach((slot) => {
+        Object.keys(rigData.items[body][slot] || {}).forEach((itemId) => {
+          POSES.forEach((dir) => {
+            const r = rigData.items[body][slot][itemId][dir];
+            if (!r) return;
+            rows.push('<tr><td>' + escapeHtml(body) + '</td>'
+              + '<td>' + escapeHtml(slot) + '</td>'
+              + '<td>' + escapeHtml(itemId) + '</td>'
+              + '<td><span class="dir-tag ' + dir + '">' + dir + '</span></td>'
+              + '<td>' + escapeHtml(r.anchor_type) + '</td>'
+              + '<td class="mono">' + fmtNum(r.offset_x) + '</td>'
+              + '<td class="mono">' + fmtNum(r.offset_y) + '</td>'
+              + '<td class="mono">' + fmtNum(r.scale) + '</td>'
+              + '<td class="mono">' + fmtNum(r.rotation) + '</td></tr>');
+          });
+        });
+      });
+    });
+    document.getElementById('items-count').textContent = '(' + rows.length + ')';
+    document.getElementById('items-tbody').innerHTML = rows.length
+      ? rows.join('')
+      : '<tr><td colspan="9" class="archive-empty">No item calibration rows found.</td></tr>';
+  }
+
+  async function init() {
+    if (!window.QZAuth || !window.QZAuth.configured) {
+      setState('<div class="icon">⚠️</div>Quest Zone auth isn\'t configured on this page.');
+      return;
+    }
+    const session = await window.QZAuth.getSession();
+    if (!session) {
+      setState('<div class="icon">🔒</div>Sign in to access the Admin Zone.');
+      return;
+    }
+    const profile = await window.QZAuth.getProfile();
+    if (!profile || !profile.is_admin) {
+      setState('<div class="icon">🚫</div>This area is restricted to Quest Zone administrators.');
+      return;
+    }
+
+    const client = window.QZAuth.client;
+    renderGrid();
+
+    let AV = window.QZAvatarViewer;
+    if (!AV) {
+      await new Promise((resolve) => {
+        const t = setInterval(() => { if (window.QZAvatarViewer) { AV = window.QZAvatarViewer; clearInterval(t); resolve(); } }, 30);
+        setTimeout(() => { clearInterval(t); resolve(); }, 4000);
+      });
+    }
+    if (!AV) {
+      stateEl.hidden = true; contentEl.hidden = false;
+      document.getElementById('anchors-tbody').innerHTML = '<tr><td colspan="6" class="archive-empty">Avatar viewer module didn\'t load — can\'t read calibration data.</td></tr>';
+      document.getElementById('items-tbody').innerHTML = '<tr><td colspan="9" class="archive-empty">Avatar viewer module didn\'t load — can\'t read calibration data.</td></tr>';
+      return;
+    }
+
+    const rigData = await AV.loadRigData(client);
+    stateEl.hidden = true;
+    contentEl.hidden = false;
+    fillCounts(rigData);
+    renderAnchorsTable(rigData);
+    renderItemsTable(rigData);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

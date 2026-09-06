@@ -78,6 +78,10 @@
     font-size: 12px; border-radius: 50%; background: rgba(6,10,20,0.75);
     border: 1px solid rgba(140,195,255,0.45); box-shadow: 0 0 8px rgba(70,140,255,0.35);
   }
+  /* Front-only mode hides these via the `hidden` attribute; .avatar-arrow's
+     own `display: flex` below would otherwise out-specificity the
+     browser's default [hidden]{display:none}. */
+  .avatar-arrow[hidden] { display: none; }
   .avatar-arrow {
     position: absolute; top: 50%; z-index: 3; width: 34px; height: 34px;
     display: flex; align-items: center; justify-content: center;
@@ -214,6 +218,7 @@
 <script src="../assets/js/item-notify.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
+<script src="../assets/js/avatar-mode.js"></script>
 <script src="../assets/js/avatar-viewer.js"></script>
 <script src="../assets/js/skill-card.js"></script>
 <script>
@@ -229,15 +234,23 @@
   // ---- avatar (mirrors profile/index.html's own mount, minus admin-view
   // impersonation — this page only ever shows the signed-in account's own
   // skills) ----
+  // Front-view-only per window.QZ_AVATAR_MODE (assets/js/avatar-mode.js) —
+  // see that file for how to bring the old rotating/draggable viewer back.
+  const FRONT_ONLY = window.QZ_AVATAR_MODE !== 'multi-angle';
   const avatarContainer = document.getElementById('avatar-3d');
   let qzAvatar = null;
   if (avatarContainer && window.QZAvatarViewer) {
-    qzAvatar = window.QZAvatarViewer.mount(avatarContainer);
+    qzAvatar = window.QZAvatarViewer.mount(avatarContainer, { staticFront: FRONT_ONLY });
   }
   const arrowLeft = document.getElementById('avatar-arrow-left');
   const arrowRight = document.getElementById('avatar-arrow-right');
-  if (arrowLeft) arrowLeft.addEventListener('click', () => qzAvatar && qzAvatar.prev());
-  if (arrowRight) arrowRight.addEventListener('click', () => qzAvatar && qzAvatar.next());
+  if (FRONT_ONLY) {
+    if (arrowLeft) arrowLeft.hidden = true;
+    if (arrowRight) arrowRight.hidden = true;
+  } else {
+    if (arrowLeft) arrowLeft.addEventListener('click', () => qzAvatar && qzAvatar.prev());
+    if (arrowRight) arrowRight.addEventListener('click', () => qzAvatar && qzAvatar.next());
+  }
 
   async function loadAvatar(profile) {
     if (!qzAvatar || !window.QZAuth || !window.QZAuth.client) return;
