@@ -12,6 +12,13 @@
 // verifyEmailCode) and site.js (qzToast) already loaded on the page.
 (function () {
   const RESEND_COOLDOWN_MS = 30000;
+  // Must match supabase/config.toml's [auth.email] otp_length. Discovered
+  // the hard way: this project's otp_length is 8 (inherited from the
+  // project's pre-existing settings, restored after an earlier config
+  // mix-up), not Supabase's own default of 6 — the input was capped at 6
+  // and silently truncated every real code, so nothing anyone typed could
+  // ever match. If otp_length ever changes, update this constant too.
+  const CODE_LENGTH = 8;
 
   let modalEl = null;
   let codeInput = null;
@@ -59,7 +66,7 @@
       .qz-ev-code-input {
         width: 100%; padding: 11px 12px; border-radius: 8px; text-align: center;
         border: 1.5px solid rgba(120,160,220,0.35); background: rgba(4,8,16,0.65);
-        color: #fff; font-size: 18px; letter-spacing: 0.35em; font-family: 'Orbitron', monospace;
+        color: #fff; font-size: 16px; letter-spacing: 0.2em; font-family: 'Orbitron', monospace;
       }
       .qz-ev-code-input::placeholder { letter-spacing: 0.2em; font-size: 13px; color: rgba(169,177,214,0.5); }
       .qz-ev-code-input:focus { outline: none; border-color: #7fb3ff; }
@@ -90,9 +97,9 @@
         '<div class="qz-ev-icon">📧</div>' +
         '<h3 class="qz-ev-title">Confirm Your Email</h3>' +
         '<p class="qz-ev-body">You haven’t confirmed <span class="qz-ev-email" id="qz-ev-email"></span> yet.<br>' +
-          'Check your inbox (and spam folder) for a 6-digit code from Quest Zone.</p>' +
+          'Check your inbox (and spam folder) for a code from Quest Zone.</p>' +
         '<div class="qz-ev-row">' +
-          '<input type="text" class="qz-ev-code-input" id="qz-ev-code" placeholder="Enter code" inputmode="numeric" maxlength="6" autocomplete="one-time-code">' +
+          '<input type="text" class="qz-ev-code-input" id="qz-ev-code" placeholder="Enter code" inputmode="numeric" maxlength="' + CODE_LENGTH + '" autocomplete="one-time-code">' +
         '</div>' +
         '<div class="qz-ev-status" id="qz-ev-status"></div>' +
         '<div class="qz-ev-actions">' +
@@ -110,7 +117,7 @@
     modalEl.querySelector('.qz-ev-close').addEventListener('click', close);
     modalEl.addEventListener('click', (e) => { if (e.target === modalEl) close(); });
     codeInput.addEventListener('input', () => {
-      codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 6);
+      codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
     });
     codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmBtn.click(); });
 
@@ -156,7 +163,7 @@
 
   async function onConfirm() {
     const code = codeInput.value.trim();
-    if (code.length !== 6) { setStatus('Enter the 6-digit code from your email.', false); return; }
+    if (code.length !== CODE_LENGTH) { setStatus('Enter the full code from your email.', false); return; }
     if (!window.QZAuth || !window.QZAuth.verifyEmailCode) return;
     confirmBtn.disabled = true;
     setStatus('Checking…', false);

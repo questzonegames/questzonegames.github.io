@@ -24,7 +24,7 @@
 //   QZAuth.getSession()   -> Supabase session or null
 //   QZAuth.getProfile()   -> { id, username, is_admin, created_at,
 //                              email_verified_at, ... } or null
-//   QZAuth.sendVerificationCode(email)   — sends/resends the 6-digit email
+//   QZAuth.sendVerificationCode(email)   — sends/resends the email
 //                                          verification code (see
 //                                          assets/js/email-verify-modal.js)
 //   QZAuth.verifyEmailCode(email, code)  — checks that code and, on
@@ -76,7 +76,7 @@
     return data;
   }
 
-  // Sends a 6-digit email OTP the player can enter in the email-
+  // Sends a 8-digit email OTP the player can enter in the email-
   // verification modal (assets/js/email-verify-modal.js). Reused for both
   // the first, best-effort send right after signup and every later
   // "Resend" click — same call, same code path, nothing special about
