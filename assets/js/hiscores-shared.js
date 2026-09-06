@@ -8,7 +8,11 @@
 // just describes WHICH skills to show a box for; every actual level/XP/
 // rank value always comes from a hiscores_* RPC call in the page itself.
 (function () {
-  const REAL_SKILL_ICONS = { intelligence: 'assets/img/skills/intelligence.png' };
+  const REAL_SKILL_ICONS = {
+    intelligence: 'assets/img/skills/intelligence.png',
+    agility: 'assets/img/skills/agility.png',
+    driving: 'assets/img/skills/driving.png'
+  };
 
   function placeholderIconSvg() {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><circle cx="12" cy="11.5" r="2.2" fill="currentColor" stroke="none"/></svg>';

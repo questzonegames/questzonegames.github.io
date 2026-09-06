@@ -32,8 +32,9 @@
 -- 20260906060000_players_search_and_public_profiles.sql,
 -- 20260906070000_players_search_avatar_thumbnails.sql, and
 -- 20260906080000_email_verification.sql, and
--- 20260906090000_profile_pictures.sql, and
--- 20260906100000_hiscores_profile_picture.sql).
+-- 20260906090000_profile_pictures.sql,
+-- 20260906100000_hiscores_profile_picture.sql, and
+-- 20260906110000_agility_driving_skills.sql).
 -- As of 06/09/2026 this list was cross-checked against `supabase migration
 -- list` (every local migration file's timestamp matches an applied remote
 -- migration, zero drift) and every function/table below was folded in from
@@ -2474,4 +2475,32 @@ end;
 $$;
 
 grant execute on function public.mark_email_verified() to authenticated;
+
+-- ============================================================================
+-- Agility and Driving skills (see supabase/migrations/20260906110000_
+-- agility_driving_skills.sql) -- public.games is the ONE table that drives
+-- every skill-aware system on the site (Skills page, Highscores, public
+-- player profiles, the admin skill editor) -- every one of those already
+-- reads game_key/name/sort_order generically rather than hardcoding
+-- "intelligence", so the entire change is adding two rows here, plus
+-- backfilling game_progress for every account that already existed (new
+-- signups already get a row per public.games row automatically, via
+-- handle_new_user()). Neither skill has an XP source yet -- that's
+-- deliberate; they exist purely as properly tracked, independent skills
+-- starting at level 1 / 0 XP, ready for a future game to award XP into
+-- them exactly like Intelligence's games already do. A fresh install has
+-- no existing accounts to backfill; that INSERT is then a no-op.
+-- ============================================================================
+
+insert into public.games (game_key, name, sort_order) values
+  ('agility', 'Agility', 2),
+  ('driving', 'Driving', 3)
+on conflict (game_key) do nothing;
+
+insert into public.game_progress (user_id, game_key, xp, level)
+select p.id, g.game_key, 0, 1
+from public.profiles p
+cross join public.games g
+where g.game_key in ('agility', 'driving')
+on conflict (user_id, game_key) do nothing;
 
