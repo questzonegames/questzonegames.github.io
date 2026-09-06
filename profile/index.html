@@ -915,6 +915,17 @@
         </div>
 
         <div class="admin-ctrl-section">
+          <h3>Visibility</h3>
+          <div class="admin-ban-status" id="admin-hidden-status" hidden>👁️‍🗨️ Hidden from Highscores and search — the account still works normally.</div>
+          <div class="admin-ctrl-row" id="admin-visibility-actions"></div>
+        </div>
+
+        <div class="admin-ctrl-section">
+          <h3 style="color:#ff9d9d;">Danger Zone</h3>
+          <div class="admin-ctrl-row" id="admin-danger-actions"></div>
+        </div>
+
+        <div class="admin-ctrl-section">
           <h3>Skills — set exact XP (recalculates level automatically)</h3>
           <div class="admin-skills-list" id="admin-skills-list"></div>
         </div>
@@ -1438,6 +1449,8 @@
       if (!panel) return;
       panel.hidden = false;
       renderBanControls(view.targetProfile);
+      renderVisibilityControls(view.targetProfile);
+      renderDangerZone(view.targetProfile);
       await renderSkills(view.targetId);
       await renderAchievements(view.targetId);
     }
@@ -1478,6 +1491,37 @@
         actionsEl.appendChild(tempBtn);
         actionsEl.appendChild(permBtn);
       }
+    }
+
+    // Cosmetic-only and fully reversible: hidden just means "doesn't show
+    // on Highscores or search" — the account still logs in and plays
+    // normally. Distinct from a ban, which blocks login entirely.
+    function renderVisibilityControls(p) {
+      const statusEl = document.getElementById('admin-hidden-status');
+      const actionsEl = document.getElementById('admin-visibility-actions');
+      statusEl.hidden = !p.is_hidden;
+      actionsEl.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn ' + (p.is_hidden ? 'btn-chrome-blue' : 'btn-chrome-dark');
+      btn.textContent = p.is_hidden ? 'Unhide Account' : 'Hide Account';
+      btn.addEventListener('click', () => (p.is_hidden ? doUnhide(p) : doHide(p)));
+      actionsEl.appendChild(btn);
+    }
+
+    // Permanent, irreversible: wipes the account entirely (see
+    // admin_delete_account() in supabase/migrations) and frees the
+    // username for anyone to register again from scratch.
+    function renderDangerZone(p) {
+      const actionsEl = document.getElementById('admin-danger-actions');
+      actionsEl.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-chrome-dark';
+      btn.style.background = 'linear-gradient(135deg,#c0392b,#8e2b20)';
+      btn.textContent = 'Delete Account';
+      btn.addEventListener('click', () => doDelete(p));
+      actionsEl.appendChild(btn);
     }
 
     // Only skills with real art show an icon here — keyed by game_key,
@@ -1724,6 +1768,50 @@
         renderBanControls(refreshed);
       }
       if (window.qzToast) window.qzToast(p.username + ' has been unbanned.');
+    }
+
+    async function doHide(p) {
+      const msg = 'Hide ' + p.username + '?\n\n' +
+        'If you hide this account, it will not show on the Highscores and ' +
+        'people won’t be able to search for it — it will look like the ' +
+        'account doesn’t exist. The account still works completely ' +
+        'normally otherwise (they can still log in and play). You can ' +
+        'unhide it again at any time.';
+      if (!window.confirm(msg)) return;
+      const { error } = await window.QZAuth.client.rpc('admin_hide_user', { p_user: p.id });
+      if (error) { window.alert('Could not hide: ' + error.message); return; }
+      const { data: refreshed } = await window.QZAuth.client.from('profiles').select('*').eq('id', p.id).single();
+      if (refreshed) {
+        if (window.QZAdminView) window.QZAdminView.targetProfile = refreshed;
+        renderVisibilityControls(refreshed);
+      }
+      if (window.qzToast) window.qzToast(p.username + ' is now hidden from Highscores.');
+    }
+
+    async function doUnhide(p) {
+      if (!window.confirm('Unhide ' + p.username + ' so they show on Highscores and search again?')) return;
+      const { error } = await window.QZAuth.client.rpc('admin_unhide_user', { p_user: p.id });
+      if (error) { window.alert('Could not unhide: ' + error.message); return; }
+      const { data: refreshed } = await window.QZAuth.client.from('profiles').select('*').eq('id', p.id).single();
+      if (refreshed) {
+        if (window.QZAdminView) window.QZAdminView.targetProfile = refreshed;
+        renderVisibilityControls(refreshed);
+      }
+      if (window.qzToast) window.qzToast(p.username + ' is visible on Highscores again.');
+    }
+
+    async function doDelete(p) {
+      const msg = 'Delete ' + p.username + ' permanently?\n\n' +
+        'If you delete this account, all data, all items, everything about ' +
+        'this account will be wiped clean and the name will become ' +
+        'available to sign up again. This cannot be undone.';
+      if (!window.confirm(msg)) return;
+      if (!window.confirm('Are you absolutely sure? Confirm again to permanently delete ' + p.username + '.')) return;
+
+      const { error } = await window.QZAuth.client.rpc('admin_delete_account', { p_user: p.id });
+      if (error) { window.alert('Could not delete: ' + error.message); return; }
+      if (window.qzToast) window.qzToast(p.username + ' has been permanently deleted.');
+      location.href = 'admin.html';
     }
 
     if (window.QZAdminViewReady) {

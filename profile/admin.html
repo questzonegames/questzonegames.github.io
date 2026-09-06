@@ -92,6 +92,7 @@
   .admin-tag.player { background: rgba(140,160,190,0.12); color: var(--text-dim); border: 1px solid rgba(140,160,190,0.25); }
   .admin-tag.active { background: rgba(60,200,120,0.14); color: #6be3a0; border: 1px solid rgba(90,220,150,0.35); }
   .admin-tag.banned { background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.4); }
+  .admin-tag.hidden { background: rgba(140,160,190,0.14); color: var(--text-dim); border: 1px solid rgba(140,160,190,0.3); margin-left: 5px; }
   .admin-row-you td:first-child { color: var(--blue-light); }
 
   .admin-summary { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -413,6 +414,11 @@
         actions.push({ label: 'BAN TEMPORARILY', onClick: () => openBanModal(p, false) });
         actions.push({ label: 'BAN PERMANENTLY', danger: true, onClick: () => openBanModal(p, true) });
       }
+      if (p.id !== myId) {
+        actions.push({ label: p.is_hidden ? 'UNHIDE ACCOUNT' : 'HIDE ACCOUNT', onClick: () => (p.is_hidden ? doUnhide(p) : doHide(p)) });
+        actions.push({ sep: true });
+        actions.push({ label: 'DELETE ACCOUNT', danger: true, onClick: () => doDelete(p) });
+      }
       return actions;
     }
 
@@ -438,7 +444,8 @@
         tr.innerHTML =
           '<td>' + escapeHtml(p.username) + (p.id === myId ? ' <span style="color:var(--text-dim);font-size:10.5px;">(you)</span>' : '') + '</td>' +
           '<td><span class="admin-tag ' + (p.is_admin ? 'admin">Admin' : 'player">Player') + '</span></td>' +
-          '<td><span class="admin-tag ' + (banned ? 'banned' : 'active') + '">' + escapeHtml(statusLabel) + '</span></td>' +
+          '<td><span class="admin-tag ' + (banned ? 'banned' : 'active') + '">' + escapeHtml(statusLabel) + '</span>' +
+            (p.is_hidden ? '<span class="admin-tag hidden">Hidden</span>' : '') + '</td>' +
           '<td>' + joined + '</td>' +
           '<td class="mono">' + totalLevelFor(p.id) + '</td>' +
           '<td class="mono">' + Number(p.quest_points || 0).toLocaleString() + '</td>' +
@@ -552,6 +559,55 @@
       await reloadOneProfile(p.id);
       renderTable();
       if (window.qzToast) window.qzToast(p.username + ' has been unbanned.');
+    }
+
+    // ---------------- hide / unhide ----------------
+    // Cosmetic-only and fully reversible: a hidden account keeps logging in
+    // and playing exactly as normal, it just stops appearing on Highscores
+    // or in player search — distinct from a ban, which blocks login.
+    async function doHide(p) {
+      const msg = 'Hide ' + p.username + '?\n\n' +
+        'If you hide this account, it will not show on the Highscores and ' +
+        'people won’t be able to search for it — it will look like the ' +
+        'account doesn’t exist. The account still works completely ' +
+        'normally otherwise (they can still log in and play). You can ' +
+        'unhide it again at any time.';
+      if (!window.confirm(msg)) return;
+      const { error } = await client.rpc('admin_hide_user', { p_user: p.id });
+      if (error) { window.alert('Could not hide: ' + error.message); return; }
+      await reloadOneProfile(p.id);
+      renderTable();
+      if (window.qzToast) window.qzToast(p.username + ' is now hidden from Highscores.');
+    }
+
+    async function doUnhide(p) {
+      if (!window.confirm('Unhide ' + p.username + ' so they show on Highscores and search again?')) return;
+      const { error } = await client.rpc('admin_unhide_user', { p_user: p.id });
+      if (error) { window.alert('Could not unhide: ' + error.message); return; }
+      await reloadOneProfile(p.id);
+      renderTable();
+      if (window.qzToast) window.qzToast(p.username + ' is visible on Highscores again.');
+    }
+
+    // ---------------- delete account (permanent, irreversible) ----------------
+    // Unlike a permanent ban, this actually removes the row — the username
+    // becomes available again for anyone to register from scratch.
+    async function doDelete(p) {
+      const msg = 'Delete ' + p.username + ' permanently?\n\n' +
+        'If you delete this account, all data, all items, everything about ' +
+        'this account will be wiped clean and the name will become ' +
+        'available to sign up again. This cannot be undone.';
+      if (!window.confirm(msg)) return;
+      // Two-step confirmation for a truly irreversible action — a single
+      // confirm() is what an accidental click on "DELETE ACCOUNT" (right
+      // next to "HIDE ACCOUNT" in the same menu) would still get past.
+      if (!window.confirm('Are you absolutely sure? Type nothing, just confirm again: permanently delete ' + p.username + '?')) return;
+
+      const { error } = await client.rpc('admin_delete_account', { p_user: p.id });
+      if (error) { window.alert('Could not delete: ' + error.message); return; }
+      profiles = profiles.filter((row) => row.id !== p.id);
+      renderTable();
+      if (window.qzToast) window.qzToast(p.username + ' has been permanently deleted.');
     }
 
     async function reloadOneProfile(userId) {

@@ -187,10 +187,11 @@
         rowsHtml += skillRowHtml(s, sd ? sd.level : 1, sd ? sd.xp : 0, sd ? sd.rank : null);
       });
 
+      const bannedTag = row.is_banned ? ' <span class="hs-banned-tag">⛔ Banned</span>' : '';
       document.getElementById('hs-player-body').innerHTML =
         '<div class="hs-player-head">' +
           '<div class="hs-player-avatar">👤</div>' +
-          '<div><h1 class="hs-player-name">' + escapeHtml(row.username) + '</h1>' +
+          '<div><h1 class="hs-player-name' + (row.is_banned ? ' hs-banned-name' : '') + '">' + escapeHtml(row.username) + bannedTag + '</h1>' +
             '<div class="hs-player-sub">Total Level Rank #' + Number(row.overall_rank).toLocaleString() + '</div>' +
           '</div>' +
         '</div>' +

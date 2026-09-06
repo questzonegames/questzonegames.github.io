@@ -244,8 +244,8 @@
 
       const playerAUrl = window.QZHiscores.playerUrl('../', a.username);
       const playerBUrl = window.QZHiscores.playerUrl('../', b.username);
-      const nameALink = '<a class="hs-vs-name p1" href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a>';
-      const nameBLink = '<a class="hs-vs-name p2" href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a>';
+      const nameALink = '<a class="hs-vs-name p1' + (a.is_banned ? ' hs-banned-name' : '') + '" href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a>' + (a.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '');
+      const nameBLink = '<a class="hs-vs-name p2' + (b.is_banned ? ' hs-banned-name' : '') + '" href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a>' + (b.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '');
 
       document.getElementById('hs-compare-body').innerHTML =
         '<div class="hs-vs-head">' + nameALink + '<div class="hs-vs-badge">VS</div>' + nameBLink + '</div>' +

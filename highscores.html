@@ -425,10 +425,12 @@
     rows.forEach((row) => {
       const level = skill.id === 'overall' ? row.total_level : row.level;
       const xp = skill.id === 'overall' ? row.total_xp : row.xp;
+      const bannedClass = row.is_banned ? ' hs-banned-name' : '';
+      const bannedTag = row.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '';
       const tr = document.createElement('tr');
       tr.innerHTML =
         '<td class="hs-col-rank">' + rankBadgeHtml(row.rank) + '</td>' +
-        '<td class="hs-col-name"><a class="hs-row-link" href="' + window.QZHiscores.playerUrl('', row.username) + '">' + escapeHtml(row.username) + '</a></td>' +
+        '<td class="hs-col-name"><a class="hs-row-link' + bannedClass + '" href="' + window.QZHiscores.playerUrl('', row.username) + '">' + escapeHtml(row.username) + '</a>' + bannedTag + '</td>' +
         '<td class="hs-col-level">' + Number(level).toLocaleString() + '</td>' +
         '<td class="hs-col-xp">' + Number(xp).toLocaleString() + '</td>';
       body.appendChild(tr);

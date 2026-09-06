@@ -83,4 +83,17 @@ a.hs-row-link:hover { color: var(--blue-light); text-decoration: underline; }
 .hs-arrow { font-size: 16px; font-weight: 900; display: inline-block; }
 .hs-arrow.up { color: var(--green); }
 .hs-arrow.down { color: #ff6e6e; }
+
+/* ---- temp-banned indicator — a permanently banned or hidden account
+   never reaches these pages at all (excluded server-side), so seeing
+   this only ever means "currently serving a temporary ban". Shown on
+   the main table, a player's own page, and Compare alike. */
+a.hs-row-link.hs-banned-name, .hs-vs-name.hs-banned-name, .hs-player-name.hs-banned-name { color: #ff6e6e !important; }
+.hs-banned-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 5px; margin-left: 6px;
+  font-family: 'Orbitron', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; vertical-align: middle;
+  background: rgba(240,70,70,0.16); color: #ff9d9d; border: 1px solid rgba(240,90,90,0.4);
+}
 .hs-arrow.neutral { color: var(--text-dim); }
