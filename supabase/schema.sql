@@ -31,7 +31,8 @@
 -- 20260906050000_admin_hide_and_delete_accounts.sql,
 -- 20260906060000_players_search_and_public_profiles.sql,
 -- 20260906070000_players_search_avatar_thumbnails.sql, and
--- 20260906080000_email_verification.sql).
+-- 20260906080000_email_verification.sql, and
+-- 20260906090000_profile_pictures.sql).
 -- As of 06/09/2026 this list was cross-checked against `supabase migration
 -- list` (every local migration file's timestamp matches an applied remote
 -- migration, zero drift) and every function/table below was folded in from
@@ -2099,6 +2100,10 @@ grant execute on function public.record_anagram_quest_difficulty_result(text, in
 -- avatar showcase fields, so a search result can show that account's real
 -- front-facing avatar instead of a placeholder icon. An empty/blank query
 -- returns zero rows deliberately.
+-- Final version (superseding the pre-profile-picture one from
+-- 20260906070000): also returns equipped_profile_picture_id, so a search
+-- result can show a player's chosen Profile Picture (see
+-- 20260906090000_profile_pictures.sql) instead of the default silhouette.
 create or replace function public.search_public_players(p_query text, p_limit int default 20, p_offset int default 0)
 returns table (
   user_id uuid,
@@ -2109,6 +2114,7 @@ returns table (
   avatar_hair_style text,
   avatar_hair_colour text,
   equipped_items jsonb,
+  equipped_profile_picture_id text,
   total_count bigint
 )
 language plpgsql
@@ -2139,6 +2145,7 @@ begin
          where e.user_id = p.id),
         '[]'::jsonb
       ) as items,
+      p.equipped_profile_picture_id as pfp,
       (position(v_q in lower(p.username)) = 1) as is_prefix
     from public.profiles p
     left join public.avatar_customization ac on ac.user_id = p.id
@@ -2147,7 +2154,7 @@ begin
       and (not p.is_test_account or public.is_admin())
       and position(v_q in lower(p.username)) > 0
   )
-  select uid, uname, banned, gender, skin_colour, hair_style, hair_colour, items,
+  select uid, uname, banned, gender, skin_colour, hair_style, hair_colour, items, pfp,
     count(*) over () as total_count
   from matches
   order by is_prefix desc, uname asc
@@ -2165,7 +2172,8 @@ grant execute on function public.search_public_players(text, int, int) to anon, 
 -- distinguish those from each other. equipped_items is returned as a jsonb
 -- array of {slot, item_id} only -- the client already owns the full item
 -- catalog client-side (assets/js/inventory-data.js) and looks up art/name/
--- etc. from that.
+-- etc. from that. Final version (superseding the pre-profile-picture one
+-- from 20260906060000): also returns equipped_profile_picture_id.
 create or replace function public.get_public_player_profile(p_username text)
 returns table (
   user_id uuid,
@@ -2176,7 +2184,8 @@ returns table (
   avatar_skin_colour text,
   avatar_hair_style text,
   avatar_hair_colour text,
-  equipped_items jsonb
+  equipped_items jsonb,
+  equipped_profile_picture_id text
 )
 language plpgsql
 security definer
@@ -2212,7 +2221,8 @@ begin
        from public.equipped_items e
        where e.user_id = p.id),
       '[]'::jsonb
-    ) as equipped_items
+    ) as equipped_items,
+    p.equipped_profile_picture_id
   from public.profiles p
   left join public.avatar_customization ac on ac.user_id = p.id
   where p.id = v_user_id;
@@ -2220,6 +2230,185 @@ end;
 $$;
 
 grant execute on function public.get_public_player_profile(text) to anon, authenticated;
+
+-- ============================================================================
+-- Profile Pictures (see supabase/migrations/20260906090000_profile_
+-- pictures.sql) -- replaces the live-avatar-render approach in every small
+-- circular badge across the site (Players search, and any future
+-- highscores/game-lobby row) with a plain, chosen 2D picture. A live
+-- avatar mounted into a tiny circle threw off items positioned in real
+-- pixels against that tiny container's own size; a picked static picture
+-- can't have that problem, it's just an image.
+--
+-- Same catalog-table shape as public.games/public.achievements: a public,
+-- read-only reference table of every picture that exists, plus a per-
+-- account ownership table for the ones that have to be unlocked/bought.
+-- Free pictures need no ownership row at all -- "free" IS the unlock.
+-- ============================================================================
+
+create table if not exists public.profile_pictures (
+  id text primary key,
+  name text not null,
+  image_path text not null,
+  unlock_type text not null check (unlock_type in ('free', 'purchase_points', 'achievement')),
+  cost_quest_points int check (cost_quest_points is null or cost_quest_points > 0),
+  requirement_achievement_id text references public.achievements(achievement_id) on delete set null,
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  constraint profile_pictures_cost_matches_type check (
+    (unlock_type = 'purchase_points' and cost_quest_points is not null)
+    or (unlock_type != 'purchase_points' and cost_quest_points is null)
+  ),
+  constraint profile_pictures_requirement_matches_type check (
+    (unlock_type = 'achievement' and requirement_achievement_id is not null)
+    or (unlock_type != 'achievement' and requirement_achievement_id is null)
+  )
+);
+alter table public.profile_pictures enable row level security;
+
+drop policy if exists "profile_pictures_select_all" on public.profile_pictures;
+create policy "profile_pictures_select_all"
+  on public.profile_pictures for select
+  using (true);
+-- No insert/update/delete policy -- the catalog only grows via a
+-- migration, same as public.games/public.achievements.
+
+create table if not exists public.owned_profile_pictures (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  profile_picture_id text not null references public.profile_pictures(id) on delete cascade,
+  unlocked_at timestamptz not null default now(),
+  primary key (user_id, profile_picture_id)
+);
+alter table public.owned_profile_pictures enable row level security;
+
+drop policy if exists "owned_profile_pictures_select_own_or_admin" on public.owned_profile_pictures;
+create policy "owned_profile_pictures_select_own_or_admin"
+  on public.owned_profile_pictures for select
+  using (auth.uid() = user_id or public.is_admin());
+
+alter table public.profiles add column if not exists equipped_profile_picture_id text references public.profile_pictures(id) on delete set null;
+
+-- equip_profile_picture() -- the ONLY way equipped_profile_picture_id
+-- changes. p_picture_id = null clears it back to the default silhouette.
+-- Re-checks ownership server-side; free pictures need no ownership row,
+-- anything else must have a matching owned_profile_pictures row already.
+create or replace function public.equip_profile_picture(p_picture_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_unlock_type text;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if p_picture_id is null then
+    update public.profiles set equipped_profile_picture_id = null where id = v_uid;
+    return;
+  end if;
+
+  select unlock_type into v_unlock_type
+  from public.profile_pictures
+  where id = p_picture_id and is_active;
+
+  if v_unlock_type is null then
+    raise exception 'Unknown or inactive profile picture.';
+  end if;
+
+  if v_unlock_type != 'free' then
+    if not exists (
+      select 1 from public.owned_profile_pictures
+      where user_id = v_uid and profile_picture_id = p_picture_id
+    ) then
+      raise exception 'You have not unlocked this profile picture yet.';
+    end if;
+  end if;
+
+  update public.profiles set equipped_profile_picture_id = p_picture_id where id = v_uid;
+end;
+$$;
+
+grant execute on function public.equip_profile_picture(text) to authenticated;
+
+-- purchase_profile_picture() -- spends quest_points, grants ownership.
+-- Does NOT auto-equip (equip_profile_picture is a separate, deliberate
+-- step). Atomic: the deduction and the ownership grant happen together.
+create or replace function public.purchase_profile_picture(p_picture_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_unlock_type text;
+  v_cost int;
+  v_points int;
+begin
+  if v_uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  select unlock_type, cost_quest_points into v_unlock_type, v_cost
+  from public.profile_pictures
+  where id = p_picture_id and is_active;
+
+  if v_unlock_type is null then
+    raise exception 'Unknown or inactive profile picture.';
+  end if;
+  if v_unlock_type != 'purchase_points' then
+    raise exception 'This profile picture is not purchasable with Quest Points.';
+  end if;
+
+  if exists (
+    select 1 from public.owned_profile_pictures
+    where user_id = v_uid and profile_picture_id = p_picture_id
+  ) then
+    raise exception 'You already own this profile picture.';
+  end if;
+
+  select quest_points into v_points from public.profiles where id = v_uid for update;
+  if v_points is null or v_points < v_cost then
+    raise exception 'Not enough Quest Points.';
+  end if;
+
+  update public.profiles set quest_points = quest_points - v_cost where id = v_uid;
+  insert into public.owned_profile_pictures (user_id, profile_picture_id) values (v_uid, p_picture_id);
+end;
+$$;
+
+grant execute on function public.purchase_profile_picture(text) to authenticated;
+
+-- get_owned_profile_pictures() -- the gallery needs to know which non-free
+-- pictures the CALLER already owns.
+create or replace function public.get_owned_profile_pictures()
+returns table (profile_picture_id text)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select profile_picture_id from public.owned_profile_pictures where user_id = auth.uid();
+$$;
+
+grant execute on function public.get_owned_profile_pictures() to authenticated;
+
+-- Seed data -- a handful of free starter pictures (assets/img/profile-
+-- pictures/*.svg, simple placeholder badges) plus one purchasable example
+-- proving the Quest Points economy path. Add real art later purely by
+-- inserting more rows here.
+insert into public.profile_pictures (id, name, image_path, unlock_type, cost_quest_points, sort_order) values
+  ('default',      'Default',      'assets/img/profile-pictures/default.svg',      'free', null, 0),
+  ('star-badge',    'Star',         'assets/img/profile-pictures/star-badge.svg',    'free', null, 1),
+  ('rocket-badge',  'Rocket',       'assets/img/profile-pictures/rocket-badge.svg',  'free', null, 2),
+  ('shield-badge',  'Shield',       'assets/img/profile-pictures/shield-badge.svg',  'free', null, 3),
+  ('crown-badge',   'Golden Crown', 'assets/img/profile-pictures/crown-badge.svg',   'purchase_points', 500, 4)
+on conflict (id) do nothing;
 
 -- ============================================================================
 -- Email verification -- decoupled from Supabase Auth's own confirmation

@@ -92,29 +92,14 @@
     box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
   }
   .player-avatar-thumb svg { width: 22px; height: 22px; color: #9ab6ea; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-  /* Real avatar thumbnail — a flat PNG snapshot (see snapshotAvatar() below)
-     of the exact same avatar-viewer.js render used on the profile page,
-     taken at a normal, full render size and then displayed here scaled
-     down as a plain image. This is deliberate: mounting a LIVE avatar-
-     viewer instance directly into a 44px circle at a large CSS zoom used
-     to throw off equipped items positioned in absolute pixels (computed
-     against that tiny container's own size), so a crown that sits
-     correctly on the real profile came out visibly offset in the small
-     circle. A flat snapshot can't drift from the real render — it IS the
-     real render, just scaled — and plain image scaling can't misplace a
-     layer relative to another the way re-running layout math at a
-     different container size could. */
-  .player-avatar-thumb img.snapshot {
-    position: absolute; width: 100%; height: 100%;
-    object-fit: cover; object-position: 50% 18%;
-  }
-  /* The hidden, full-size render snapshotAvatar() mounts each avatar into
-     before capturing it — needs the SAME padding avatar-viewer.js's real
-     .avatar-sprite CSS uses everywhere else (profile/index.html, skills.
-     html, etc.), since computeContentBox() reads it back via
-     getComputedStyle() to know where the sprite content box actually
-     starts. Nothing here is ever visible; the element sits off-screen. */
-  .qz-avatar-snapshot-rig .avatar-sprite { padding: 9% 11% 5%; }
+  /* Each result's chosen Profile Picture (see assets/js/profile-picture-
+     picker.js) — a plain, picked static image, not a live-rendered
+     avatar. A live avatar mounted straight into this small a circle used
+     to throw off equipped items positioned in real pixels against that
+     tiny container's own size (a crown that sat correctly on the real
+     profile came out visibly offset here) — a picture can't have that
+     problem, it's just an image. */
+  .player-avatar-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .player-row-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .player-row-name {
     font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px;
@@ -201,10 +186,9 @@
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/email-verify-modal.js"></script>
+<script src="../assets/js/profile-picture-picker.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
-<script src="../assets/js/inventory-data.js"></script>
-<script type="module" src="../assets/js/avatar-viewer.js"></script>
 <script>
 (function () {
   // Live player search — debounced ~250ms so a fast typist doesn't fire a
@@ -212,8 +196,9 @@
   // search_public_players() RPC (see supabase/migrations/
   // 20260906060000_players_search_and_public_profiles.sql), which already
   // excludes permanently banned, hidden, and deleted accounts server-side.
-  // This page never queries public.profiles directly.
-  const PERSON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.4"/><path d="M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6"/></svg>';
+  // This page never queries public.profiles directly. Each result's
+  // circle shows its chosen Profile Picture (assets/js/profile-picture-
+  // picker.js) — a plain image, not a live-rendered avatar.
   const DEBOUNCE_MS = 250;
   const RESULT_LIMIT = 20;
 
@@ -229,135 +214,25 @@
   }
 
   function showState(icon, title, body) {
-    renderGen++; // invalidate any snapshot still being rendered for the previous results
     stateEl.innerHTML = '<div class="icon">' + icon + '</div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body);
     stateEl.hidden = false;
     resultsEl.hidden = true;
   }
 
-  // Each result's real front-facing avatar shown as a flat PNG snapshot —
-  // see the CSS comment above .player-avatar-thumb img.snapshot for why a
-  // snapshot instead of mounting a live avatar-viewer straight into the
-  // small circle. `renderGen` guards against a slow, still-in-flight
-  // snapshot from an OLDER search landing after a newer one has already
-  // replaced the results list (a fast typist's earlier keystroke finishing
-  // its render work after a later one).
-  let renderGen = 0;
-  const SNAPSHOT_W = 240, SNAPSHOT_H = 320;
-
-  // Polls until every image avatar-viewer.js actually intends to show
-  // (opacity !== '0' — it briefly creates hidden images for other poses/
-  // broken items) has finished loading, or gives up after timeoutMs so one
-  // broken/slow image can never hang a whole search result forever.
-  function waitForAvatarImages(container, timeoutMs) {
-    return new Promise((resolve) => {
-      const start = Date.now();
-      (function poll() {
-        const imgs = Array.from(container.querySelectorAll('img')).filter((img) => {
-          return img.getAttribute('src') && getComputedStyle(img).opacity !== '0';
-        });
-        const ready = imgs.length > 0 && imgs.every((img) => img.complete);
-        if (ready || Date.now() - start > timeoutMs) {
-          // two rAFs: one for this frame's style/layout to settle, one to
-          // be sure the browser has actually painted before we read rects
-          requestAnimationFrame(() => requestAnimationFrame(resolve));
-        } else {
-          setTimeout(poll, 40);
-        }
-      })();
-    });
-  }
-
-  // Renders one account's avatar at a normal, full size off-screen (same
-  // code path, same relative proportions as the real profile page —
-  // avatar-viewer.js never even knows this render is destined for a tiny
-  // circle), then flattens it into a single PNG data URL by drawing each
-  // visible layer onto a canvas in the same order/positions it's actually
-  // showing on screen. avatar-sprite layers (base body, hair, pre-baked
-  // equip-frame overlays) use object-fit:contain letterboxing, so those
-  // use avatar-viewer.js's own computeContentBox/computeRenderedImageRect
-  // math (the same formula the real renderer and Avatar Rig editor share)
-  // rather than the element's own box. Live-calibrated equip layers
-  // (avatar-equip-live, e.g. the crown) are already absolutely positioned
-  // in real pixels by avatar-viewer.js itself, so their own
-  // getBoundingClientRect() is exactly right as-is.
-  async function snapshotAvatar(row) {
-    if (!window.QZAvatarViewer) return null;
-    const AV = window.QZAvatarViewer;
-    const mountEl = document.createElement('div');
-    mountEl.className = 'qz-avatar-snapshot-rig';
-    mountEl.style.cssText = 'position:fixed; left:-9999px; top:-9999px; width:' + SNAPSHOT_W + 'px; height:' + SNAPSHOT_H + 'px; pointer-events:none;';
-    document.body.appendChild(mountEl);
-    const avatar = AV.mount(mountEl, { staticFront: true });
-    try {
-      const catalogById = {};
-      (window.QZ_ITEM_CATALOG || []).forEach((it) => { catalogById[it.id] = it; });
-      const equipped = {};
-      (row.equipped_items || []).forEach((r) => { if (r.item_id && catalogById[r.item_id]) equipped[r.slot] = catalogById[r.item_id]; });
-      avatar.setAvatarEquipment(equipped);
-      if (avatar.setBaseAppearance && row.avatar_gender) {
-        avatar.setBaseAppearance(row.avatar_gender, row.avatar_skin_colour);
-        if (avatar.setHairstyle) avatar.setHairstyle(row.avatar_hair_style, row.avatar_hair_colour);
-      }
-
-      await waitForAvatarImages(mountEl, 1200);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = SNAPSHOT_W;
-      canvas.height = SNAPSHOT_H;
-      const ctx = canvas.getContext('2d');
-      const containerRect = mountEl.getBoundingClientRect();
-      Array.from(mountEl.querySelectorAll('img')).forEach((img) => {
-        if (!img.complete || !img.naturalWidth) return;
-        if (getComputedStyle(img).opacity === '0') return;
-        try {
-          if (img.classList.contains('avatar-sprite')) {
-            const box = AV.computeContentBox(mountEl, img);
-            const r = AV.computeRenderedImageRect(box, img.naturalWidth, img.naturalHeight);
-            ctx.drawImage(img, r.left, r.top, r.width, r.height);
-          } else {
-            const r = img.getBoundingClientRect();
-            ctx.drawImage(img, r.left - containerRect.left, r.top - containerRect.top, r.width, r.height);
-          }
-        } catch (e) { /* one layer failing to draw shouldn't blank the rest */ }
-      });
-      return canvas.toDataURL('image/png');
-    } finally {
-      try { avatar.destroy(); } catch (e) {}
-      mountEl.remove();
-    }
-  }
-
-  async function fillThumb(el, row, myGen) {
-    const dataUrl = await snapshotAvatar(row).catch(() => null);
-    if (myGen !== renderGen || !el.isConnected) return; // superseded or scrolled away
-    if (!dataUrl) { el.innerHTML = PERSON_ICON; return; }
-    const img = document.createElement('img');
-    img.className = 'snapshot';
-    img.alt = '';
-    img.src = dataUrl;
-    el.innerHTML = '';
-    el.appendChild(img);
-  }
-
   function renderResults(rows) {
-    const myGen = ++renderGen;
-    resultsEl.innerHTML = rows.map((row, i) => {
+    resultsEl.innerHTML = rows.map((row) => {
       const badge = row.is_banned
         ? '<span class="player-banned-badge">Temporarily Banned</span>'
         : '';
+      const pfp = window.QZProfilePicture ? window.QZProfilePicture.imgHtml(row.equipped_profile_picture_id) : '';
       return '<a class="player-row" href="index.html?player=' + encodeURIComponent(row.username) + '">' +
-        '<span class="player-avatar-thumb" id="player-thumb-' + i + '">' + PERSON_ICON + '</span>' +
+        '<span class="player-avatar-thumb">' + pfp + '</span>' +
         '<span class="player-row-main"><span class="player-row-name">' + escapeHtml(row.username) + '</span>' + badge + '</span>' +
         '<span class="player-row-arrow">›</span>' +
       '</a>';
     }).join('');
     stateEl.hidden = true;
     resultsEl.hidden = false;
-    rows.forEach((row, i) => {
-      const el = document.getElementById('player-thumb-' + i);
-      if (el) fillThumb(el, row, myGen);
-    });
   }
 
   async function runSearch(query) {
@@ -366,9 +241,10 @@
       showState('⚠️', 'Search unavailable', 'Accounts aren’t configured on this deployment yet.');
       return;
     }
-    const { data, error } = await window.QZAuth.client.rpc('search_public_players', {
-      p_query: query, p_limit: RESULT_LIMIT, p_offset: 0
-    });
+    const [{ data, error }] = await Promise.all([
+      window.QZAuth.client.rpc('search_public_players', { p_query: query, p_limit: RESULT_LIMIT, p_offset: 0 }),
+      window.QZProfilePicture ? window.QZProfilePicture.ready() : Promise.resolve()
+    ]);
     if (mySeq !== requestSeq) return; // a newer keystroke's request already landed
     if (error) {
       showState('⚠️', 'Something went wrong', 'Could not search players right now — try again shortly.');

@@ -327,6 +327,15 @@
   }
   .profile-top-side { flex: 0 0 auto; min-width: 118px; }
   .profile-top-spacer { visibility: hidden; }
+  .profile-pfp-slot { display: flex; justify-content: flex-end; align-items: center; }
+  .profile-pfp-btn {
+    width: 40px; height: 40px; border-radius: 50%; padding: 0; cursor: pointer;
+    border: 2px solid rgba(140,195,255,0.4); background: #0a0e18; overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .profile-pfp-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .profile-pfp-btn:hover { border-color: rgba(150,200,255,0.8); box-shadow: 0 0 14px rgba(90,160,255,0.4); }
+  .profile-pfp-btn[hidden] { display: none; }
   .profile-top .profile-heading { flex: 1 1 auto; margin: 0; }
 
   .profile-heading {
@@ -839,7 +848,11 @@
       <div class="profile-top">
         <a href="customise.html" class="btn btn-chrome-dark profile-top-side" id="customise-btn" hidden>🎨 Customise</a>
         <h1 class="profile-heading"><span class="dash"></span>Profile<span class="dash"></span></h1>
-        <span class="profile-top-side profile-top-spacer"></span>
+        <div class="profile-top-side profile-pfp-slot">
+          <button type="button" class="profile-pfp-btn" id="profile-pfp-btn" hidden title="Change profile picture">
+            <img id="profile-pfp-btn-img" src="" alt="">
+          </button>
+        </div>
       </div>
 
       <div class="profile-grid">
@@ -1041,6 +1054,7 @@
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/email-verify-modal.js"></script>
+<script src="../assets/js/profile-picture-picker.js"></script>
 <script src="../assets/js/qz-xp.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
@@ -1508,6 +1522,16 @@
       showAdminAvatarStorageTile(profile.is_admin);
       const customiseBtn = document.getElementById('customise-btn');
       if (customiseBtn) customiseBtn.hidden = false; // own profile only — never in admin-view (that's someone else's character)
+
+      const pfpBtn = document.getElementById('profile-pfp-btn');
+      if (pfpBtn && window.QZProfilePicture) {
+        pfpBtn.hidden = false;
+        pfpBtn.addEventListener('click', () => window.QZProfilePicture.open());
+        window.QZProfilePicture.ready().then(() => {
+          const img = document.getElementById('profile-pfp-btn-img');
+          if (img) img.src = window.QZProfilePicture.urlFor(profile.equipped_profile_picture_id);
+        });
+      }
     }
     loadRealProfile();
   })();
