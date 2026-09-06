@@ -310,7 +310,37 @@
   // (show hair) everywhere except where the item is currently drawn, so it
   // can never point at a stale position after a recalibration. See
   // hairBehavior:'partial' in inventory-data.js / headHairBehavior above.
+  //
+  // The item is first drawn to its own small offscreen canvas at its exact
+  // target size with smoothing OFF, then hard-thresholded (any alpha above
+  // a small cutoff becomes fully opaque, everything else fully
+  // transparent), and THAT hardened silhouette — not the original image —
+  // is what actually erases hair below. Skipping this step and drawing the
+  // item straight into the mask (scaled + smoothed) measurably bled
+  // partial alpha into gaps between an item's fine details (a crown's
+  // points, say): scaling assets/img/equipment/head/admin-crown-left.png
+  // up ~1.5x this way nearly tripled its share of partially-transparent
+  // pixels (2.5% -> 7%), and every one of those got fed into
+  // destination-out, quietly eating extra hair beyond what the crown
+  // visually covers — worse the more an item is scaled up, which is
+  // exactly why this only became obvious after a recalibration used a
+  // larger scale than earlier testing had. A mask is a hide/show
+  // decision, not a visual render, so a crisp, hard-edged silhouette is
+  // the more correct shape for it regardless of scale.
   function buildHairMaskDataUrl(canvasW, canvasH, itemImg, itemRectCanvasSpace, rotationDeg) {
+    const ALPHA_THRESHOLD = 40;
+    const w = Math.max(1, Math.round(itemRectCanvasSpace.width));
+    const h = Math.max(1, Math.round(itemRectCanvasSpace.height));
+    const sil = document.createElement('canvas');
+    sil.width = w; sil.height = h;
+    const silCtx = sil.getContext('2d');
+    silCtx.imageSmoothingEnabled = false;
+    try { silCtx.drawImage(itemImg, 0, 0, w, h); } catch (err) { /* not decoded yet */ }
+    const silData = silCtx.getImageData(0, 0, w, h);
+    const px = silData.data;
+    for (let i = 3; i < px.length; i += 4) px[i] = px[i] > ALPHA_THRESHOLD ? 255 : 0;
+    silCtx.putImageData(silData, 0, 0);
+
     const c = document.createElement('canvas');
     c.width = canvasW; c.height = canvasH;
     const ctx = c.getContext('2d');
@@ -322,9 +352,7 @@
     const cy = itemRectCanvasSpace.top + itemRectCanvasSpace.height / 2;
     ctx.translate(cx, cy);
     ctx.rotate(((rotationDeg || 0) * Math.PI) / 180);
-    try {
-      ctx.drawImage(itemImg, -itemRectCanvasSpace.width / 2, -itemRectCanvasSpace.height / 2, itemRectCanvasSpace.width, itemRectCanvasSpace.height);
-    } catch (err) { /* image not decoded yet — mask just stays blank/opaque this pass */ }
+    ctx.drawImage(sil, -w / 2, -h / 2, w, h);
     ctx.restore();
     return c.toDataURL('image/png');
   }
