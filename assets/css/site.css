@@ -3,10 +3,10 @@
 
 :root {
   --bg-deep: #000000;
-  --bg-panel: #090b12;
-  --bg-panel-alt: #0c0f1a;
-  --border: rgba(110,140,220,0.14);
-  --border-strong: rgba(110,140,220,0.3);
+  --bg-panel: #0a0d18;
+  --bg-panel-alt: #10152a;
+  --border: rgba(130,160,255,0.14);
+  --border-strong: rgba(130,160,255,0.3);
   --blue: #3b82f6;
   --blue-dark: #1d4ed8;
   --blue-light: #7fb3ff;
@@ -27,11 +27,15 @@
   --qp-border: rgba(110,175,255,0.55);
   --qp-border-dim: rgba(90,140,220,0.28);
   --qp-glow: rgba(60,140,255,0.35);
-  --chrome-frame: linear-gradient(135deg, #e9eefa 0%, #a6b2c9 10%, #4c5670 24%, #212637 38%, #6f9fdc 52%, #8fd2ff 58%, #212637 72%, #4c5670 84%, #cdd7ea 100%);
-  --chrome-frame-soft: linear-gradient(135deg, #dbe3f2 0%, #929fbc 12%, #3f4760 30%, #232838 46%, #5f8fd0 58%, #212637 74%, #a3aec6 100%);
+  /* retuned to match the nav bar's own gunmetal-blue metal — a flat
+     vertical bevel (bright edge fading to a dark blue-navy core) instead
+     of the old silver/purple diagonal shine, so every panel and button
+     built from this frame reads as the same material as the nav strip */
+  --chrome-frame: linear-gradient(180deg, #c9d8ff 0%, #7fa0e0 12%, #2c3652 42%, #171b2a 55%, #2c3652 68%, #7fa0e0 88%, #c9d8ff 100%);
+  --chrome-frame-soft: linear-gradient(180deg, #aec2f2 0%, #6483c9 14%, #262e46 42%, #171b2a 58%, #262e46 72%, #6483c9 86%, #aec2f2 100%);
   --edge-blue: linear-gradient(90deg, rgba(80,160,255,0) 0%, rgba(110,190,255,0.9) 50%, rgba(80,160,255,0) 100%);
-  --gunmetal: #2c313f;
-  --seam: rgba(110,195,255,0.85);
+  --gunmetal: #171d30;
+  --seam: rgba(90,150,255,0.75);
 }
 
 * { box-sizing: border-box; }
@@ -106,22 +110,36 @@ img { max-width: 100%; display: block; }
   position: relative;
 }
 
+/* same gunmetal-blue metal as the nav bar: a cool vertical bevel (light
+   top edge, dark base) instead of a flat panel, so the search bar reads
+   as part of the same control family instead of a plain input field */
 .site-search input {
   width: 100%;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0) 40%), #0a0c14;
-  border: 1px solid rgba(150,160,180,0.3);
+  background: linear-gradient(180deg, rgba(140,170,255,0.10) 0%, rgba(140,170,255,0) 16%, #0d111d 60%, #0a0d16 100%);
+  border: 1px solid rgba(130,160,255,0.3);
   color: var(--text);
   border-radius: 10px;
   padding: 16px 52px 16px 20px;
   font-family: 'Exo 2', sans-serif;
   font-size: 15.5px;
   outline: none;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow:
+    inset 0 1px 0 rgba(190,210,255,0.12),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    inset 0 6px 10px -8px rgba(0,0,0,0.6);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .site-search input::placeholder { color: var(--text-faint); }
-.site-search input:focus { border-color: var(--blue-light); box-shadow: inset 0 1px 3px rgba(0,0,0,0.6), 0 0 0 3px rgba(59,130,246,0.15); }
+.site-search input:hover { border-color: rgba(150,185,255,0.45); }
+.site-search input:focus {
+  border-color: var(--blue-light);
+  box-shadow:
+    inset 0 1px 0 rgba(200,220,255,0.2),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    0 0 0 3px rgba(59,130,246,0.18),
+    0 0 20px rgba(59,130,246,0.25);
+}
 
 .site-search button {
   position: absolute;
@@ -131,11 +149,14 @@ img { max-width: 100%; display: block; }
   width: 38px;
   background: transparent;
   border: none;
-  color: var(--text-dim);
+  color: #9fb0d6;
   cursor: pointer;
   font-size: 18px;
   padding: 0;
+  transition: color 0.15s ease;
 }
+.site-search input:focus + button,
+.site-search form:hover button { color: #bfe0ff; }
 
 .header-actions {
   display: flex;
@@ -881,13 +902,23 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   opacity: 0.9;
 }
 
-/* ---- homepage game-selection section ---- */
+/* ---- homepage game-selection section ----
+   Same gunmetal-blue metal family as the nav bar: a flat vertical rim
+   (bright top edge fading to dark) instead of the shinier diagonal
+   chrome-frame gradient used elsewhere, plus the same soft ambient glow
+   the nav strip has, so this panel reads as the nav's larger sibling
+   rather than a different material. */
 .game-section {
   position: relative;
   border: 3px solid transparent;
   border-radius: 16px;
   padding: 26px clamp(14px, 3vw, 32px) 32px;
-  background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
+  background:
+    var(--qp-fill) padding-box,
+    linear-gradient(180deg, rgba(190,215,255,0.5) 0%, rgba(130,160,255,0.22) 10%, rgba(40,50,80,0.3) 50%, rgba(130,160,255,0.22) 90%, rgba(190,215,255,0.45) 100%) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(200,220,255,0.06),
+    0 0 30px rgba(50,90,220,0.14);
   margin-bottom: 26px;
 }
 .game-section .hud-heading { font-size: clamp(19px, 2.8vw, 28px); margin: 0 0 clamp(18px, 2.6vw, 26px); }
@@ -900,6 +931,11 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
 @media (max-width: 900px) { .game-grid { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 560px) { .game-grid { grid-template-columns: repeat(3, 1fr); } }
 
+/* Same gunmetal-blue metal family as the nav bar and the panel around
+   this grid: a flat vertical bevel instead of the shinier diagonal
+   chrome-frame ring. Thumbnail cards (.has-thumb) sit their artwork 10px
+   inset from the edge, so this background still shows through as their
+   frame — one recipe, both card types. */
 .game-card {
   position: relative;
   display: flex;
@@ -917,26 +953,23 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   padding: 8px 6px;
   background:
     radial-gradient(ellipse at 50% 120%, rgba(60,130,255,0.1), transparent 60%),
-    linear-gradient(165deg, #0e1a30 0%, #081020 60%, #060b16 100%) padding-box,
-    var(--chrome-frame-soft) border-box;
+    linear-gradient(180deg, #202840 0%, #12172a 45%, #080a14 100%) padding-box,
+    linear-gradient(180deg, rgba(190,215,255,0.5) 0%, rgba(130,160,255,0.2) 16%, rgba(40,50,80,0.32) 55%, rgba(130,160,255,0.28) 100%) border-box;
   box-shadow:
-    inset 0 0 0 1.5px var(--gunmetal),
-    inset 0 0 0 3px var(--seam),
-    inset 0 0 0 4px rgba(6,10,20,0.9),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+    inset 0 1px 0 rgba(190,210,255,0.14),
+    inset 0 -1px 0 rgba(0,0,0,0.5),
+    inset 0 6px 10px -6px rgba(0,0,0,0.5);
   transform: perspective(700px) rotateX(0deg) rotateY(0deg) scale(1);
-  transition: box-shadow 0.2s ease, transform 0.15s ease-out;
+  transition: box-shadow 0.2s ease, transform 0.15s ease-out, background-color 0.15s ease;
   will-change: transform;
 }
 .game-card:hover {
   box-shadow:
-    inset 0 0 0 1.5px var(--gunmetal),
-    inset 0 0 0 3px rgba(150,215,255,1),
-    inset 0 0 0 4px rgba(6,10,20,0.9),
-    inset 0 0 14px 4px rgba(90,180,255,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 1px 0 rgba(200,220,255,0.24),
+    inset 0 -1px 0 rgba(0,0,0,0.4),
+    inset 0 0 16px rgba(90,150,255,0.2),
     0 8px 20px rgba(0,0,0,0.45),
-    0 0 22px rgba(60,140,255,0.35);
+    0 0 20px rgba(59,130,246,0.32);
 }
 .game-card .icon {
   width: clamp(20px, 3.4vw, 30px);
@@ -973,11 +1006,8 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   transform: perspective(700px) scale(0.97);
   transition: transform 0.05s ease, box-shadow 0.05s ease;
   box-shadow:
-    inset 0 0 0 1.5px var(--gunmetal),
-    inset 0 0 0 3px rgba(150,215,255,0.8),
-    inset 0 0 0 4px rgba(6,10,20,0.9),
-    inset 0 4px 10px rgba(0,0,0,0.6),
-    inset 0 0 16px 4px rgba(59,130,246,0.35);
+    inset 0 2px 8px rgba(0,0,0,0.65),
+    inset 0 0 12px rgba(59,130,246,0.3);
 }
 
 .game-card .tile-light {
@@ -992,7 +1022,7 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   content: '';
   position: absolute; top: -140%; left: -45%;
   width: 26%; height: 380%;
-  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.22) 45%, rgba(190,220,255,0.16) 55%, rgba(255,255,255,0) 100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(210,228,255,0.32) 45%, rgba(154,127,255,0.18) 55%, rgba(255,255,255,0) 100%);
   transform: rotate(18deg);
 }
 .game-card:hover .tile-shimmer::after { animation: tile-shimmer 1.3s ease; }

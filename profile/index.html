@@ -524,15 +524,25 @@
   .tile:hover {
     box-shadow:
       inset 0 0 0 2px var(--gunmetal),
-      inset 0 0 0 4px rgba(150,215,255,1),
+      inset 0 0 0 4px var(--seam),
       inset 0 0 0 5.5px rgba(6,10,20,0.9),
-      inset 0 0 20px 5px rgba(90,180,255,0.55),
-      inset 0 1px 0 rgba(255,255,255,0.14),
-      inset 0 0 24px rgba(30,70,150,0.32),
-      0 10px 26px rgba(0,0,0,0.45),
-      0 0 30px rgba(60,140,255,0.4);
+      inset 0 0 16px 4px rgba(90,150,255,0.4),
+      inset 0 1px 0 rgba(200,220,255,0.16),
+      0 8px 20px rgba(0,0,0,0.45),
+      0 0 20px rgba(59,130,246,0.32);
   }
   .tile:hover::after { opacity: 1; }
+
+  /* tactile press: same sink-in-and-spring-back feel as the nav bar and
+     the homepage game cards, so clicking into any part of the profile
+     feels like the same physical control family */
+  .tile:active {
+    transform: perspective(700px) scale(0.98);
+    transition: transform 0.05s ease, box-shadow 0.05s ease;
+    box-shadow:
+      inset 0 2px 8px rgba(0,0,0,0.6),
+      inset 0 0 12px rgba(59,130,246,0.3);
+  }
 
   /* cursor-follow soft light — position driven by --mx/--my (site sets
      these on mousemove); invisible until hovered */
@@ -549,15 +559,13 @@
     content: '';
     position: absolute; top: -140%; left: -45%;
     width: 26%; height: 380%;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.22) 45%, rgba(190,220,255,0.16) 55%, rgba(255,255,255,0) 100%);
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(210,228,255,0.32) 45%, rgba(154,127,255,0.18) 55%, rgba(255,255,255,0) 100%);
     transform: rotate(18deg);
   }
   .tile:hover .tile-shimmer::after { animation: tile-shimmer 1.3s ease; }
   @keyframes tile-shimmer { from { left: -45%; } to { left: 145%; } }
 
   .tile > * { position: relative; z-index: 3; }
-  .tile .flare { z-index: 4; }
-  .tile:hover .flare { opacity: 1; }
   .tile-label {
     font-family: 'Orbitron', sans-serif;
     font-size: 11px;
@@ -1378,9 +1386,8 @@
                                      // without a full page reload
   })();
 
-  // ---- interactive tiles: subtle 3D tilt, cursor-follow light, and a
-  // lens-flare glint that drifts opposite the cursor — same easing
-  // approach as the header chrome buttons, applied per-tile. ----
+  // ---- interactive tiles: subtle 3D tilt and cursor-follow light, same
+  // component family as the homepage game-card tiles. ----
   (function () {
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const MAX_TILT = 3;   // degrees
@@ -1391,15 +1398,11 @@
       light.className = 'tile-light';
       const sweep = document.createElement('span');
       sweep.className = 'tile-shimmer';
-      const flare = document.createElement('span');
-      flare.className = 'flare';
       tile.appendChild(light);
       tile.appendChild(sweep);
-      tile.appendChild(flare);
 
       if (reduceMotion) return; // keep the static hover styling only
 
-      const maxDrift = 10;
       tile.addEventListener('mousemove', (e) => {
         const r = tile.getBoundingClientRect();
         const px = (e.clientX - r.left) / r.width;   // 0..1
@@ -1413,15 +1416,9 @@
         // cursor-follow soft light
         tile.style.setProperty('--mx', (px * 100) + '%');
         tile.style.setProperty('--my', (py * 100) + '%');
-
-        // flare drifts opposite the cursor, staying near the frame
-        const dx = -(px * 2 - 1) * maxDrift;
-        const dy = -(py * 2 - 1) * maxDrift;
-        flare.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       });
       tile.addEventListener('mouseleave', () => {
         tile.style.transform = 'perspective(700px) rotateX(0deg) rotateY(0deg) scale(1)';
-        flare.style.transform = 'translate(-50%, -50%)';
       });
     });
   })();
