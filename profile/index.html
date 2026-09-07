@@ -395,7 +395,11 @@
     filter: drop-shadow(0 0 6px rgba(120,190,255,0.55));
   }
   .currency-box .cur-icon svg { width: 100%; height: 100%; }
-  .currency-box.currency-stardust .cur-icon { color: #ffd76a; filter: drop-shadow(0 0 6px rgba(255,215,106,0.55)); }
+  .currency-box .cur-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .currency-box.currency-stardust .cur-icon {
+    width: 28px; height: 28px;
+    filter: drop-shadow(0 0 6px rgba(255,215,106,0.55));
+  }
   .currency-box .cur-text { display: flex; flex-direction: column; line-height: 1.25; }
   .currency-box .cur-label {
     font-family: 'Orbitron', sans-serif; font-size: 9.5px; font-weight: 700;
@@ -898,7 +902,7 @@
           </a>
           <div class="currency-box currency-stardust" id="stardust-box" hidden>
             <span class="cur-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2L12 2z"/></svg>
+              <img src="../assets/img/currency/stardust.png" alt="">
             </span>
             <span class="cur-text">
               <span class="cur-label">Stardust</span>
