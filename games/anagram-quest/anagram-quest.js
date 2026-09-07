@@ -131,6 +131,38 @@
     if (!/^[A-Za-z]+$/.test(word)) return false; // no spaces/punctuation/numbers/hyphens
     return dictSet.has(word.toLowerCase());
   }
+
+  // ---- beta rejection log — audit trail only, never affects scoring ----
+  // Logs every word a player actually submitted that the dictionary
+  // rejected, so a legitimate missing word (like "mega" was) can be found
+  // and added to games/anagram-quest/data/manual-valid-words.json instead
+  // of guessing what players are hitting. Purely local (localStorage),
+  // capped so it can't grow unbounded, and never read by anything that
+  // decides validity — it's audit-only, matching the "do NOT automatically
+  // make rejected words valid" rule this was built for.
+  const REJECT_LOG_KEY = 'qzAnagramRejectLog';
+  const REJECT_LOG_MAX = 200;
+  function logRejectedWord(word) {
+    try {
+      const entry = {
+        word: word.toUpperCase(),
+        length: word.length,
+        at: new Date().toISOString(),
+        difficulty: state.difficulty,
+        round: state.currentRound
+      };
+      const log = JSON.parse(localStorage.getItem(REJECT_LOG_KEY) || '[]');
+      log.push(entry);
+      while (log.length > REJECT_LOG_MAX) log.shift();
+      localStorage.setItem(REJECT_LOG_KEY, JSON.stringify(log));
+    } catch (err) {
+      // localStorage unavailable/full — never let logging break the game
+    }
+  }
+  window.QZAnagramRejectLog = {
+    getAll: () => { try { return JSON.parse(localStorage.getItem(REJECT_LOG_KEY) || '[]'); } catch (err) { return []; } },
+    clear: () => { try { localStorage.removeItem(REJECT_LOG_KEY); } catch (err) {} }
+  };
   // The ONE centralized word validator — every place in this file that
   // needs to know "does this word count" (Rounds 1-4 and Round 5, both at
   // round end — see judgeAndEndRound) calls this, never isValidEnglishWord
@@ -831,6 +863,11 @@
     // exactly the same as any other 0-point result, matching the point
     // table's intent precisely instead of contradicting it.
     const valid = points > 0;
+    // Audit-only: a real attempt (4+ alphabetic letters — not an empty/
+    // too-short submission) that scored nothing is exactly the "the
+    // dictionary might be missing this" case worth logging. Never changes
+    // `valid`/`points` above, which are already fully decided by this point.
+    if (!valid && word.length >= MIN_WORD_LEN && /^[A-Za-z]+$/.test(word)) logRejectedWord(word);
 
     state.roundScores[roundIndex] = points;
     state.totalScore += points;

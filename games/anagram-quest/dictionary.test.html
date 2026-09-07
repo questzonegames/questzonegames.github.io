@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Anagram Quest — Dictionary Validator Tests</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #0a0e18; color: #eaf3ff; padding: 24px; }
+  h1 { font-size: 18px; }
+  table { border-collapse: collapse; width: 100%; max-width: 900px; margin-top: 12px; }
+  td, th { border-bottom: 1px solid #2a3450; padding: 6px 10px; font-size: 13.5px; text-align: left; }
+  tr.pass td.status { color: #6be3a0; }
+  tr.fail td.status { color: #ff6e6e; font-weight: bold; }
+  #summary { margin-top: 16px; font-size: 15px; font-weight: bold; }
+  #summary.ok { color: #6be3a0; }
+  #summary.bad { color: #ff6e6e; }
+  code { background: #1a2338; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h1>Anagram Quest — Dictionary Validator Tests</h1>
+  <p>Loads the real <code>data/dictionary.txt</code> and exercises the exact
+     same validation rule the game uses (<code>MIN_WORD_LEN</code>/<code>MAX_WORD_LEN</code>
+     from anagram-quest.js, mirrored below). Not part of the game itself —
+     open this file directly whenever the dictionary is rebuilt.</p>
+  <table id="results"><thead><tr><th>Input</th><th>Expected</th><th>Status</th><th>Note</th></tr></thead><tbody></tbody></table>
+  <div id="summary"></div>
+
+<script>
+(function () {
+  // ---- mirrors anagram-quest.js's isValidEnglishWord()/MIN_WORD_LEN/MAX_WORD_LEN
+  //      exactly (kept in sync by hand — this file has no import of the game's
+  //      own IIFE-scoped code, so it re-states the same three lines here) ----
+  const MIN_WORD_LEN = 4;
+  const MAX_WORD_LEN = 9;
+  let dictSet = null;
+
+  function isValidEnglishWord(word) {
+    if (!dictSet) return false;
+    if (typeof word !== 'string') return false;
+    if (!/^[A-Za-z]+$/.test(word)) return false;
+    return dictSet.has(word.toLowerCase());
+  }
+  // What the game actually checks at judge time (isValidEnglishWord() PLUS
+  // the length gate — see finishGame()'s `realWord` check in anagram-quest.js).
+  function isAcceptedByGame(word) {
+    return typeof word === 'string' &&
+      word.length >= MIN_WORD_LEN && word.length <= MAX_WORD_LEN &&
+      isValidEnglishWord(word);
+  }
+
+  const cases = [
+    // ---- must be accepted ----
+    ['mega', true, 'the word that started this whole rebuild'],
+    ['MEGA', true, 'uppercase'],
+    ['Mega', true, 'title case'],
+    ['mEgA', true, 'mixed case'],
+    ['colour', true, 'British spelling'],
+    ['favour', true, 'British spelling'],
+    ['honour', true, 'British spelling'],
+    ['centre', true, 'British spelling'],
+    ['theatre', true, 'British spelling'],
+    ['sceptical', true, 'British spelling'],
+    ['cancelled', true, 'British double-L'],
+    ['email', true, 'modern vocabulary gap ENABLE1 alone missed'],
+    ['google', true, 'lexicalised verb, lowercase only (Google the brand is excluded)'],
+    ['googling', true, 'affix-expanded verb form (-ing)'],
+    ['knackered', true, 'British informal'],
+    ['peckish', true, 'British informal'],
+    ['gazump', true, 'British informal'],
+    ['apple', true, 'ordinary common noun'],
+    ['jumped', true, 'standard verb conjugation (-ed)'],
+    ['bigger', true, 'standard comparative'],
+    ['biggest', true, 'standard superlative'],
+    ['boxes', true, 'standard plural (-es)'],
+    // ---- must be rejected ----
+    ['cat', false, 'too short (3 letters, below MIN_WORD_LEN)'],
+    ['ab', false, 'too short (2 letters)'],
+    ['travelling', false, 'too long (10 letters, above MAX_WORD_LEN) -- a real British word, just outside the rack-size range'],
+    ['extraordinary', false, 'too long (13 letters)'],
+    ['word1', false, 'contains a digit'],
+    ['wo-rd', false, 'contains punctuation (hyphen)'],
+    ["won't", false, 'contains punctuation (apostrophe)'],
+    ['two words', false, 'contains a space'],
+    ['1234', false, 'digits only'],
+    ['', false, 'empty string'],
+    ['london', false, 'proper noun (place name)'],
+    ['Google', true, 'submitted capitalised, but the validator lowercases before lookup -- matches the "google" verb entry fine'],
+    ['zzzzqqqq', false, 'random letter sequence, not a real word'],
+  ];
+
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function render(results) {
+    const tbody = document.querySelector('#results tbody');
+    tbody.innerHTML = results.map((r) => {
+      const cls = r.pass ? 'pass' : 'fail';
+      return '<tr class="' + cls + '">' +
+        '<td><code>' + escapeHtml(JSON.stringify(r.input)) + '</code></td>' +
+        '<td>' + (r.expected ? 'accepted' : 'rejected') + '</td>' +
+        '<td class="status">' + (r.pass ? 'PASS' : 'FAIL — got ' + (r.actual ? 'accepted' : 'rejected')) + '</td>' +
+        '<td>' + escapeHtml(r.note) + '</td>' +
+      '</tr>';
+    }).join('');
+    const passCount = results.filter((r) => r.pass).length;
+    const summary = document.getElementById('summary');
+    summary.textContent = passCount + ' / ' + results.length + ' passed';
+    summary.className = passCount === results.length ? 'ok' : 'bad';
+  }
+
+  fetch('data/dictionary.txt')
+    .then((r) => r.text())
+    .then((text) => {
+      dictSet = new Set(text.split(/\r?\n/).map((w) => w.trim()).filter(Boolean));
+      const results = cases.map(([input, expected, note]) => {
+        const actual = isAcceptedByGame(input);
+        return { input, expected, actual, pass: actual === expected, note };
+      });
+      render(results);
+    })
+    .catch((err) => {
+      document.getElementById('summary').textContent = 'Could not load dictionary.txt: ' + err;
+      document.getElementById('summary').className = 'bad';
+    });
+})();
+</script>
+</body>
+</html>
