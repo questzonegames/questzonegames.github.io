@@ -508,6 +508,29 @@
   .diff-btn.medium { background: linear-gradient(180deg,#ffe38a,#ffc233); border-color: #ffe9a8; color: #3a2200; box-shadow: 0 0 16px rgba(255,190,60,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
   .diff-btn.hard { background: linear-gradient(180deg,#ff9a9a,#e0303a); border-color: #ffc4c4; color: #2a0505; box-shadow: 0 0 16px rgba(255,60,70,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
   .diff-btn:hover { transform: translateY(-2px); }
+  /* ---- locked difficulty (Intelligence level requirement not yet met) ----
+     Greyed out and inert -- overrides the coloured .easy/.medium/.hard
+     background above with a flat, desaturated fill so it visibly reads as
+     "not available yet" rather than just a disabled version of the same
+     bright colour. The requirement itself shows in .diff-lock-note instead
+     of the usual timer/XP meta line. */
+  .diff-btn.locked {
+    background: linear-gradient(180deg,#3a4258,#242a3c);
+    border-color: rgba(140,160,190,0.3);
+    color: #8a93ab;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .diff-btn.locked:hover { transform: none; }
+  .diff-btn.locked .diff-meta { display: none; }
+  .diff-lock-note {
+    display: none;
+    align-items: center; gap: 6px;
+    font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 12px;
+    color: #8a93ab; letter-spacing: 0.02em;
+  }
+  .diff-btn.locked .diff-lock-note { display: flex; }
+  .diff-lock-note svg { width: 13px; height: 13px; flex-shrink: 0; }
 
   /* small pill badge showing the active difficulty — reused on Select/Active/Result/GameOver headers */
   .diff-chip { display: table; margin: 0 auto 10px; padding: 3px 14px; border-radius: 999px; font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 11px; letter-spacing: 0.05em; }
@@ -739,10 +762,18 @@
         <button class="btn diff-btn medium" id="btn-diff-medium">
           <span class="diff-name">MEDIUM</span>
           <span class="diff-meta">20s rounds &middot; 30s Round 5 &middot; 60 XP / point</span>
+          <span class="diff-lock-note">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.5,10 V7.5 A5.5,5.5 0 0 1 17.5,7.5 V10 H18.5 A1.5,1.5 0 0 1 20,11.5 V19.5 A1.5,1.5 0 0 1 18.5,21 H5.5 A1.5,1.5 0 0 1 4,19.5 V11.5 A1.5,1.5 0 0 1 5.5,10 Z M8.5,10 H15.5 V7.5 A3.5,3.5 0 0 0 8.5,7.5 Z"/></svg>
+            Unlocks at Intelligence Level 5
+          </span>
         </button>
         <button class="btn diff-btn hard" id="btn-diff-hard">
           <span class="diff-name">HARD</span>
           <span class="diff-meta">10s rounds &middot; 20s Round 5 &middot; 180 XP / point</span>
+          <span class="diff-lock-note">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.5,10 V7.5 A5.5,5.5 0 0 1 17.5,7.5 V10 H18.5 A1.5,1.5 0 0 1 20,11.5 V19.5 A1.5,1.5 0 0 1 18.5,21 H5.5 A1.5,1.5 0 0 1 4,19.5 V11.5 A1.5,1.5 0 0 1 5.5,10 Z M8.5,10 H15.5 V7.5 A3.5,3.5 0 0 0 8.5,7.5 Z"/></svg>
+            Unlocks at Intelligence Level 20
+          </span>
         </button>
       </div>
       <button class="btn btn-dark" id="btn-diff-back" style="max-width:220px;margin:18px auto 0;display:block;">&#8592; BACK</button>

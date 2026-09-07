@@ -88,10 +88,13 @@
   // (timers, scoring, XP conversion, Lock In behaviour) is already
   // difficulty-generic and picks it up automatically. cssClass matches
   // the .diff-btn/.diff-chip/.intro-diff modifier classes in index.html. ----
+  // unlockLevel: the Intelligence level required to play this difficulty
+  // (see applyDifficultyLocks()) -- Easy is available from level 1 (i.e.
+  // to everyone, including a guest with no tracked level at all).
   const DIFFICULTIES = {
-    EASY: { key: 'EASY', label: 'EASY', normalRoundSeconds: 30, round5Seconds: 30, xpPerPoint: 20, cssClass: 'easy' },
-    MEDIUM: { key: 'MEDIUM', label: 'MEDIUM', normalRoundSeconds: 20, round5Seconds: 30, xpPerPoint: 60, cssClass: 'medium' },
-    HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard' }
+    EASY: { key: 'EASY', label: 'EASY', normalRoundSeconds: 30, round5Seconds: 30, xpPerPoint: 20, cssClass: 'easy', unlockLevel: 1 },
+    MEDIUM: { key: 'MEDIUM', label: 'MEDIUM', normalRoundSeconds: 20, round5Seconds: 30, xpPerPoint: 60, cssClass: 'medium', unlockLevel: 5 },
+    HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard', unlockLevel: 20 }
   };
 
   // ---- sound hooks (no audio assets shipped yet — safe no-ops until a
@@ -188,11 +191,17 @@
     // 'MEDIUM' | 'HARD' -> { highScore, nineCount } — this account only
     // (see loadDifficultyStats/renderDifficultyStats). null until loaded
     // (or for a guest, who has nothing to load).
-    difficultyStats: null
-    // Intelligence level/XP is intentionally NOT cached here — the lobby's
-    // skill card (assets/js/skill-card.js) always fetches it fresh from
-    // public.game_progress itself, the same way profile/skills.html does,
-    // so there is exactly one source of truth and no stale duplicate.
+    difficultyStats: null,
+    // Intelligence level, kept ONLY for the difficulty-lock check below
+    // (applyDifficultyLocks) — the lobby's own skill card (assets/js/
+    // skill-card.js) still always fetches its own copy fresh from
+    // public.game_progress rather than reading this, so there is still
+    // exactly one source of truth for the level shown to the player;
+    // this is a separate, gate-only read. Defaults to 1 (a brand-new
+    // account's real level, and a guest's stand-in level, since a guest
+    // has no game_progress row at all) so Medium/Hard start locked until
+    // this loads for a real account.
+    intelligenceLevel: 1
   };
 
   // ================= DOM =================
@@ -355,6 +364,7 @@
   // or the game lobby of another Quest Zone game rather than re-adding it
   // here — this file intentionally carries none of that wiring any more.
   async function loadAccountData() {
+    applyDifficultyLocks(); // render the level-1 default immediately — Medium/Hard start locked/grey for everyone until a real level (if any) loads below
     if (!window.QZAuth || !window.QZAuth.client) { updateFooterStats(); return; }
     try {
       const profile = await window.QZAuth.getProfile();
@@ -368,10 +378,50 @@
       state.highScore = (statsRow && statsRow.high_score) || 0;
       state.gamesPlayed = (statsRow && statsRow.games_played) || 0;
       await loadDifficultyStats();
+      await loadIntelligenceLevel();
     } catch (err) {
       console.warn('Anagram Quest: could not load account data', err);
     }
     updateFooterStats();
+  }
+
+  // Reads this account's real Intelligence level for the difficulty-lock
+  // check only — see state.intelligenceLevel's own comment for why this
+  // is a separate read from the lobby's skill-card widget rather than
+  // reusing/caching its value. Same fetchSkill() shared data query
+  // skill-card.js itself uses (public.games + public.game_progress), so
+  // it can never disagree with what the widget displays.
+  async function loadIntelligenceLevel() {
+    if (!window.QZSkillCard || !state.profile) return;
+    try {
+      const skill = await window.QZSkillCard.fetchSkill(window.QZAuth.client, state.profile.id, GAME_KEY, 'Intelligence');
+      state.intelligenceLevel = skill.level;
+    } catch (err) {
+      console.warn('Anagram Quest: could not load Intelligence level', err);
+    } finally {
+      applyDifficultyLocks();
+    }
+  }
+
+  // ---- difficulty locks — Medium/Hard require an Intelligence level (see
+  // DIFFICULTIES[key].unlockLevel above); Easy's own unlockLevel is 1, so
+  // it's never locked. Greys the button out, swaps its timer/XP meta line
+  // for a "Unlocks at Intelligence Level N" note, and disables it so it
+  // can't be clicked (selectDifficulty() below also re-checks this itself,
+  // in case anything ever calls it some other way). Re-run any time the
+  // level might have changed: once with the level-1 default before
+  // account data has loaded, again once the real level is known, and
+  // again after this run's XP is awarded (awardIntelligenceXp) in case a
+  // level-up just crossed a threshold.
+  function applyDifficultyLocks() {
+    ['EASY', 'MEDIUM', 'HARD'].forEach((key) => {
+      const btn = document.getElementById('btn-diff-' + key.toLowerCase());
+      if (!btn) return;
+      const locked = state.intelligenceLevel < DIFFICULTIES[key].unlockLevel;
+      btn.classList.toggle('locked', locked);
+      btn.disabled = locked;
+      btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    });
   }
 
   // Called once per COMPLETED game (Game Over), never per round. Score is
@@ -421,6 +471,14 @@
       });
       if (error) { console.warn('Anagram Quest: could not save XP', error); return; }
       const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        // Keep the difficulty-lock check current too — a level-up from
+        // this run's XP should unlock Medium/Hard immediately the next
+        // time the player opens the difficulty screen, not only after a
+        // page refresh.
+        state.intelligenceLevel = row.level;
+        applyDifficultyLocks();
+      }
       if (row && window.QZXp) {
         // The widget itself now shows the level/XP bar — animateXpGain()
         // flies the +XP label into it and eases it up to `row`'s fresh
@@ -1033,6 +1091,7 @@
 
   // ================= difficulty select + intro/countdown =================
   function selectDifficulty(key) {
+    if (state.intelligenceLevel < DIFFICULTIES[key].unlockLevel) return; // belt-and-suspenders — the button is already disabled/greyed for this
     state.difficulty = key;
     state.difficultyConfig = DIFFICULTIES[key];
     state.totalScore = 0;
