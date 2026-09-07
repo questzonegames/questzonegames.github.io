@@ -25,14 +25,18 @@
 
   .hs-player-head { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
   .hs-player-avatar {
-    width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+    width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0;
     background: radial-gradient(circle at 35% 30%, #3b4a6b, #1a2036 70%);
     border: 2px solid var(--border-strong);
     display: flex; align-items: center; justify-content: center; font-size: 28px;
     overflow: hidden;
   }
   .hs-player-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .hs-player-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(22px, 4vw, 30px); color: #fff; letter-spacing: 0.02em; margin: 0; }
+  /* Colour/shimmer/hover-pop come from the shared .qz-shine-name class in
+     assets/css/site.css (also used by both names on Compare, the main
+     Highscores list, and a player's profile page) -- this rule is
+     layout/sizing only. */
+  .hs-player-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(22px, 4vw, 30px); letter-spacing: 0.02em; margin: 0; }
   .hs-player-sub { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 </style>
 </head>
@@ -193,7 +197,7 @@
       document.getElementById('hs-player-body').innerHTML =
         '<div class="hs-player-head">' +
           '<div class="hs-player-avatar">' + (window.QZProfilePicture ? window.QZProfilePicture.imgHtml(row.equipped_profile_picture_id) : '') + '</div>' +
-          '<div><h1 class="hs-player-name' + (row.is_banned ? ' hs-banned-name' : '') + '">' + escapeHtml(row.username) + bannedTag + '</h1>' +
+          '<div><h1 class="hs-player-name qz-shine-name' + (row.is_banned ? ' hs-banned-name' : '') + '">' + escapeHtml(row.username) + bannedTag + '</h1>' +
             '<div class="hs-player-sub">Total Level Rank #' + Number(row.overall_rank).toLocaleString() + '</div>' +
           '</div>' +
         '</div>' +

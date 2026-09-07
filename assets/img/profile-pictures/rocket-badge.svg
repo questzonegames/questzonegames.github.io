@@ -2,7 +2,7 @@
 <defs><radialGradient id="bg" cx="35%" cy="30%" r="75%">
 <stop offset="0%" stop-color="#1c2a4a"/><stop offset="100%" stop-color="#060a14"/>
 </radialGradient></defs>
-<circle cx="50" cy="50" r="50" fill="url(#bg)"/>
+<rect x="0" y="0" width="100" height="100" fill="url(#bg)"/>
 <g transform="rotate(45 50 50)">
 <path d="M50 18c8 8 10 20 10 32 0 8-4 14-10 18-6-4-10-10-10-18 0-12 2-24 10-32z" fill="#6fb2ff" stroke="#bfe0ff" stroke-width="1"/>
 <circle cx="50" cy="40" r="5" fill="#0a1428"/>

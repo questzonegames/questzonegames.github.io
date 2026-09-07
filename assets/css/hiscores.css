@@ -84,11 +84,19 @@ a.hs-row-link:hover { color: var(--blue-light); text-decoration: underline; }
 .hs-arrow.up { color: var(--green); }
 .hs-arrow.down { color: #ff6e6e; }
 
+/* ---- premium metallic "shine name" ----
+   The .qz-shine-name component itself (chrome fill + glisten + hover pop)
+   now lives in assets/css/site.css, shared with non-Highscores pages too
+   (profile/index.html's own and public-profile name) -- see the comment
+   there. Every consumer on the three Highscores pages (the main
+   leaderboard's row names, a player's own name, and both Compare names)
+   just adds the class; nothing Highscores-specific remains to define here. */
+
 /* ---- temp-banned indicator — a permanently banned or hidden account
    never reaches these pages at all (excluded server-side), so seeing
    this only ever means "currently serving a temporary ban". Shown on
    the main table, a player's own page, and Compare alike. */
-a.hs-row-link.hs-banned-name, .hs-vs-name.hs-banned-name, .hs-player-name.hs-banned-name { color: #ff6e6e !important; }
+a.hs-row-link.hs-banned-name, .qz-shine-name.hs-banned-name { color: #ff6e6e !important; }
 .hs-banned-tag {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 7px; border-radius: 5px; margin-left: 6px;

@@ -27,9 +27,15 @@
 //
 // Requires qz-auth.js and site.js (qzToast) already loaded on the page.
 (function () {
+  // Square full-bleed background (not a circle) -- every profile-picture
+  // frame on the site is a rounded square now, not a circle (see the
+  // border-radius changes across profile/index.html, profile/players.html,
+  // highscores/player.html, and .qz-pfp-thumb-btn below), so this needs to
+  // fill the whole square or its own corners would show through as an
+  // odd gap instead of a clean, deliberate square background.
   const FALLBACK_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
-    '<circle cx="50" cy="50" r="50" fill="#101a30"/>' +
+    '<rect x="0" y="0" width="100" height="100" fill="#101a30"/>' +
     '<circle cx="50" cy="38" r="16" fill="#3a4a72"/>' +
     '<path d="M18 88c0-19 14-32 32-32s32 13 32 32" fill="#3a4a72"/></svg>'
   );
@@ -124,7 +130,7 @@
       }
       .qz-pfp-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
       .qz-pfp-thumb-btn {
-        position: relative; width: 72px; height: 72px; border-radius: 50%;
+        position: relative; width: 72px; height: 72px; border-radius: 16px;
         border: 2.5px solid rgba(120,160,220,0.3); padding: 0; cursor: pointer;
         background: #0a0e18; overflow: hidden; transition: border-color 0.15s ease, box-shadow 0.15s ease;
       }

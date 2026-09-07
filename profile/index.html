@@ -329,7 +329,7 @@
   .profile-top-spacer { visibility: hidden; }
   .profile-pfp-slot { display: flex; justify-content: flex-end; align-items: center; }
   .profile-pfp-btn {
-    width: 50px; height: 50px; border-radius: 50%; padding: 0; cursor: pointer;
+    width: 50px; height: 50px; border-radius: 12px; padding: 0; cursor: pointer;
     border: 2px solid rgba(140,195,255,0.4); background: #0a0e18; overflow: hidden;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
@@ -553,17 +553,15 @@
   }
   .avatar-arrow:active { transform: translateY(-50%) scale(0.94); }
   .avatar-arrow:focus-visible { outline: 2px solid #6fb2ff; outline-offset: 2px; }
+  /* Colour/shimmer/hover-pop come from the shared .qz-shine-name class in
+     assets/css/site.css (also used by Highscores and Compare) -- this
+     rule is layout/sizing only. */
   .avatar-name {
     margin-top: 12px;
     font-family: 'Orbitron', sans-serif;
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    background: linear-gradient(180deg, #fff 0%, #cfd9ee 55%, #9aa9c8 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 0 10px rgba(120,170,255,0.35);
   }
 
   /* ---------- right-side tiles ---------- */
@@ -931,7 +929,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
             </button>
           </div>
-          <div class="avatar-name" id="profile-username">Username</div>
+          <div class="avatar-name qz-shine-name" id="profile-username">Username</div>
         </div>
 
         <!-- Main sections — later: populated from account data -->
@@ -1755,7 +1753,13 @@
   // component family as the homepage game-card tiles. ----
   (function () {
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const MAX_TILT = 3;   // degrees
+    const MAX_TILT = 3;   // degrees -- fine for a roughly square tile
+    // The Pinned Achievements tile is far wider than it is tall (it spans
+    // the full width beside the avatar), so the SAME rotation angle swings
+    // its far corners a lot more in actual screen pixels than it does on a
+    // square tile -- hence its own much gentler max tilt here, rather than
+    // one fixed angle for every tile regardless of shape.
+    const MAX_TILT_WIDE = 0.6; // degrees
     const MAX_LIFT = 1.02; // scale
 
     document.querySelectorAll('.tile').forEach((tile) => {
@@ -1768,14 +1772,16 @@
 
       if (reduceMotion) return; // keep the static hover styling only
 
+      const maxTilt = tile.classList.contains('tile-pinned') ? MAX_TILT_WIDE : MAX_TILT;
+
       tile.addEventListener('mousemove', (e) => {
         const r = tile.getBoundingClientRect();
         const px = (e.clientX - r.left) / r.width;   // 0..1
         const py = (e.clientY - r.top) / r.height;   // 0..1
 
         // gentle 3D tilt toward the cursor
-        const rotY = (px - 0.5) * MAX_TILT * 2;
-        const rotX = (0.5 - py) * MAX_TILT * 2;
+        const rotY = (px - 0.5) * maxTilt * 2;
+        const rotX = (0.5 - py) * maxTilt * 2;
         tile.style.transform = `perspective(700px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${MAX_LIFT})`;
 
         // cursor-follow soft light

@@ -1228,3 +1228,62 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
   padding-top: clamp(12px, 2vw, 16px);
   border-top: 1px solid var(--qp-border-dim);
 }
+
+/* ============================================================================
+   Premium metallic "shine name" — ANY place a username is displayed as a
+   title/heading rather than as plain inline text: a player's own profile
+   name, a public profile (Players search) name, a Highscores row name, a
+   player's individual Highscores page name, both names on Compare. Never
+   used for plain-text mentions of a username (the header login pill, a
+   Players search result row, an admin table cell, etc.) — those stay
+   ordinary text everywhere, unchanged.
+
+   Silver/white chrome fill (background-clip:text) with a slow glisten
+   that glides across on hover as a second background layer sharing that
+   same clip mask, so the shine is only ever visible where a glyph
+   actually is — never a box/rectangle around the name.
+
+   Every name using this class is the same neutral white/silver today —
+   a name colour is planned as a future purchasable cosmetic. When that
+   lands, a purchased colour replaces the base gradient below for that
+   one player; the shimmer/pop mechanics stay identical for everyone.
+
+   .qz-shine-nopop suppresses the hover "pop" (scale/lift) for dense
+   contexts like the main Highscores list, where many rows popping on
+   hover would be noisy — the shimmer and colour still apply there.
+   ============================================================================ */
+.qz-shine-name {
+  display: inline-block;
+  text-decoration: none;
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 200% 100%;
+  background-position: 0 0, -120% 0;
+  background-image:
+    linear-gradient(180deg, #ffffff 0%, #e4eaf7 32%, #b7c1d9 58%, #838ea8 80%, #eef2fb 100%),
+    linear-gradient(100deg,
+      transparent 0%, transparent 28%,
+      rgba(255,255,255,0.6) 38%,
+      #ffffff 50%,
+      rgba(255,255,255,0.6) 62%,
+      transparent 72%, transparent 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 16px rgba(210,220,245,0.35);
+  transform: scale(1) translateY(0);
+  transition: background-position 0.05s linear, filter 0.3s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), text-shadow 0.25s ease;
+}
+.qz-shine-name:hover {
+  filter: brightness(1.28);
+  background-position: 0 0, 120% 0;
+  transform: scale(1.045) translateY(-1px);
+  text-shadow: 0 0 22px rgba(220,230,255,0.55), 0 4px 8px rgba(0,0,0,0.4);
+  transition: background-position 2.3s ease-in-out, filter 0.3s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), text-shadow 0.25s ease;
+}
+.qz-shine-name.qz-shine-nopop:hover { transform: scale(1) translateY(0); }
+/* Banned overrides the metallic fill entirely with a flat warning red --
+   a plain `color` rule (a.hs-row-link.hs-banned-name etc. in hiscores.css)
+   has no effect once background-clip:text is in play, so this resets the
+   fill/clip specifically for a shine name. */
+.qz-shine-name.hs-banned-name {
+  background: none !important; -webkit-background-clip: initial !important; background-clip: initial !important;
+  -webkit-text-fill-color: #ff6e6e !important; text-shadow: none !important;
+}

@@ -23,11 +23,33 @@
     margin: 0 auto;
   }
 
-  .hs-vs-head { display: flex; align-items: center; justify-content: center; gap: clamp(10px, 3vw, 26px); margin-bottom: 22px; flex-wrap: wrap; }
-  .hs-vs-name { font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic; font-size: clamp(18px, 3.6vw, 26px); text-align: center; max-width: 260px; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
-  .hs-vs-name.p1 { color: var(--blue-light); }
-  .hs-vs-name.p2 { color: #ffb4d8; }
-  .hs-vs-name:hover { text-decoration: underline; }
+  .hs-vs-head { display: flex; align-items: center; justify-content: center; gap: clamp(14px, 3.4vw, 32px); margin-bottom: 22px; flex-wrap: wrap; }
+
+  /* ---- each side: profile picture + name, stacked ---- */
+  .hs-vs-side { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 220px; }
+  .hs-vs-avatar {
+    display: block; width: 64px; height: 64px; border-radius: 14px;
+    overflow: hidden; background: #0a0e18;
+    box-shadow: 0 0 0 1.5px rgba(255,255,255,0.06) inset;
+  }
+  .hs-vs-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hs-vs-side.p1 .hs-vs-avatar { border: 2px solid rgba(120,170,255,0.55); box-shadow: 0 0 16px rgba(70,130,255,0.35); }
+  .hs-vs-side.p2 .hs-vs-avatar { border: 2px solid rgba(255,205,90,0.55); box-shadow: 0 0 16px rgba(255,190,70,0.3); }
+
+  /* ---- player names ----
+     Layout/sizing only -- the metallic chrome fill, shimmer glide, and
+     hover "pop" all come from the shared .qz-shine-name class in
+     assets/css/site.css (also used by highscores/player.html's own name,
+     the main Highscores list, and profile pages), so none of them can
+     visually drift apart. Both players' names are plain white/silver
+     here -- .p1/.p2 no longer tint the name itself, only the avatar
+     frame's accent colour below. */
+  .hs-vs-name {
+    padding: 2px 6px;
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-style: italic;
+    font-size: clamp(19px, 3.8vw, 28px); letter-spacing: 0.02em;
+    text-align: center; max-width: 260px; overflow-wrap: anywhere;
+  }
   .hs-vs-badge { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 14px; color: var(--text-dim); letter-spacing: 0.08em; }
 
   /* ---- comparison table: uses the shared .hs-table column system from
@@ -38,10 +60,9 @@
   table.hs-table { min-width: 640px; }
   table.hs-table th.hs-col-name, table.hs-table td.hs-col-name { width: 190px; }
   table.hs-table thead tr.hs-name-row th { padding-bottom: 4px; border-bottom: none; font-size: 12.5px; text-align: center; }
-  table.hs-table thead tr.hs-name-row th.p1 { color: var(--blue-light); }
-  table.hs-table thead tr.hs-name-row th.p2 { color: #ffb4d8; }
-  table.hs-table thead tr.hs-name-row th a { color: inherit; text-decoration: none; }
-  table.hs-table thead tr.hs-name-row th a:hover { text-decoration: underline; }
+  /* table header names reuse the exact same metallic-chrome + shimmer
+     treatment as the big VS header above, just at table-header size */
+  table.hs-table thead tr.hs-name-row th .hs-vs-name { font-size: 13px; font-style: normal; letter-spacing: 0.04em; max-width: none; }
   table.hs-table thead tr.hs-stat-row th { text-align: center; }
   table.hs-table thead tr.hs-stat-row th.hs-col-name { text-align: left; }
 </style>
@@ -107,6 +128,7 @@
 <script src="../assets/js/qz-auth.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/email-verify-modal.js"></script>
+<script src="../assets/js/profile-picture-picker.js"></script>
 <script src="../assets/js/hiscores-shared.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
@@ -218,7 +240,8 @@
       const [playerAResult, playerBResult, registry] = await Promise.all([
         fetchPlayer(usernames.a),
         fetchPlayer(usernames.b),
-        window.QZHiscores.loadSkillRegistry(client(), '../')
+        window.QZHiscores.loadSkillRegistry(client(), '../'),
+        window.QZProfilePicture ? window.QZProfilePicture.ready() : Promise.resolve()
       ]);
       const missing = [];
       if (!playerAResult) missing.push(usernames.a);
@@ -242,11 +265,15 @@
 
       const playerAUrl = window.QZHiscores.playerUrl('../', a.username);
       const playerBUrl = window.QZHiscores.playerUrl('../', b.username);
-      const nameALink = '<a class="hs-vs-name p1' + (a.is_banned ? ' hs-banned-name' : '') + '" href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a>' + (a.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '');
-      const nameBLink = '<a class="hs-vs-name p2' + (b.is_banned ? ' hs-banned-name' : '') + '" href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a>' + (b.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '');
+      const avatarA = window.QZProfilePicture ? window.QZProfilePicture.imgHtml(a.equipped_profile_picture_id) : '';
+      const avatarB = window.QZProfilePicture ? window.QZProfilePicture.imgHtml(b.equipped_profile_picture_id) : '';
+      const nameALink = '<a class="hs-vs-name qz-shine-name' + (a.is_banned ? ' hs-banned-name' : '') + '" href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a>' + (a.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '');
+      const nameBLink = '<a class="hs-vs-name qz-shine-name' + (b.is_banned ? ' hs-banned-name' : '') + '" href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a>' + (b.is_banned ? '<span class="hs-banned-tag">⛔ Banned</span>' : '');
+      const sideA = '<div class="hs-vs-side p1"><a class="hs-vs-avatar" href="' + playerAUrl + '" aria-label="' + escapeHtml(a.username) + '">' + avatarA + '</a>' + nameALink + '</div>';
+      const sideB = '<div class="hs-vs-side p2"><a class="hs-vs-avatar" href="' + playerBUrl + '" aria-label="' + escapeHtml(b.username) + '">' + avatarB + '</a>' + nameBLink + '</div>';
 
       document.getElementById('hs-compare-body').innerHTML =
-        '<div class="hs-vs-head">' + nameALink + '<div class="hs-vs-badge">VS</div>' + nameBLink + '</div>' +
+        '<div class="hs-vs-head">' + sideA + '<div class="hs-vs-badge">VS</div>' + sideB + '</div>' +
         '<div class="hs-table-wrap"><table class="hs-table">' +
           // An explicit colgroup makes column widths authoritative
           // regardless of row order or the name-row's colspans — the
@@ -262,9 +289,9 @@
           '<thead>' +
             '<tr class="hs-name-row">' +
               '<th class="hs-col-name"></th>' +
-              '<th class="p1" colspan="3"><a href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a></th>' +
+              '<th colspan="3"><a class="hs-vs-name qz-shine-name" href="' + playerAUrl + '">' + escapeHtml(a.username) + '</a></th>' +
               '<th></th>' +
-              '<th class="p2" colspan="3"><a href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a></th>' +
+              '<th colspan="3"><a class="hs-vs-name qz-shine-name" href="' + playerBUrl + '">' + escapeHtml(b.username) + '</a></th>' +
             '</tr>' +
             '<tr class="hs-stat-row">' +
               '<th class="hs-col-name">Skill</th>' +
