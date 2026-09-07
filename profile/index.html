@@ -379,8 +379,8 @@
   .currency-box {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 16px;
+    gap: 12px;
+    padding: 6px 16px 6px 8px;
     border-radius: 10px;
     border: 1.5px solid var(--border-strong);
     background:
@@ -388,18 +388,19 @@
       linear-gradient(165deg, #0e1a30 0%, #081020 60%, #060b16 100%);
   }
   .currency-box[hidden] { display: none; }
+  /* Icons are full illustrated artwork (not flat currentColor glyphs), so
+     they're sized to fill most of the box's own height rather than
+     sitting as a small corner glyph — snug against the top/bottom edges
+     with a little breathing room, never clipped. */
   .currency-box .cur-icon {
-    flex: 0 0 auto; width: 24px; height: 24px;
+    flex: 0 0 auto; width: 46px; height: 46px;
     display: flex; align-items: center; justify-content: center;
     color: #cfe4ff;
-    filter: drop-shadow(0 0 6px rgba(120,190,255,0.55));
   }
-  .currency-box .cur-icon svg { width: 100%; height: 100%; }
+  .currency-box .cur-icon svg { width: 100%; height: 100%; filter: drop-shadow(0 0 6px rgba(120,190,255,0.55)); }
   .currency-box .cur-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .currency-box.currency-stardust .cur-icon {
-    width: 28px; height: 28px;
-    filter: drop-shadow(0 0 6px rgba(255,215,106,0.55));
-  }
+  .currency-box.currency-quest-points .cur-icon img { filter: drop-shadow(0 0 6px rgba(120,190,255,0.5)); }
+  .currency-box.currency-stardust .cur-icon img { filter: drop-shadow(0 0 6px rgba(255,215,106,0.5)); }
   .currency-box .cur-text { display: flex; flex-direction: column; line-height: 1.25; }
   .currency-box .cur-label {
     font-family: 'Orbitron', sans-serif; font-size: 9.5px; font-weight: 700;
@@ -893,7 +894,7 @@
         <div class="profile-currencies">
           <a href="wallet.html" class="currency-box currency-quest-points" id="quest-points-tile" aria-label="Open your wallet">
             <span class="cur-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 9-9 9-9-9z"/></svg>
+              <img src="../assets/img/currency/quest-points.png" alt="">
             </span>
             <span class="cur-text">
               <span class="cur-label">Quest Points</span>
