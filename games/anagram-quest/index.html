@@ -202,15 +202,26 @@
   }
   .hero-side-rule { width: 34px; height: 2px; background: var(--cyan); opacity: 0.6; margin-top: 8px; }
   .lobby-hero-center { text-align: center; min-width: 0; }
-  .hero-orbital-arc { display: block; width: min(560px, 46vw); max-width: 100%; height: auto; margin: 0 auto; overflow: visible; }
-  .hero-title {
-    font-family: 'Saira', sans-serif; font-weight: 900;
-    font-size: clamp(28px, 4.4vw, 54px); letter-spacing: 0.04em;
-    color: #f4faff; margin-top: -22px;
-    text-shadow: 0 0 16px rgba(130,215,255,0.9), 0 0 36px rgba(80,160,255,0.5);
+  /* Real logo asset (assets/img/anagram-quest/logo.png) replacing the old
+     CSS-drawn arc/title/subtitle. The source PNG is a 1254x1254 square
+     canvas with a huge transparent margin above and below the actual
+     wide logo art (only the middle ~27% of its height is visible) — this
+     container/--logo-* crop just removes that empty transparent space
+     for layout purposes (same non-destructive crop technique used for
+     the Start Game button and difficulty cards elsewhere on this page);
+     the artwork itself is never redrawn, resized in isolation, or
+     distorted, only cropped-and-scaled as a whole per the asset-integrity
+     rule. */
+  .hero-logo-wrap {
+    --logo-ratio: 1251/339; --logo-w: 100.24%; --logo-h: 369.91%; --logo-x: -0.24%; --logo-y: -135.10%;
+    position: relative; width: min(640px, 56vw); max-width: 100%;
+    aspect-ratio: var(--logo-ratio); margin: 0 auto; overflow: hidden;
   }
-  .hero-rule { width: 130px; height: 2px; margin: 10px auto; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.85; }
-  .hero-motto { font-family: 'Saira', sans-serif; font-weight: 700; font-size: clamp(10px, 1.3vw, 13px); letter-spacing: 0.14em; color: var(--text-dim); }
+  .hero-logo-img {
+    position: absolute; left: var(--logo-x); top: var(--logo-y);
+    width: var(--logo-w); height: var(--logo-h); max-width: none;
+    display: block;
+  }
   .lobby-hero-right { display: flex; gap: 10px; justify-content: flex-end; padding-top: 2px; }
   .hero-icon-btn {
     width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
@@ -912,26 +923,9 @@
           <div class="hero-side-rule"></div>
         </div>
         <div class="lobby-hero-center">
-          <svg class="hero-orbital-arc" viewBox="0 0 600 90" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#6fe3ff" stop-opacity="0.15"/>
-                <stop offset="35%" stop-color="#6fe3ff" stop-opacity="0.85"/>
-                <stop offset="50%" stop-color="#ffe9a8"/>
-                <stop offset="65%" stop-color="#6fe3ff" stop-opacity="0.85"/>
-                <stop offset="100%" stop-color="#6fe3ff" stop-opacity="0.15"/>
-              </linearGradient>
-            </defs>
-            <path d="M 15 82 Q 300 -35 585 82" fill="none" stroke="url(#arcGrad)" stroke-width="3" stroke-linecap="round"/>
-            <g transform="translate(300,4)">
-              <circle r="10" fill="#ffe9a8" opacity="0.35"/>
-              <circle r="4" fill="#fff8e6"/>
-              <path d="M0 -13 L0 13 M-13 0 L13 0" stroke="#ffe9a8" stroke-width="1.5" opacity="0.8"/>
-            </g>
-          </svg>
-          <div class="hero-title">ANAGRAM QUEST</div>
-          <div class="hero-rule"></div>
-          <div class="hero-motto">SOLVE WORDS &bull; SCORE HIGH &bull; EARN INTELLIGENCE XP</div>
+          <div class="hero-logo-wrap">
+            <img class="hero-logo-img" src="../../assets/img/anagram-quest/logo.png" alt="Anagram Quest">
+          </div>
         </div>
         <div class="lobby-hero-right">
           <button class="hero-icon-btn" type="button" data-coming-soon="Sound settings are coming soon!" title="Sound">
