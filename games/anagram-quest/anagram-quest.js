@@ -247,6 +247,12 @@
     GAMEOVER: document.getElementById('screen-gameover')
   };
   function showScreen(key) {
+    // Preserve the player's scroll position across screen transitions.
+    // All screens live in the same page and are just toggled hidden/
+    // visible, so swapping to a screen with a different total height
+    // otherwise makes the browser silently clamp scrollY back toward 0
+    // — which reads as "it keeps jumping back to the top" every round.
+    const prevScrollY = window.scrollY;
     Object.values(screens).forEach((el) => el.classList.add('hidden'));
     screens[key].classList.remove('hidden');
     // The lobby has its own hero header (orbital arc, big ANAGRAM QUEST
@@ -255,6 +261,7 @@
     // is showing (see body.lobby-active in the CSS), never removed from
     // the DOM, so every other screen's header is completely unaffected.
     document.body.classList.toggle('lobby-active', key === 'LOBBY');
+    requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
   }
 
   function updateFooterStats() {
