@@ -34,7 +34,14 @@
     overflow-x: hidden;
   }
 
-  #starfield { position: fixed; inset: 0; z-index: 0; }
+  /* Same background as the Quest Zone homepage — #site-starfield is the
+     exact id assets/js/starfield.js looks for; these four rules are the
+     same ones site.css defines for it there (duplicated rather than
+     importing all of site.css, to avoid pulling its unrelated nav/button/
+     component styles into this page). The actual star/nebula/galaxy
+     generation and all its behaviour live entirely in that one shared JS
+     file — this page doesn't reimplement any of it. */
+  #site-starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
   .topbar {
     position: relative; z-index: 2;
@@ -160,13 +167,21 @@
 
   /* This section alone breaks out of .wrap's max-width to use most of
      the viewport, matching the reference mockup's wide dashboard —
-     nothing else on the page is affected (see .wrap above, unchanged). */
+     nothing else on the page is affected.
+     Previously this used the classic `width:100vw; left:50%;
+     margin-left:-50vw` breakout trick — but 100vw includes the vertical
+     scrollbar's own width while the page's actual visible area doesn't,
+     so on any page tall enough to scroll it rendered a few pixels wider
+     than the real viewport and sat visibly off-centre. Widening .wrap
+     itself instead (via the body.lobby-active class showScreen() already
+     toggles — see anagram-quest.js) needs no viewport units at all: .wrap
+     simply becomes 100% of the page's own (scrollbar-correct) width
+     while the lobby is showing, and #screen-lobby stretches to fill it. */
+  body.lobby-active .wrap { max-width: none; padding: 0; }
   #screen-lobby.screen {
-    width: 100vw;
-    position: relative;
-    left: 50%;
-    margin-left: -50vw;
-    padding: 14px 20px 30px;
+    align-self: stretch;
+    width: 100%;
+    padding: 18px 20px 30px;
   }
   .lobby-inner { max-width: 1440px; margin: 0 auto; position: relative; z-index: 1; }
 
@@ -594,7 +609,7 @@
   .rule-acc-body-inner li:last-child { margin-bottom: 0; }
 
   /* ---- bottom nav (functional, styled like the reference's decorative
-     bottom strip) + planet horizon ---- */
+     bottom strip) ---- */
   .lobby-bottom-nav {
     display: flex; align-items: center; justify-content: center; gap: 10px;
     margin-top: 18px; font-family: 'Saira', sans-serif; font-weight: 700;
@@ -606,20 +621,10 @@
   }
   .lobby-bottom-nav a:hover, .lobby-bottom-nav button:hover { color: var(--cyan); }
   .lobby-bottom-nav-sep { opacity: 0.4; }
-
-  .planet-horizon {
-    position: fixed; left: 50%; bottom: -970px; transform: translateX(-50%);
-    width: 2400px; height: 1100px; border-radius: 50%;
-    background: radial-gradient(circle at 50% 0%, #1e4172 0%, #123058 30%, #071630 62%, #05070f 82%);
-    box-shadow: 0 -4px 26px 4px rgba(110,200,255,0.55), 0 -2px 90px rgba(70,160,255,0.35);
-    z-index: 0; pointer-events: none;
-  }
-  .planet-horizon::before {
-    content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: 420px; height: 200px; border-radius: 50%;
-    background: radial-gradient(ellipse at 50% 100%, rgba(255,224,160,1) 0%, rgba(255,190,100,0.55) 45%, transparent 74%);
-    filter: blur(2px);
-  }
+  /* The planet/horizon graphic that used to sit fixed at the bottom of the
+     page (and its warm glow) has been removed entirely — the shared
+     #site-starfield canvas (see the homepage's assets/js/starfield.js)
+     is the only background now, and it already covers the full page. */
 
   /* ---- responsive: center content first, then stats, then rules ---- */
   @media (max-width: 980px) {
@@ -877,8 +882,8 @@
   }
 </style>
 </head>
-<body>
-<canvas id="starfield"></canvas>
+<body class="lobby-active">
+<canvas id="site-starfield"></canvas>
 
 <div class="topbar">
   <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
@@ -891,14 +896,15 @@
   <!-- Full dashboard rehaul (see docs brief: Anagram_Quest_Lobby_Rehaul_
        Brief.docx) — a three-column premium sci-fi hub: Difficulty Stats
        (left) / Player + Intelligence + Start Game (center) / collapsible
-       Rules (right), a planet-horizon + orbital-arc atmosphere, and NO
-       player avatar anywhere on this screen (deliberately removed — see
+       Rules (right), an orbital-arc behind the title, and NO player
+       avatar anywhere on this screen (deliberately removed — see
        anagram-quest.js, loadPlayerAvatar/qzAvatar no longer exist). This
-       section alone breaks out of .wrap's 900px max-width (see
-       #screen-lobby.screen in the CSS) — every other screen is untouched. -->
+       section alone breaks out of .wrap's normal 900px max-width — see
+       body.lobby-active/#screen-lobby.screen in the CSS — every other
+       screen is untouched. The bottom planet/horizon graphic that used
+       to sit here has been removed entirely; the shared starfield is
+       the only background now. -->
   <section id="screen-lobby" class="screen">
-    <div class="planet-horizon" aria-hidden="true"></div>
-
     <div class="lobby-inner">
       <div class="lobby-hero">
         <div class="lobby-hero-left">
@@ -1306,7 +1312,7 @@
 <script src="../../assets/js/qz-xp.js"></script>
 <script src="../../assets/js/skill-card.js"></script>
 <script src="../../assets/js/site.js"></script>
-<script src="../../assets/js/stars-plain.js"></script>
+<script src="../../assets/js/starfield.js"></script>
 <script src="anagram-data.js"></script>
 <script src="geo-data.js"></script>
 <script src="anagram-quest.js"></script>
