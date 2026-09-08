@@ -792,7 +792,11 @@
 
   /* ---- Difficulty select + intro/countdown ---- */
   .diff-options { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; margin: 6px auto 4px; }
-  .diff-options-art { max-width: 460px; }
+  /* Sized down from the art's natural ~460px so all three selection
+     buttons fit on screen without scrolling — the art itself is
+     untouched, this only shrinks the button (and therefore the image)
+     proportionally via aspect-ratio, exactly like resizing an <img>. */
+  .diff-options-art { max-width: 270px; gap: 8px; }
 
   /* Difficulty-SELECT screen buttons — the same real easy/medium/hard.png
      art + crop geometry as the lobby's .diff-card-art cards, reused as-is.
@@ -810,7 +814,7 @@
   .diff-select-btn:hover { transform: scale(1.01); }
   .diff-select-btn:active { transform: scale(0.995); }
   .diff-select-btn:focus-visible { outline: 2px solid #6fe3ff; outline-offset: 4px; }
-  .diff-select-btn .diff-card-stat-value { font-size: clamp(17px, 3vw, 24px); }
+  .diff-select-btn .diff-card-stat-value { font-size: clamp(13px, 2vw, 16px); }
 
   /* Locked (Intelligence level requirement not met) — the asset itself is
      never modified. A CSS filter dims/desaturates the <img> (a
@@ -1127,7 +1131,7 @@
           </div>
         </button>
       </div>
-      <button class="btn btn-dark" id="btn-diff-back" style="max-width:220px;margin:18px auto 0;display:block;">&#8592; BACK</button>
+      <button class="btn btn-dark" id="btn-diff-back" style="max-width:220px;margin:12px auto 0;display:block;">&#8592; BACK</button>
     </div>
   </section>
 
