@@ -274,6 +274,11 @@
     // visible screen — updateFooterStats() also runs on every in-round
     // transition, and there's no point re-querying game_progress then.
     if (!screens.LOBBY.classList.contains('hidden')) { mountIntelligenceCard(); renderDifficultyStats(); }
+    // Difficulty-SELECT screen's own Best Score/9-Letter Words values —
+    // cheap textContent writes on always-present elements, so (unlike the
+    // two calls above) there's no reason to gate this on which screen is
+    // showing; it just stays in sync for whenever the player gets there.
+    renderDifficultySelectStats();
   }
 
   // ---- lobby: per-difficulty high score + 9-letter-word count — THIS
@@ -320,6 +325,27 @@
         '</div>' +
       '</div>';
     }).join('');
+  }
+
+  // Difficulty-SELECT screen's Best Score/9-Letter Words values (see
+  // #screen-difficulty in index.html) — same data as the lobby's cards
+  // above (state.difficultyStats), just written into the static
+  // #diffsel-<difficulty>-score/-nine elements already sitting inside
+  // those buttons, rather than rebuilding the buttons' innerHTML (which
+  // would risk detaching nothing here, since the click listeners are on
+  // the buttons themselves and not re-created, but there's no need to
+  // rebuild the DOM just to update two numbers). Guests / no stats yet
+  // fall back to 0, matching the static HTML's own default.
+  function renderDifficultySelectStats() {
+    const stats = state.difficultyStats || {};
+    ['EASY', 'MEDIUM', 'HARD'].forEach((key) => {
+      const cfg = DIFFICULTIES[key];
+      const s = stats[key] || { highScore: 0, nineCount: 0 };
+      const scoreEl = document.getElementById('diffsel-' + cfg.cssClass + '-score');
+      const nineEl = document.getElementById('diffsel-' + cfg.cssClass + '-nine');
+      if (scoreEl) scoreEl.textContent = s.highScore;
+      if (nineEl) nineEl.textContent = s.nineCount;
+    });
   }
 
   // Reads this account's own row (or nothing, for a brand new player who's

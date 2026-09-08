@@ -792,39 +792,46 @@
 
   /* ---- Difficulty select + intro/countdown ---- */
   .diff-options { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; margin: 6px auto 4px; }
-  .diff-btn {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    width: 100%; padding: 16px 18px; border-radius: 16px; border: 2px solid; cursor: pointer;
+  .diff-options-art { max-width: 460px; }
+
+  /* Difficulty-SELECT screen buttons — the same real easy/medium/hard.png
+     art + crop geometry as the lobby's .diff-card-art cards, reused as-is.
+     This modifier only adds what differs about being an actual clickable
+     selection button: native <button> chrome reset, a very small hover
+     pop (the lobby's cards stay physically static; this is a real button
+     so it gets deliberately restrained feedback instead — nothing like
+     the Start Game button's pop), and the locked/disabled treatment. */
+  .diff-select-btn {
+    -webkit-appearance: none; appearance: none;
+    background: none; border: none; padding: 0; font: inherit; color: inherit;
+    margin-bottom: 0; cursor: pointer;
+    transition: transform 0.15s ease;
   }
-  .diff-btn .diff-name { font-family: 'Saira', sans-serif; font-weight: 900; font-size: 22px; letter-spacing: 0.04em; }
-  .diff-btn .diff-meta { font-family: 'Saira', sans-serif; font-weight: 600; font-size: 12px; opacity: 0.85; }
-  .diff-btn.easy { background: linear-gradient(180deg,#8dffb0,#2fce6c); border-color: #c9ffdb; color: #04220f; box-shadow: 0 0 16px rgba(60,220,120,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
-  .diff-btn.medium { background: linear-gradient(180deg,#ffe38a,#ffc233); border-color: #ffe9a8; color: #3a2200; box-shadow: 0 0 16px rgba(255,190,60,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
-  .diff-btn.hard { background: linear-gradient(180deg,#ff9a9a,#e0303a); border-color: #ffc4c4; color: #2a0505; box-shadow: 0 0 16px rgba(255,60,70,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
-  .diff-btn:hover { transform: translateY(-2px); }
-  /* ---- locked difficulty (Intelligence level requirement not yet met) ----
-     Greyed out and inert -- overrides the coloured .easy/.medium/.hard
-     background above with a flat, desaturated fill so it visibly reads as
-     "not available yet" rather than just a disabled version of the same
-     bright colour. The requirement itself shows in .diff-lock-note instead
-     of the usual timer/XP meta line. */
-  .diff-btn.locked {
-    background: linear-gradient(180deg,#3a4258,#242a3c);
-    border-color: rgba(140,160,190,0.3);
-    color: #8a93ab;
-    box-shadow: none;
-    cursor: not-allowed;
-  }
-  .diff-btn.locked:hover { transform: none; }
-  .diff-btn.locked .diff-meta { display: none; }
-  .diff-lock-note {
+  .diff-select-btn:hover { transform: scale(1.01); }
+  .diff-select-btn:active { transform: scale(0.995); }
+  .diff-select-btn:focus-visible { outline: 2px solid #6fe3ff; outline-offset: 4px; }
+  .diff-select-btn .diff-card-stat-value { font-size: clamp(17px, 3vw, 24px); }
+
+  /* Locked (Intelligence level requirement not met) — the asset itself is
+     never modified. A CSS filter dims/desaturates the <img> (a
+     non-destructive overlay effect, same principle as the shimmer/value
+     layers already used on this same asset) and a semi-transparent scrim
+     + message sits above it in place of the score values. */
+  .diff-select-btn.locked { cursor: not-allowed; }
+  .diff-select-btn.locked:hover { transform: none; }
+  .diff-select-btn.locked .diff-card-img { filter: grayscale(0.9) brightness(0.5); }
+  .diff-select-btn.locked .diff-card-shimmer,
+  .diff-select-btn.locked .diff-card-values-zone { display: none; }
+  .diff-select-lock {
     display: none;
-    align-items: center; gap: 6px;
+    position: absolute; inset: 0; z-index: 4;
+    flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    background: rgba(6,10,20,0.55);
     font-family: 'Saira', sans-serif; font-weight: 700; font-size: 12px;
-    color: #8a93ab; letter-spacing: 0.02em;
+    color: #c7d0e0; letter-spacing: 0.02em; text-align: center; padding: 0 10%;
   }
-  .diff-btn.locked .diff-lock-note { display: flex; }
-  .diff-lock-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .diff-select-btn.locked .diff-select-lock { display: flex; }
+  .diff-select-lock svg { width: 20px; height: 20px; opacity: 0.85; flex-shrink: 0; }
 
   /* small pill badge showing the active difficulty — reused on Select/Active/Result/GameOver headers */
   .diff-chip { display: table; margin: 0 auto 10px; padding: 3px 14px; border-radius: 999px; font-family: 'Saira', sans-serif; font-weight: 900; font-size: 11px; letter-spacing: 0.05em; }
@@ -1072,26 +1079,52 @@
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="gold-heading">CHOOSE YOUR DIFFICULTY</div>
       <div class="subtitle">Less time, more Intelligence XP per point.</div>
-      <div class="diff-options">
-        <button class="btn diff-btn easy" id="btn-diff-easy">
-          <span class="diff-name">EASY</span>
-          <span class="diff-meta">30s rounds &middot; 30s Round 5 &middot; 20 XP / point</span>
+      <!-- Same real easy/medium/hard.png art + crop geometry as the lobby's
+           difficulty-stats cards (.diff-card-art — see its CSS comment) is
+           reused here as-is, so both screens show the identical asset.
+           EASY/MEDIUM/HARD and the Best Score/9-Letter Words labels are
+           baked into the art; only the two yellow values are live. The
+           .diff-select-btn modifier adds what's different about this being
+           an actual clickable selection button rather than the lobby's
+           read-only display — see its CSS comment. -->
+      <div class="diff-options diff-options-art">
+        <button class="diff-card-art diff-select-btn easy" id="btn-diff-easy" type="button" aria-label="Play Easy difficulty">
+          <img class="diff-card-img" src="../../assets/img/anagram-quest/easy.png" alt="Easy difficulty">
+          <div class="diff-card-shimmer"></div>
+          <div class="diff-card-overlay">
+            <div class="diff-card-values-zone">
+              <div class="diff-card-stat-value left" id="diffsel-easy-score">0</div>
+              <div class="diff-card-stat-value right" id="diffsel-easy-nine">0</div>
+            </div>
+          </div>
         </button>
-        <button class="btn diff-btn medium" id="btn-diff-medium">
-          <span class="diff-name">MEDIUM</span>
-          <span class="diff-meta">20s rounds &middot; 30s Round 5 &middot; 60 XP / point</span>
-          <span class="diff-lock-note">
+        <button class="diff-card-art diff-select-btn medium" id="btn-diff-medium" type="button" aria-label="Play Medium difficulty">
+          <img class="diff-card-img" src="../../assets/img/anagram-quest/medium.png" alt="Medium difficulty">
+          <div class="diff-card-shimmer"></div>
+          <div class="diff-card-overlay">
+            <div class="diff-card-values-zone">
+              <div class="diff-card-stat-value left" id="diffsel-medium-score">0</div>
+              <div class="diff-card-stat-value right" id="diffsel-medium-nine">0</div>
+            </div>
+          </div>
+          <div class="diff-select-lock">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.5,10 V7.5 A5.5,5.5 0 0 1 17.5,7.5 V10 H18.5 A1.5,1.5 0 0 1 20,11.5 V19.5 A1.5,1.5 0 0 1 18.5,21 H5.5 A1.5,1.5 0 0 1 4,19.5 V11.5 A1.5,1.5 0 0 1 5.5,10 Z M8.5,10 H15.5 V7.5 A3.5,3.5 0 0 0 8.5,7.5 Z"/></svg>
-            Unlocks at Intelligence Level 5
-          </span>
+            <span>Unlocks at Intelligence Level 5</span>
+          </div>
         </button>
-        <button class="btn diff-btn hard" id="btn-diff-hard">
-          <span class="diff-name">HARD</span>
-          <span class="diff-meta">10s rounds &middot; 20s Round 5 &middot; 180 XP / point</span>
-          <span class="diff-lock-note">
+        <button class="diff-card-art diff-select-btn hard" id="btn-diff-hard" type="button" aria-label="Play Hard difficulty">
+          <img class="diff-card-img" src="../../assets/img/anagram-quest/hard.png" alt="Hard difficulty">
+          <div class="diff-card-shimmer"></div>
+          <div class="diff-card-overlay">
+            <div class="diff-card-values-zone">
+              <div class="diff-card-stat-value left" id="diffsel-hard-score">0</div>
+              <div class="diff-card-stat-value right" id="diffsel-hard-nine">0</div>
+            </div>
+          </div>
+          <div class="diff-select-lock">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.5,10 V7.5 A5.5,5.5 0 0 1 17.5,7.5 V10 H18.5 A1.5,1.5 0 0 1 20,11.5 V19.5 A1.5,1.5 0 0 1 18.5,21 H5.5 A1.5,1.5 0 0 1 4,19.5 V11.5 A1.5,1.5 0 0 1 5.5,10 Z M8.5,10 H15.5 V7.5 A3.5,3.5 0 0 0 8.5,7.5 Z"/></svg>
-            Unlocks at Intelligence Level 40
-          </span>
+            <span>Unlocks at Intelligence Level 40</span>
+          </div>
         </button>
       </div>
       <button class="btn btn-dark" id="btn-diff-back" style="max-width:220px;margin:18px auto 0;display:block;">&#8592; BACK</button>
