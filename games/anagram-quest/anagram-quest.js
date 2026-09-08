@@ -282,13 +282,18 @@
   // state.difficultyStats currently holds; loadDifficultyStats() (account
   // load) and finishGame() (right after a completed game) are the only
   // two places that ever set it. ----
-  // Small inline icon per difficulty — leaf/hexagon/mountain, matching the
-  // lobby rehaul brief's card art direction. Purely decorative; colour
-  // comes from the .diff-card.<cssClass> CSS, not from these strings.
-  const DIFF_CARD_ICON = {
-    easy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c8 0 14-6 14-16C8 4 4 12 4 20z"/><path d="M5 19C10 14 13 10 17 5"/></svg>',
-    medium: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4.5v11L12 22l-8-4.5v-11z"/></svg>',
-    hard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-11 4 6 2-3 6 8z"/></svg>'
+  // Card art per difficulty — the real easy.png/medium.png/hard.png HUD
+  // panel assets (assets/img/anagram-quest/), used exactly as supplied
+  // (never redrawn/recoloured — see .claude/rules/asset-integrity.md).
+  // Cropped via the .diff-card-art.<cssClass> --art-w/h/x/y CSS custom
+  // properties (same technique as the Start Game button); only live HTML
+  // text is layered on top, positioned to match each panel's own two
+  // built-in bands (name band on top, stats band — split by the panel's
+  // centre divider — on the bottom).
+  const DIFF_CARD_ART = {
+    easy: '../../assets/img/anagram-quest/easy.png',
+    medium: '../../assets/img/anagram-quest/medium.png',
+    hard: '../../assets/img/anagram-quest/hard.png'
   };
   function renderDifficultyStats() {
     const el = document.getElementById('lobby-diffstats-rows');
@@ -301,15 +306,21 @@
     el.innerHTML = ['EASY', 'MEDIUM', 'HARD'].map((key) => {
       const cfg = DIFFICULTIES[key];
       const s = stats[key] || { highScore: 0, nineCount: 0 };
-      return '<div class="diff-card ' + cfg.cssClass + '">' +
-        '<div class="diff-card-head">' +
-          '<span class="diff-card-icon">' + DIFF_CARD_ICON[cfg.cssClass] + '</span>' +
-          '<span class="diff-card-name">' + cfg.label + '</span>' +
-          '<svg class="diff-card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>' +
-        '</div>' +
-        '<div class="diff-card-body">' +
-          '<div class="diff-card-stat"><span>Best Score</span><b>' + s.highScore + '</b></div>' +
-          '<div class="diff-card-stat"><span>9-Letter Words</span><b>' + s.nineCount + '</b></div>' +
+      return '<div class="diff-card-art ' + cfg.cssClass + '">' +
+        '<img class="diff-card-img" src="' + DIFF_CARD_ART[cfg.cssClass] + '" alt="">' +
+        '<div class="diff-card-shimmer"></div>' +
+        '<div class="diff-card-overlay">' +
+          '<div class="diff-card-title-zone"><span class="diff-card-name">' + cfg.label + '</span></div>' +
+          '<div class="diff-card-stats-zone">' +
+            '<div class="diff-card-stat diff-card-stat-left">' +
+              '<div class="diff-card-stat-label">Best Score</div>' +
+              '<div class="diff-card-stat-value">' + s.highScore + '</div>' +
+            '</div>' +
+            '<div class="diff-card-stat diff-card-stat-right">' +
+              '<div class="diff-card-stat-label">9-Letter Words</div>' +
+              '<div class="diff-card-stat-value">' + s.nineCount + '</div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>';
     }).join('');

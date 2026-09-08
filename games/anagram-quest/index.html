@@ -232,29 +232,157 @@
   .col-header svg { width: 17px; height: 17px; flex-shrink: 0; }
   .lobby-col-center .col-header { justify-content: center; }
 
-  /* ---- left: difficulty stat cards ---- */
-  .diff-card {
-    border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.12);
-    background: rgba(9,15,28,0.6); padding: 12px 14px; margin-bottom: 12px;
-    transition: box-shadow 0.18s ease, border-color 0.18s ease;
+  /* ---- left: difficulty stat cards ----
+     Built from the real Easy/Medium/Hard HUD-panel art assets
+     (assets/img/anagram-quest/{easy,medium,hard}.png) rather than a CSS
+     background — same "real asset, cropped via --art-w/h/x/y, live HTML
+     text layered on top" technique used for the Start Game button above.
+     Each source PNG has a transparent margin around the visible panel;
+     --art-w/--art-h/--art-x/--art-y crop that margin away exactly the
+     same way (percent-of-container math, NOT the same formula as
+     mask-position — see the Start Game button comment for why). The
+     panel art itself is never redrawn, recolored or distorted — only
+     cropped and overlaid with live text, per the asset-integrity rule. */
+  .diff-card-art {
+    position: relative; display: block; width: 100%;
+    aspect-ratio: var(--art-ratio);
+    overflow: hidden; border-radius: 10px; margin-bottom: 12px;
+    cursor: default;
+    /* No transform/movement on hover — these cards stay physically
+       static, unlike the Start Game button. No background either — the
+       PNG's own transparent corners must show the page behind them, not
+       a wrapper box. */
   }
-  .diff-card-head { display: flex; align-items: center; gap: 9px; }
-  .diff-card-icon { width: 19px; height: 19px; flex-shrink: 0; display: flex; }
-  .diff-card-icon svg { width: 100%; height: 100%; }
-  .diff-card-name { font-family: 'Saira', sans-serif; font-weight: 900; font-size: 14.5px; letter-spacing: 0.05em; flex: 1; }
-  .diff-card-chevron { width: 15px; height: 15px; opacity: 0.45; flex-shrink: 0; }
-  .diff-card-body { display: flex; gap: 22px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.07); }
-  .diff-card-stat span { display: block; font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 3px; }
-  .diff-card-stat b { font-family: 'Saira', sans-serif; font-weight: 900; font-size: 19px; color: var(--gold); }
-  .diff-card.easy { border-color: rgba(62,226,122,0.4); }
-  .diff-card.easy:hover { border-color: #3ee27a; box-shadow: 0 0 16px rgba(62,226,122,0.3); }
-  .diff-card.easy .diff-card-icon, .diff-card.easy .diff-card-name { color: #3ee27a; }
-  .diff-card.medium { border-color: rgba(255,207,77,0.4); }
-  .diff-card.medium:hover { border-color: #ffcf4d; box-shadow: 0 0 16px rgba(255,207,77,0.3); }
-  .diff-card.medium .diff-card-icon, .diff-card.medium .diff-card-name { color: #ffcf4d; }
-  .diff-card.hard { border-color: rgba(255,94,106,0.4); }
-  .diff-card.hard:hover { border-color: #ff5e6a; box-shadow: 0 0 16px rgba(255,94,106,0.3); }
-  .diff-card.hard .diff-card-icon, .diff-card.hard .diff-card-name { color: #ff5e6a; }
+  .diff-card-img {
+    position: absolute; left: var(--art-x); top: var(--art-y);
+    width: var(--art-w); height: var(--art-h); max-width: none;
+    display: block; pointer-events: none; user-select: none;
+  }
+  /* Per-card zone geometry — measured directly from each PNG's own alpha
+     channel (pixel-scanned, not eyeballed): where its inner glass panel
+     starts/ends, where the built-in divider between the title strip and
+     the stats strip actually sits, and — for the two cards with a
+     built-in icon — where that icon ends so the title doesn't run under
+     it. The three panels differ enough (Hard's divider sits noticeably
+     higher than Easy's, Easy/Medium reserve an icon column Hard doesn't)
+     that one shared offset visibly misaligns at least one of them; these
+     values are each card's own measured geometry, not a shared guess.
+     --title-left/right: horizontal bounds of the title strip.
+     --title-top/bottom: vertical bounds of the title strip.
+     --stats-top/bottom: vertical bounds of the stats strip.
+     --div-x: the panel's own centre-divider x position, used to split
+       the stats strip into a left (Best Score) and right (9-Letter
+       Words) half at the SAME place the artwork's own divider sits. */
+  .diff-card-art.easy {
+    --art-ratio: 1372/665; --art-w: 105.54%; --art-h: 163.31%; --art-x: -2.70%; --art-y: -33.23%;
+    --art-mask-x: 48.68%; --art-mask-y: 52.49%;
+    --art-url: url('../../assets/img/anagram-quest/easy.png');
+    --title-left: 26%; --title-right: 6%; --title-top: 3%; --title-bottom: 48%;
+    --stats-top: 53%; --stats-bottom: 11%; --div-x: 50.3%;
+  }
+  .diff-card-art.medium {
+    --art-ratio: 1395/747; --art-w: 103.80%; --art-h: 145.38%; --art-x: -1.79%; --art-y: -22.49%;
+    --art-mask-x: 47.17%; --art-mask-y: 49.56%;
+    --art-url: url('../../assets/img/anagram-quest/medium.png');
+    --title-left: 23%; --title-right: 6%; --title-top: 2%; --title-bottom: 60%;
+    --stats-top: 49%; --stats-bottom: 10%; --div-x: 45.7%;
+  }
+  .diff-card-art.hard {
+    --art-ratio: 1425/743; --art-w: 101.61%; --art-h: 146.16%; --art-x: -0.77%; --art-y: -20.32%;
+    --art-mask-x: 47.83%; --art-mask-y: 44.02%;
+    --art-url: url('../../assets/img/anagram-quest/hard.png');
+    --title-left: 6%; --title-right: 6%; --title-top: 3%; --title-bottom: 59%;
+    --stats-top: 44%; --stats-bottom: 8%; --div-x: 47.7%;
+  }
+
+  /* Hover shimmer — a thin diagonal light-sweep, masked to the panel's
+     own opaque pixels only (same --art-mask-x/y percentage-of-container
+     formula used by the Start Game button's shimmer, NOT the same
+     formula as --art-x/y — see that button's CSS comment for why they
+     differ) so it can never appear over the PNG's transparent corners,
+     plus overflow:hidden on the card above as a second line of defence.
+     The card itself never moves; only this layer's opacity/position
+     animates. */
+  .diff-card-shimmer {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background: linear-gradient(115deg,
+      transparent 32%, rgba(255,255,255,0.45) 47%,
+      rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.45) 53%, transparent 68%);
+    background-size: 300% 300%;
+    background-position: 160% 50%;
+    background-repeat: no-repeat;
+    mix-blend-mode: screen;
+    opacity: 0;
+    -webkit-mask-image: var(--art-url); mask-image: var(--art-url);
+    -webkit-mask-size: var(--art-w) var(--art-h); mask-size: var(--art-w) var(--art-h);
+    -webkit-mask-position: var(--art-mask-x) var(--art-mask-y); mask-position: var(--art-mask-x) var(--art-mask-y);
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    transition: opacity 0.2s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .diff-card-art:hover .diff-card-shimmer {
+      opacity: 1; background-position: -60% 50%;
+      transition: background-position 1.15s ease, opacity 0.2s ease;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .diff-card-art:hover .diff-card-shimmer { opacity: 0.55; }
+  }
+
+  /* live text overlay — two zones, each positioned from THIS card's own
+     measured --title-*/--stats-*/--div-x geometry above, not a shared
+     guess. Structure:
+       .diff-card-overlay
+         ├── .diff-card-title-zone   (spans the panel's title strip,
+         │      centred both ways in the space right of its icon)
+         └── .diff-card-stats-zone   (spans the panel's stats strip,
+                split at --div-x into a left/right half, each centring
+                its own label+value column) */
+  .diff-card-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+
+  .diff-card-title-zone {
+    position: absolute; top: var(--title-top); bottom: var(--title-bottom);
+    left: var(--title-left); right: var(--title-right);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .diff-card-name {
+    font-family: 'Saira', sans-serif; font-weight: 900; font-size: clamp(13px, 1.5vw, 18px);
+    letter-spacing: 0.06em; text-transform: uppercase; line-height: 1;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.55);
+  }
+  .diff-card-art.easy   .diff-card-name { color: #52ffa0; }
+  .diff-card-art.medium .diff-card-name { color: #ffd76a; }
+  .diff-card-art.hard   .diff-card-name { color: #ff7480; }
+
+  .diff-card-stats-zone {
+    position: absolute; top: var(--stats-top); bottom: var(--stats-bottom);
+    left: 0; right: 0; display: flex;
+  }
+  .diff-card-stat { position: relative; height: 100%; }
+  .diff-card-stat-left  { width: var(--div-x); }
+  .diff-card-stat-right { width: calc(100% - var(--div-x)); }
+
+  /* Label sits close under the divider, the value sits lower with
+     visible breathing room above it and before the panel's own bottom
+     border — matching the reference layout's rhythm — rather than the
+     label+value being centred as one compact block. Both rows are
+     positioned with top/bottom (percent-of-height, unlike margin/padding
+     which CSS always resolves against width) so this is reliable
+     regardless of each card's own stats-zone height. Same two
+     percentages on every card, so the label row and value row land at
+     matching relative heights across Easy/Medium/Hard. */
+  .diff-card-stat-label {
+    position: absolute; left: 0; right: 0; top: 6%; bottom: 60%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8.5px; letter-spacing: 0.07em; text-transform: uppercase;
+    color: #cfe8ff; text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+  }
+  .diff-card-stat-value {
+    position: absolute; left: 0; right: 0; top: 44%; bottom: 9%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Saira', sans-serif; font-weight: 900; font-size: 17px; line-height: 1;
+    color: #ffd76a; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  }
 
   .lobby-col-footer {
     text-align: center; font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim);
