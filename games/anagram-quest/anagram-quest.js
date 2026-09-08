@@ -306,11 +306,11 @@
   function renderDifficultyStats() {
     const el = document.getElementById('lobby-diffstats-rows');
     if (!el) return;
-    if (!state.profile) {
-      el.innerHTML = '<div class="diffstats-empty">Sign in to track your difficulty stats.</div>';
-      return;
-    }
-    const stats = state.difficultyStats || {};
+    // Always show the three real difficulty cards, even signed out —
+    // they're the permanent branding/layout for this part of the frame,
+    // not just a data display, so a guest sees them with 0/0 rather than
+    // the cards disappearing and leaving that side of the frame empty.
+    const stats = state.profile ? (state.difficultyStats || {}) : {};
     el.innerHTML = ['EASY', 'MEDIUM', 'HARD'].map((key) => {
       const cfg = DIFFICULTIES[key];
       const s = stats[key] || { highScore: 0, nineCount: 0 };
@@ -1219,7 +1219,11 @@
   // top-right icon row now (Anagram Quest's own scoped achievements page,
   // same folder — not the site-wide profile/achievements.html) — no JS
   // click handler needed, the href does it directly.
-  // #btn-leaderboards uses data-coming-soon (see site.js) — no listener needed here.
+  // #btn-leaderboards is now a plain <a href="../../highscores.html?skill=intelligence">
+  // — the site-wide highscores page's own deep-link support (see
+  // getRequestedSkillId()/init() in highscores.html) picks that query
+  // param up and lands straight on the Intelligence leaderboard. No JS
+  // click handler needed here either.
 
   // ---- Rules accordion (lobby only) — one category open at a time,
   // native <button>s so it's keyboard-operable for free, aria-expanded
