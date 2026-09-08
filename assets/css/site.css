@@ -1055,6 +1055,19 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   pointer-events: none;
 }
 
+/* .thumb-contain: for a logo/wordmark asset (Anagram Quest) rather than a
+   full-bleed screenshot — shown whole and centered, with generous
+   breathing room, against the card's own dark background instead of
+   being cropped to fill the tile. No fade/title overlay needed since the
+   logo already carries its own name. */
+.game-card.thumb-contain .card-thumb {
+  inset: 22px;
+  width: calc(100% - 44px);
+  height: calc(100% - 44px);
+  object-fit: contain;
+  object-position: 50% 50%;
+}
+
 .game-card .card-title {
   position: absolute;
   left: 14px; right: 14px; bottom: 14px;

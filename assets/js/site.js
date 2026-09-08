@@ -49,18 +49,24 @@
 
   function makeGameCard(opts) {
     const a = document.createElement('a');
-    a.className = 'game-card' + (opts.image ? ' has-thumb' : '');
+    a.className = 'game-card' + (opts.image ? ' has-thumb' : '') + (opts.thumbContain ? ' thumb-contain' : '');
     a.href = opts.route || '#';
     a.setAttribute('aria-label', opts.title);
 
     if (opts.image) {
       // real, live game — full-bleed artwork + metallic title overlay,
-      // no placeholder icon/label/number.
+      // no placeholder icon/label/number. opts.thumbContain (Anagram
+      // Quest's own logo, which already carries its name as artwork) is
+      // shown whole/centered instead of full-bleed-cropped, and skips the
+      // redundant plain-text title underneath it — see .thumb-contain in
+      // site.css.
       a.innerHTML =
         '<span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>' +
-        '<img class="card-thumb" src="' + opts.image + '" alt="" loading="lazy">' +
-        '<span class="card-thumb-fade"></span>' +
-        '<span class="card-title">' + opts.title + '</span>';
+        '<img class="card-thumb" src="' + opts.image + '" alt="' + (opts.thumbContain ? opts.title : '') + '" loading="lazy">' +
+        (opts.thumbContain ? '' :
+          '<span class="card-thumb-fade"></span>' +
+          '<span class="card-title">' + opts.title + '</span>'
+        );
     } else {
       a.innerHTML =
         '<span class="corner-brackets sm"><i></i><i></i><i></i><i></i></span>' +
@@ -101,7 +107,12 @@
       id: 'anagram-quest',
       number: '01',
       title: 'Anagram Quest',
-      image: 'assets/img/anagram-quest-thumb.svg',
+      // the real Anagram Quest logo (assets/img/anagram-quest/logo.png,
+      // same exact asset used throughout the game itself) shown whole
+      // and centered — see thumbContain below — rather than the old
+      // placeholder "AQ letter tile" scene cropped full-bleed.
+      image: 'assets/img/anagram-quest/logo.png',
+      thumbContain: true,
       route: 'games/anagram-quest/',
       status: 'active',
       category: 'total-level'
@@ -127,6 +138,7 @@
         label: (g.status === 'active' && !g.image) ? g.title : 'Total Level<br>Game',
         number: g.number,
         image: g.image,
+        thumbContain: g.thumbContain,
         active: g.status === 'active',
         comingSoon: 'This Total Level Game slot is coming soon!'
       }));

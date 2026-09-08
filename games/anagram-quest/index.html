@@ -62,19 +62,23 @@
     display: flex; flex-direction: column; align-items: center;
   }
 
+  /* Shared header logo — shown at the top of every screen except the
+     lobby (which has its own, bigger .hero-logo-wrap version of the same
+     asset; see body.lobby-active hiding this one below). Same real
+     logo.png, same non-destructive crop-for-layout technique (see
+     .hero-logo-wrap's comment), just smaller since this sits above a
+     normal single-column panel rather than the wide lobby dashboard. */
   .logo {
-    font-family: 'Saira', sans-serif; font-weight: 900;
-    font-size: clamp(28px, 6vw, 46px);
-    letter-spacing: 0.04em;
-    text-align: center;
-    padding: 10px 34px;
-    margin: 6px 0 18px;
-    border: 2px solid var(--cyan);
-    border-radius: 999px;
-    background: radial-gradient(ellipse at 50% 30%, rgba(60,110,200,0.35), rgba(3,6,14,0.9));
-    box-shadow: 0 0 18px rgba(110,220,255,0.35), inset 0 0 24px rgba(70,150,255,0.25);
-    color: #eaf6ff;
-    text-shadow: 0 0 10px rgba(120,210,255,0.85), 0 0 22px rgba(80,160,255,0.5);
+    display: block;
+    width: min(300px, 62vw); max-width: 100%;
+    margin: 6px auto 18px;
+    position: relative;
+    aspect-ratio: 1251/339;
+    overflow: hidden;
+  }
+  .logo img {
+    position: absolute; left: -0.24%; top: -135.10%;
+    width: 100.24%; height: 369.91%; max-width: none; display: block;
   }
 
   .panel {
@@ -860,7 +864,6 @@
   .diff-chip.hard { background: rgba(224,48,58,0.16); color: #ff9a9a; border: 1px solid rgba(255,154,154,0.5); }
 
   .intro-panel { text-align: center; padding: clamp(30px,8vw,60px) 20px; }
-  .intro-title { font-family: 'Saira', sans-serif; font-weight: 900; color: var(--cyan); font-size: clamp(18px,4vw,26px); letter-spacing: 0.06em; }
   .intro-diff { font-family: 'Saira', sans-serif; font-weight: 900; font-size: clamp(28px,7vw,44px); margin: 10px 0 4px; }
   .intro-diff.easy { color: #7CFFA0; text-shadow: 0 0 18px rgba(124,255,160,0.6); }
   .intro-diff.medium { color: var(--gold); text-shadow: 0 0 18px rgba(255,207,77,0.6); }
@@ -901,7 +904,7 @@
 </div>
 
 <div class="wrap">
-  <div class="logo">ANAGRAM QUEST</div>
+  <div class="logo"><img src="../../assets/img/anagram-quest/logo.png" alt="Anagram Quest"></div>
 
   <!-- ============== LOBBY ============== -->
   <!-- Full dashboard rehaul (see docs brief: Anagram_Quest_Lobby_Rehaul_
@@ -1136,10 +1139,13 @@
   </section>
 
   <!-- ============== INTRO / COUNTDOWN ============== -->
+  <!-- The old "ANAGRAM QUEST" .intro-title text right above the
+       difficulty name was removed as redundant — the shared .logo image
+       above this panel (see .logo) is now the one and only Anagram Quest
+       logo on this screen. -->
   <section id="screen-intro" class="screen hidden">
     <div class="panel intro-panel">
       <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
-      <div class="intro-title">ANAGRAM QUEST</div>
       <div class="intro-diff" id="intro-diff-label">EASY</div>
       <div class="intro-status" id="intro-status">GAME STARTING</div>
       <div class="intro-countdown" id="intro-countdown">&nbsp;</div>
