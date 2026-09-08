@@ -259,40 +259,33 @@
     display: block; pointer-events: none; user-select: none;
   }
   /* Per-card zone geometry — measured directly from each PNG's own alpha
-     channel (pixel-scanned, not eyeballed): where its inner glass panel
-     starts/ends, where the built-in divider between the title strip and
-     the stats strip actually sits, and — for the two cards with a
-     built-in icon — where that icon ends so the title doesn't run under
-     it. The three panels differ enough (Hard's divider sits noticeably
-     higher than Easy's, Easy/Medium reserve an icon column Hard doesn't)
-     that one shared offset visibly misaligns at least one of them; these
-     values are each card's own measured geometry, not a shared guess.
-     --title-left/right: horizontal bounds of the title strip.
-     --title-top/bottom: vertical bounds of the title strip.
-     --stats-top/bottom: vertical bounds of the stats strip.
-     --div-x: the panel's own centre-divider x position, used to split
-       the stats strip into a left (Best Score) and right (9-Letter
-       Words) half at the SAME place the artwork's own divider sits. */
+     channel and text pixels (pixel-scanned, not eyeballed). These assets
+     now have EASY/MEDIUM/HARD and the BEST SCORE / 9-LETTER WORDS labels
+     baked into the artwork itself, so the only live text left is the two
+     yellow values — --value-top/bottom locate the empty space the
+     artwork leaves below its own baked "Best Score"/"9-Letter Words"
+     labels. --div-x is the panel's own built-in centre-divider x
+     position, used to split that space into a left/right half at the
+     same place the artwork's own divider sits. The three panels differ
+     slightly (Hard's baked label sits higher than Easy's), so these are
+     each card's own measured values, not a shared guess. */
   .diff-card-art.easy {
-    --art-ratio: 1372/665; --art-w: 105.54%; --art-h: 163.31%; --art-x: -2.70%; --art-y: -33.23%;
-    --art-mask-x: 48.68%; --art-mask-y: 52.49%;
+    --art-ratio: 1375/667; --art-w: 105.31%; --art-h: 162.82%; --art-x: -2.62%; --art-y: -32.83%;
+    --art-mask-x: 49.32%; --art-mask-y: 52.27%;
     --art-url: url('../../assets/img/anagram-quest/easy.png');
-    --title-left: 26%; --title-right: 6%; --title-top: 3%; --title-bottom: 48%;
-    --stats-top: 53%; --stats-bottom: 11%; --div-x: 50.3%;
+    --value-top: 65%; --value-bottom: 13%; --div-x: 50.3%;
   }
   .diff-card-art.medium {
-    --art-ratio: 1395/747; --art-w: 103.80%; --art-h: 145.38%; --art-x: -1.79%; --art-y: -22.49%;
-    --art-mask-x: 47.17%; --art-mask-y: 49.56%;
+    --art-ratio: 1402/759; --art-w: 103.28%; --art-h: 143.08%; --art-x: -1.64%; --art-y: -21.34%;
+    --art-mask-x: 50.00%; --art-mask-y: 49.54%;
     --art-url: url('../../assets/img/anagram-quest/medium.png');
-    --title-left: 23%; --title-right: 6%; --title-top: 2%; --title-bottom: 60%;
-    --stats-top: 49%; --stats-bottom: 10%; --div-x: 45.7%;
+    --value-top: 62%; --value-bottom: 10%; --div-x: 45.6%;
   }
   .diff-card-art.hard {
-    --art-ratio: 1425/743; --art-w: 101.61%; --art-h: 146.16%; --art-x: -0.77%; --art-y: -20.32%;
-    --art-mask-x: 47.83%; --art-mask-y: 44.02%;
+    --art-ratio: 1427/750; --art-w: 101.47%; --art-h: 144.80%; --art-x: -0.70%; --art-y: -19.60%;
+    --art-mask-x: 47.62%; --art-mask-y: 43.75%;
     --art-url: url('../../assets/img/anagram-quest/hard.png');
-    --title-left: 6%; --title-right: 6%; --title-top: 3%; --title-bottom: 59%;
-    --stats-top: 44%; --stats-bottom: 8%; --div-x: 47.7%;
+    --value-top: 60%; --value-bottom: 10%; --div-x: 47.7%;
   }
 
   /* Hover shimmer — a thin diagonal light-sweep, masked to the panel's
@@ -329,60 +322,25 @@
     .diff-card-art:hover .diff-card-shimmer { opacity: 0.55; }
   }
 
-  /* live text overlay — two zones, each positioned from THIS card's own
-     measured --title-*/--stats-*/--div-x geometry above, not a shared
-     guess. Structure:
-       .diff-card-overlay
-         ├── .diff-card-title-zone   (spans the panel's title strip,
-         │      centred both ways in the space right of its icon)
-         └── .diff-card-stats-zone   (spans the panel's stats strip,
-                split at --div-x into a left/right half, each centring
-                its own label+value column) */
+  /* live text overlay — the EASY/MEDIUM/HARD title and the "BEST SCORE"/
+     "9-LETTER WORDS" labels are now baked into the artwork itself, so the
+     only live elements left are the two yellow values. Each sits in the
+     empty space the art leaves below its own baked label (--value-top/
+     bottom, measured per card above), split left/right at the panel's
+     own --div-x so the value lands directly under its own label. */
   .diff-card-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 
-  .diff-card-title-zone {
-    position: absolute; top: var(--title-top); bottom: var(--title-bottom);
-    left: var(--title-left); right: var(--title-right);
-    display: flex; align-items: center; justify-content: center;
-  }
-  .diff-card-name {
-    font-family: 'Saira', sans-serif; font-weight: 900; font-size: clamp(13px, 1.5vw, 18px);
-    letter-spacing: 0.06em; text-transform: uppercase; line-height: 1;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.55);
-  }
-  .diff-card-art.easy   .diff-card-name { color: #52ffa0; }
-  .diff-card-art.medium .diff-card-name { color: #ffd76a; }
-  .diff-card-art.hard   .diff-card-name { color: #ff7480; }
-
-  .diff-card-stats-zone {
-    position: absolute; top: var(--stats-top); bottom: var(--stats-bottom);
+  .diff-card-values-zone {
+    position: absolute; top: var(--value-top); bottom: var(--value-bottom);
     left: 0; right: 0; display: flex;
   }
-  .diff-card-stat { position: relative; height: 100%; }
-  .diff-card-stat-left  { width: var(--div-x); }
-  .diff-card-stat-right { width: calc(100% - var(--div-x)); }
-
-  /* Label sits close under the divider, the value sits lower with
-     visible breathing room above it and before the panel's own bottom
-     border — matching the reference layout's rhythm — rather than the
-     label+value being centred as one compact block. Both rows are
-     positioned with top/bottom (percent-of-height, unlike margin/padding
-     which CSS always resolves against width) so this is reliable
-     regardless of each card's own stats-zone height. Same two
-     percentages on every card, so the label row and value row land at
-     matching relative heights across Easy/Medium/Hard. */
-  .diff-card-stat-label {
-    position: absolute; left: 0; right: 0; top: 6%; bottom: 60%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 8.5px; letter-spacing: 0.07em; text-transform: uppercase;
-    color: #cfe8ff; text-shadow: 0 1px 3px rgba(0,0,0,0.95);
-  }
   .diff-card-stat-value {
-    position: absolute; left: 0; right: 0; top: 44%; bottom: 9%;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Saira', sans-serif; font-weight: 900; font-size: 17px; line-height: 1;
     color: #ffd76a; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
   }
+  .diff-card-stat-value.left  { width: var(--div-x); }
+  .diff-card-stat-value.right { width: calc(100% - var(--div-x)); }
 
   .lobby-col-footer {
     text-align: center; font-size: 10px; letter-spacing: 0.1em; color: var(--text-dim);

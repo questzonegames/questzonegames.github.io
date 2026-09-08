@@ -285,11 +285,14 @@
   // Card art per difficulty — the real easy.png/medium.png/hard.png HUD
   // panel assets (assets/img/anagram-quest/), used exactly as supplied
   // (never redrawn/recoloured — see .claude/rules/asset-integrity.md).
-  // Cropped via the .diff-card-art.<cssClass> --art-w/h/x/y CSS custom
-  // properties (same technique as the Start Game button); only live HTML
-  // text is layered on top, positioned to match each panel's own two
-  // built-in bands (name band on top, stats band — split by the panel's
-  // centre divider — on the bottom).
+  // These assets have the EASY/MEDIUM/HARD title and the "Best Score"/
+  // "9-Letter Words" labels baked into the artwork itself, so the only
+  // live text left is the two yellow values — no name/label markup is
+  // duplicated on top of what the art already shows. Cropped via the
+  // .diff-card-art.<cssClass> --art-w/h/x/y CSS custom properties (same
+  // technique as the Start Game button); the values are positioned via
+  // --value-top/bottom + --div-x to land directly under each panel's own
+  // baked label.
   const DIFF_CARD_ART = {
     easy: '../../assets/img/anagram-quest/easy.png',
     medium: '../../assets/img/anagram-quest/medium.png',
@@ -307,19 +310,12 @@
       const cfg = DIFFICULTIES[key];
       const s = stats[key] || { highScore: 0, nineCount: 0 };
       return '<div class="diff-card-art ' + cfg.cssClass + '">' +
-        '<img class="diff-card-img" src="' + DIFF_CARD_ART[cfg.cssClass] + '" alt="">' +
+        '<img class="diff-card-img" src="' + DIFF_CARD_ART[cfg.cssClass] + '" alt="' + cfg.label + ' difficulty">' +
         '<div class="diff-card-shimmer"></div>' +
         '<div class="diff-card-overlay">' +
-          '<div class="diff-card-title-zone"><span class="diff-card-name">' + cfg.label + '</span></div>' +
-          '<div class="diff-card-stats-zone">' +
-            '<div class="diff-card-stat diff-card-stat-left">' +
-              '<div class="diff-card-stat-label">Best Score</div>' +
-              '<div class="diff-card-stat-value">' + s.highScore + '</div>' +
-            '</div>' +
-            '<div class="diff-card-stat diff-card-stat-right">' +
-              '<div class="diff-card-stat-label">9-Letter Words</div>' +
-              '<div class="diff-card-stat-value">' + s.nineCount + '</div>' +
-            '</div>' +
+          '<div class="diff-card-values-zone">' +
+            '<div class="diff-card-stat-value left">' + s.highScore + '</div>' +
+            '<div class="diff-card-stat-value right">' + s.nineCount + '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
