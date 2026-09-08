@@ -94,7 +94,7 @@
   const DIFFICULTIES = {
     EASY: { key: 'EASY', label: 'EASY', normalRoundSeconds: 30, round5Seconds: 30, xpPerPoint: 20, cssClass: 'easy', unlockLevel: 1 },
     MEDIUM: { key: 'MEDIUM', label: 'MEDIUM', normalRoundSeconds: 20, round5Seconds: 30, xpPerPoint: 60, cssClass: 'medium', unlockLevel: 5 },
-    HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard', unlockLevel: 20 }
+    HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard', unlockLevel: 40 }
   };
 
   // ---- sound hooks (no audio assets shipped yet — safe no-ops until a
