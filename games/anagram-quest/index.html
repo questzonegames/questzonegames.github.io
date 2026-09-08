@@ -432,12 +432,11 @@
 
   .intel-widget-slot { margin-bottom: 10px; text-align: left; }
 
-  /* ---- Start Game button — built from the real "Start Bar" art asset
-     (assets/img/anagram-quest/start-bar.png) rather than a CSS background.
-     The source PNG's own canvas (2172x724) carries a large transparent
-     margin above/below the actual bar art (the real bar only occupies
-     roughly the middle 61% of the canvas height) — sizing the button to
-     the full canvas left a big invisible hoverable/glowing rectangle
+  /* ---- Start Game button — built from the real "Start Bar Gold" art
+     asset (assets/img/anagram-quest/start-bar-gold.png) rather than a CSS
+     background. The source PNG's own canvas (2172x724) carries a
+     transparent margin above/below the actual bar art — sizing the button
+     to the full canvas left a big invisible hoverable/glowing rectangle
      around the visible art. Fixed here by cropping to the art's real
      pixel bounds: --art-w/--art-h/--art-x/--art-y size and position the
      SAME full image (as both the visible <img> and every effect layer's
@@ -450,7 +449,7 @@
     width: 100%;
     max-width: 300px;
     margin: 0 auto;
-    aspect-ratio: 2152 / 445;
+    aspect-ratio: 2156 / 575;
     border: none;
     background: none;
     padding: 0;
@@ -464,11 +463,17 @@
        it — nothing to reconcile there. */
     overflow: hidden;
     transition: transform 0.12s ease;
-    --art-url: url('../../assets/img/anagram-quest/start-bar.png');
-    --art-w: 100.93%;
-    --art-h: 162.7%;
-    --art-x: -0.42%;
-    --art-y: -28.99%;
+    /* "start bar gold" — the gold/fire-themed replacement for the original
+       blue glass bar, matching the rest of the site's gold reskin. Same
+       2172x724 canvas as the old asset but a DIFFERENT real transparent
+       margin (measured fresh from this file's own alpha channel, not
+       reused from the old one — the two crop/mask numbers below are not
+       interchangeable between assets). */
+    --art-url: url('../../assets/img/anagram-quest/start-bar-gold.png');
+    --art-w: 100.74%;
+    --art-h: 125.91%;
+    --art-x: -0.37%;
+    --art-y: -8.70%;
     /* mask-position/background-position use a DIFFERENT percentage formula
        than top/left: offset = (container - image) * (pct/100), not a
        direct percentage of the container. --art-x/--art-y above are
@@ -477,8 +482,8 @@
        formula, so the mask lines up with the actual image instead of
        landing tens of percent off (which is what put nebula/frame pixels
        in the wrong corners and cut the shimmer off asymmetrically before). */
-    --art-mask-x: 45.01%;
-    --art-mask-y: 46.24%;
+    --art-mask-x: 50.00%;
+    --art-mask-y: 33.56%;
   }
   /* Every effect layer shares this base: identical position/size to the
      frame <img>, and — crucially — the SAME alpha mask as the frame
@@ -535,16 +540,19 @@
      real image, not guessed) — tight and saturated so each reads as a
      distinct gentle pulse of light rather than one big generic glow wash.
      Screen-blended and stacked ABOVE the frame so it reads as light
-     adding onto the frame's own printed accents, not covering them. */
+     adding onto the frame's own printed accents, not covering them.
+     Recoloured warm gold/fire (was icy blue) to match the new gold bar —
+     same anchor positions, since this asset is the same frame template
+     family as the old bar, just re-themed. */
   .hero-start-energy {
     z-index: 3;
     mix-blend-mode: screen;
     opacity: 0.65;
     background:
-      radial-gradient(ellipse 3.5% 20% at 1.2% 50%,  rgba(130,225,255,1), transparent 68%),
-      radial-gradient(ellipse 3.5% 20% at 98.8% 50%, rgba(130,225,255,1), transparent 68%),
-      radial-gradient(ellipse 15% 5% at 50% 5.3%,    rgba(150,230,255,1), transparent 68%),
-      radial-gradient(ellipse 15% 5% at 50% 89%,     rgba(150,230,255,1), transparent 68%);
+      radial-gradient(ellipse 3.5% 20% at 1.2% 50%,  rgba(255,190,90,1), transparent 68%),
+      radial-gradient(ellipse 3.5% 20% at 98.8% 50%, rgba(255,190,90,1), transparent 68%),
+      radial-gradient(ellipse 15% 5% at 50% 5.3%,    rgba(255,210,130,1), transparent 68%),
+      radial-gradient(ellipse 15% 5% at 50% 89%,     rgba(255,210,130,1), transparent 68%);
   }
   /* ---- layer 4: hover shimmer sweep ----
      A soft, wide, low-contrast glisten — NOT a hard bright line — moved
@@ -564,9 +572,9 @@
     background-position: -100% 0;
     background-image: linear-gradient(78deg,
       transparent 0%, transparent 32%,
-      rgba(190,225,255,0.35) 42%,
+      rgba(255,225,180,0.35) 42%,
       rgba(255,255,255,0.7) 50%,
-      rgba(190,225,255,0.35) 58%,
+      rgba(255,225,180,0.35) 58%,
       transparent 68%, transparent 100%);
   }
   .hero-start-content {
@@ -1044,7 +1052,7 @@
           <div id="lobby-skillcard-slot" class="intel-widget-slot"></div>
 
           <button class="hero-start-btn" id="btn-start-game" aria-label="Start Game">
-            <img src="../../assets/img/anagram-quest/start-bar.png" alt="">
+            <img src="../../assets/img/anagram-quest/start-bar-gold.png" alt="">
             <span class="hero-start-fx hero-start-galaxy" aria-hidden="true"></span>
             <span class="hero-start-fx hero-start-energy" aria-hidden="true"></span>
             <span class="hero-start-fx hero-start-shimmer" aria-hidden="true"></span>
