@@ -94,25 +94,61 @@
     width: 100.24%; height: 369.91%; max-width: none; display: block;
   }
 
+  /* Real gold frame asset (assets/img/anagram-quest/panel-frame.png)
+     replacing the old plain "2px solid var(--cyan) + drawn corner
+     brackets" panel border, on every screen that uses .panel EXCEPT the
+     intro/countdown screen (#screen-intro strips it back to no frame at
+     all — see below). Used via border-image rather than the lobby
+     frame's absolute-overlay technique: this asset is a genuinely
+     stretchable frame (plain, near-uniform double-line edges with a
+     one-off emblem only at top-centre/bottom-centre), and .panel's
+     height varies a lot between screens (difficulty select vs. Game
+     Over) while its width barely does — exactly the case border-image
+     is designed for, since it only stretches each edge along ITS OWN
+     axis (top/bottom stretch horizontally, left/right stretch
+     vertically), so the width-only variation across screens never
+     touches the emblem and the height-only variation never distorts
+     anything (the left/right edges are just plain parallel lines).
+     border-image-slice values are pixel-measured from the source PNG's
+     own alpha channel (not eyeballed): left/right slice to 85px (the
+     real line sits at 53-82px in from each edge — measured, so this
+     comfortably contains it with a small margin), bottom to 90px, and
+     top all the way to 155px specifically because the star emblem
+     reaches down to y=147px in the 1122x1402 source — a slice sized only
+     for the plain top edge (~95px) would have cut the emblem in half. */
   .panel {
     position: relative;
     width: 100%;
-    background: var(--panel);
-    border: 2px solid var(--cyan);
-    border-radius: 20px;
-    box-shadow: 0 0 22px rgba(255,190,80,0.25), inset 0 0 30px rgba(120,80,20,0.25);
-    padding: clamp(12px, 2.2vw, 22px);
+    background: none;
+    border-style: solid;
+    border-width: 58px 32px 34px 32px;
+    border-image-source: url('../../assets/img/anagram-quest/panel-frame.png');
+    border-image-slice: 155 85 90 85 fill;
+    border-image-repeat: stretch;
+    padding: clamp(10px, 1.6vw, 18px);
     margin-bottom: 10px;
   }
+  /* background is intentionally transparent — the frame is meant to be
+     hollow, with the starfield showing through both inside it and
+     through the gaps in the gold linework itself (matching the lobby's
+     own floating-frame look), not a solid card behind it. border-image-
+     slice's "fill" keyword still matters even with a transparent
+     background: it's what makes border-image-width/border-width above
+     count as real box-model space (so padding/content correctly starts
+     inside the frame lines) instead of border-image drawing over the
+     top of the padding/content. */
 
-  /* corner brackets, matching the site-wide HUD-panel look */
-  .corner-brackets { position: absolute; inset: -3px; pointer-events: none; border-radius: inherit; overflow: hidden; }
-  .corner-brackets i { position: absolute; width: 26px; height: 26px; border: 2px solid var(--cyan); opacity: 0.9; }
-  .corner-brackets i:nth-child(1) { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 16px 0 0 0; }
-  .corner-brackets i:nth-child(2) { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 16px 0 0; }
-  .corner-brackets i:nth-child(3) { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 16px; }
-  .corner-brackets i:nth-child(4) { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 16px 0; }
-
+  /* No frame at all on the intro/countdown screen, by explicit request —
+     just the difficulty name and countdown number directly on the
+     starfield. */
+  #screen-intro .panel {
+    border-image-source: none;
+    border-style: none;
+    border-width: 0;
+    background: none;
+    box-shadow: none;
+    padding: clamp(10px, 1.6vw, 18px) 0;
+  }
   .gold-heading {
     font-family: 'Saira', sans-serif; font-weight: 900;
     font-size: clamp(22px, 4vw, 34px);
@@ -335,33 +371,35 @@
     display: block; pointer-events: none; user-select: none;
   }
   /* Per-card zone geometry — measured directly from each PNG's own alpha
-     channel and text pixels (pixel-scanned, not eyeballed). These assets
-     now have EASY/MEDIUM/HARD and the BEST SCORE / 9-LETTER WORDS labels
-     baked into the artwork itself, so the only live text left is the two
-     yellow values — --value-top/bottom locate the empty space the
-     artwork leaves below its own baked "Best Score"/"9-Letter Words"
-     labels. --div-x is the panel's own built-in centre-divider x
-     position, used to split that space into a left/right half at the
-     same place the artwork's own divider sits. The three panels differ
-     slightly (Hard's baked label sits higher than Easy's), so these are
-     each card's own measured values, not a shared guess. */
+     channel and text pixels (pixel-scanned, not eyeballed). These are the
+     gold-framed replacement assets (same 1672x941 canvas family as the
+     lobby frame/start bar) — EASY/MEDIUM/HARD and the BEST SCORE /
+     9-LETTER WORDS labels are baked into the artwork itself, so the only
+     live text left is the two yellow values — --value-top/bottom locate
+     the empty space the artwork leaves below its own baked "Best Score"/
+     "9-Letter Words" labels. --div-x is the panel's own built-in
+     centre-divider x position, used to split that space into a left/right
+     half at the same place the artwork's own divider sits. The three
+     panels differ (Hard's top band is noticeably taller, pushing its
+     baked label — and so its value row — lower than Easy/Medium's), so
+     these are each card's own measured values, not a shared guess. */
   .diff-card-art.easy {
-    --art-ratio: 1375/667; --art-w: 105.31%; --art-h: 162.82%; --art-x: -2.62%; --art-y: -32.83%;
-    --art-mask-x: 49.32%; --art-mask-y: 52.27%;
+    --art-ratio: 1640/886; --art-w: 101.95%; --art-h: 106.21%; --art-x: -0.98%; --art-y: -1.02%;
+    --art-mask-x: 50.00%; --art-mask-y: 16.36%;
     --art-url: url('../../assets/img/anagram-quest/easy.png');
-    --value-top: 65%; --value-bottom: 13%; --div-x: 50.3%;
+    --value-top: 66%; --value-bottom: 15%; --value-left-x: 23.1%; --value-right-x: 75.9%;
   }
   .diff-card-art.medium {
-    --art-ratio: 1402/759; --art-w: 103.28%; --art-h: 143.08%; --art-x: -1.64%; --art-y: -21.34%;
-    --art-mask-x: 50.00%; --art-mask-y: 49.54%;
+    --art-ratio: 1627/885; --art-w: 102.77%; --art-h: 106.33%; --art-x: -1.41%; --art-y: -1.13%;
+    --art-mask-x: 51.11%; --art-mask-y: 17.86%;
     --art-url: url('../../assets/img/anagram-quest/medium.png');
-    --value-top: 62%; --value-bottom: 10%; --div-x: 45.6%;
+    --value-top: 64%; --value-bottom: 15%; --value-left-x: 23.9%; --value-right-x: 70.1%;
   }
   .diff-card-art.hard {
-    --art-ratio: 1427/750; --art-w: 101.47%; --art-h: 144.80%; --art-x: -0.70%; --art-y: -19.60%;
-    --art-mask-x: 47.62%; --art-mask-y: 43.75%;
+    --art-ratio: 1619/856; --art-w: 103.27%; --art-h: 109.93%; --art-x: -1.67%; --art-y: -0.94%;
+    --art-mask-x: 50.94%; --art-mask-y: 9.41%;
     --art-url: url('../../assets/img/anagram-quest/hard.png');
-    --value-top: 60%; --value-bottom: 10%; --div-x: 47.7%;
+    --value-top: 61%; --value-bottom: 11%; --value-left-x: 23.8%; --value-right-x: 73.9%;
   }
 
   /* Hover shimmer — a thin diagonal light-sweep, masked to the panel's
@@ -402,21 +440,33 @@
      "9-LETTER WORDS" labels are now baked into the artwork itself, so the
      only live elements left are the two yellow values. Each sits in the
      empty space the art leaves below its own baked label (--value-top/
-     bottom, measured per card above), split left/right at the panel's
-     own --div-x so the value lands directly under its own label. */
+     bottom, measured per card above).
+     Each value is positioned INDEPENDENTLY — left:var(--value-left-x)/
+     var(--value-right-x) + translateX(-50%) centres it on that label's
+     own measured horizontal centre — rather than splitting the row into
+     two equal flex halves at one shared divider. The two labels' centres
+     are NOT symmetric around any single divider point (measured
+     directly off each PNG: e.g. Medium's "BEST SCORE" and "9-LETTER
+     WORDS" centres are 46.2 percentage points apart, not the ~50 a
+     centred divider split would assume), so a shared-divider split left
+     one or both values visibly off-centre no matter where the divider
+     was placed — independent centring fixes that exactly. */
   .diff-card-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 
   .diff-card-values-zone {
     position: absolute; top: var(--value-top); bottom: var(--value-bottom);
-    left: 0; right: 0; display: flex;
+    left: 0; right: 0;
   }
   .diff-card-stat-value {
+    position: absolute; top: 0; bottom: 0;
     display: flex; align-items: center; justify-content: center;
+    transform: translateX(-50%);
+    white-space: nowrap;
     font-family: 'Saira', sans-serif; font-weight: 900; font-size: 17px; line-height: 1;
     color: #ffd76a; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
   }
-  .diff-card-stat-value.left  { width: var(--div-x); }
-  .diff-card-stat-value.right { width: calc(100% - var(--div-x)); }
+  .diff-card-stat-value.left  { left: var(--value-left-x); }
+  .diff-card-stat-value.right { left: var(--value-right-x); }
 
   /* ---- center: welcome / global stats / Intelligence / Start ---- */
   .welcome-label { font-size: 11px; letter-spacing: 0.16em; color: rgba(255,207,77,0.75); font-weight: 700; }
@@ -1149,7 +1199,6 @@
        multiplier change (see DIFFICULTIES in anagram-quest.js). -->
   <section id="screen-difficulty" class="screen hidden">
     <div class="panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="gold-heading">CHOOSE YOUR DIFFICULTY</div>
       <div class="subtitle">Less time, more Intelligence XP per point.</div>
       <!-- Same real easy/medium/hard.png art + crop geometry as the lobby's
@@ -1211,7 +1260,6 @@
        logo on this screen. -->
   <section id="screen-intro" class="screen hidden">
     <div class="panel intro-panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="intro-diff" id="intro-diff-label">EASY</div>
       <div class="intro-status" id="intro-status">GAME STARTING</div>
       <div class="intro-countdown" id="intro-countdown">&nbsp;</div>
@@ -1221,7 +1269,6 @@
   <!-- ============== LETTER SELECTION (rounds 1-4) ============== -->
   <section id="screen-select" class="screen hidden">
     <div class="panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="diff-chip" id="sel-diff-chip">EASY</div>
       <div class="round-label">Round <span id="sel-round-num">1</span> of 5</div>
       <div class="round-sub">It's your go. Please select nine letters.</div>
@@ -1259,7 +1306,6 @@
   <!-- ============== ACTIVE ROUND (build + submit) ============== -->
   <section id="screen-active" class="screen hidden">
     <div class="panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="diff-chip" id="active-diff-chip">EASY</div>
       <div class="round-label" id="active-round-label">Round 1 of 5</div>
       <div class="round-sub" id="active-round-sub">Build the longest word you can.</div>
@@ -1299,7 +1345,6 @@
   <!-- ============== ROUND RESULT ============== -->
   <section id="screen-result" class="screen hidden">
     <div class="panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="diff-chip" id="result-diff-chip">EASY</div>
       <div class="result-word-box">
         <div class="result-word-label" id="result-label">You submitted a 6 letter word:</div>
@@ -1335,7 +1380,6 @@
   <!-- ============== GAME OVER ============== -->
   <section id="screen-gameover" class="screen hidden">
     <div class="panel">
-      <span class="corner-brackets"><i></i><i></i><i></i><i></i></span>
       <div class="gold-heading">GAME OVER</div>
       <div class="diff-chip" id="go-diff-chip">EASY</div>
       <div class="final-score-line"><span class="name" id="go-name">Player</span>: <span class="num" id="go-score">0</span></div>
