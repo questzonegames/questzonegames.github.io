@@ -125,6 +125,36 @@
       });
     return dictLoading;
   }
+
+  // ================= first names (Rounds 1-4 only) =================
+  // A SEPARATE set from dictSet, on purpose — see isValidAnagramQuestWord()
+  // below and scripts/build-anagram-names.pl/SOURCES.md for how it's built.
+  // Rounds 1-4 accept dictSet OR nameSet; Round 5 (the bonus 9-letter round)
+  // accepts dictSet only — nameSet is never even consulted there, so a
+  // 9-letter first name can never surface as a Round 5 answer no matter
+  // what's in this file.
+  let nameSet = null;
+  let nameLoading = null;
+  function loadFirstNames() {
+    if (nameLoading) return nameLoading;
+    nameLoading = fetch('data/first-names.txt')
+      .then((r) => r.text())
+      .then((text) => {
+        nameSet = new Set(text.split(/\r?\n/).map((w) => w.trim()).filter(Boolean));
+      })
+      .catch((err) => {
+        console.error('Anagram Quest: failed to load first-names list', err);
+        nameSet = new Set();
+      });
+    return nameLoading;
+  }
+  function isValidFirstName(word) {
+    if (!nameSet) return false;
+    if (typeof word !== 'string') return false;
+    if (!/^[A-Za-z]+$/.test(word)) return false;
+    return nameSet.has(word.toLowerCase());
+  }
+
   function isValidEnglishWord(word) {
     if (!dictSet) return false;
     if (typeof word !== 'string') return false;
@@ -168,9 +198,17 @@
   // round end — see judgeAndEndRound) calls this, never isValidEnglishWord
   // alone, so English dictionary words, real countries and real cities
   // are always judged identically everywhere.
-  function isValidAnagramQuestWord(word) {
+  //
+  // allowNames gates the separate first-name set (see isValidFirstName()
+  // above) — the ONLY caller that ever passes true is judgeAndEndRound()'s
+  // non-bonus (Rounds 1-4) branch. Round 5 (isBonusRound()) always passes
+  // false, so a first name can never score there no matter what's in
+  // first-names.txt — this parameter is the entire enforcement of that
+  // rule, in one place, rather than scattered round checks.
+  function isValidAnagramQuestWord(word, allowNames) {
     return isValidEnglishWord(word) ||
-      (window.QZAnagramGeo && (window.QZAnagramGeo.isCountryName(word) || window.QZAnagramGeo.isCityName(word)));
+      (window.QZAnagramGeo && (window.QZAnagramGeo.isCountryName(word) || window.QZAnagramGeo.isCityName(word))) ||
+      (allowNames === true && isValidFirstName(word));
   }
   function normalizedSignature(word) {
     return word.toUpperCase().split('').sort().join('');
@@ -887,13 +925,16 @@
     let points;
 
     if (bonus) {
+      // Round 5 — allowNames is never passed (defaults to falsy), so
+      // first-names.txt is never consulted here regardless of length.
       const rackSorted = state.rack.map((t) => t.letter).sort().join('');
       const correct = word.length === RACK_SIZE &&
         isValidAnagramQuestWord(word) &&
         word.toUpperCase().split('').sort().join('') === rackSorted;
       points = correct ? ROUND5_POINTS : 0;
     } else {
-      const realWord = word.length >= MIN_WORD_LEN && isValidAnagramQuestWord(word);
+      // Rounds 1-4 — allowNames=true lets a recognised first name count.
+      const realWord = word.length >= MIN_WORD_LEN && isValidAnagramQuestWord(word, true);
       points = realWord ? pointsForWord(word.length) : 0;
     }
     // "valid" (the tick/cross + "that word is correct" wording) always
@@ -1219,7 +1260,7 @@
 
   // ================= lobby wiring =================
   document.getElementById('btn-start-game').addEventListener('click', async () => {
-    await loadDictionary();
+    await Promise.all([loadDictionary(), loadFirstNames()]);
     showScreen('DIFFICULTY');
   });
   // Achievements is a plain <a href="achievements.html"> in the lobby's
@@ -1300,4 +1341,5 @@
   // ================= init =================
   loadAccountData();
   loadDictionary();
+  loadFirstNames();
 })();

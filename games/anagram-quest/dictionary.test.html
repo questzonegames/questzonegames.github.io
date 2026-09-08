@@ -18,10 +18,13 @@
 </head>
 <body>
   <h1>Anagram Quest — Dictionary Validator Tests</h1>
-  <p>Loads the real <code>data/dictionary.txt</code> and exercises the exact
-     same validation rule the game uses (<code>MIN_WORD_LEN</code>/<code>MAX_WORD_LEN</code>
-     from anagram-quest.js, mirrored below). Not part of the game itself —
-     open this file directly whenever the dictionary is rebuilt.</p>
+  <p>Loads the real <code>data/dictionary.txt</code> and
+     <code>data/first-names.txt</code>, and exercises the exact same
+     validation rules the game uses (<code>MIN_WORD_LEN</code>/<code>MAX_WORD_LEN</code>
+     and <code>isValidAnagramQuestWord(word, allowNames)</code> from
+     anagram-quest.js, mirrored below). Not part of the game itself — open
+     this file directly whenever the dictionary or first-name list is
+     rebuilt.</p>
   <table id="results"><thead><tr><th>Input</th><th>Expected</th><th>Status</th><th>Note</th></tr></thead><tbody></tbody></table>
   <div id="summary"></div>
 
@@ -33,6 +36,7 @@
   const MIN_WORD_LEN = 4;
   const MAX_WORD_LEN = 9;
   let dictSet = null;
+  let nameSet = null;
 
   function isValidEnglishWord(word) {
     if (!dictSet) return false;
@@ -40,12 +44,37 @@
     if (!/^[A-Za-z]+$/.test(word)) return false;
     return dictSet.has(word.toLowerCase());
   }
-  // What the game actually checks at judge time (isValidEnglishWord() PLUS
-  // the length gate — see finishGame()'s `realWord` check in anagram-quest.js).
+  // Mirrors isValidFirstName() in anagram-quest.js.
+  function isValidFirstName(word) {
+    if (!nameSet) return false;
+    if (typeof word !== 'string') return false;
+    if (!/^[A-Za-z]+$/.test(word)) return false;
+    return nameSet.has(word.toLowerCase());
+  }
+  // Mirrors isValidAnagramQuestWord(word, allowNames) — the geo (country/
+  // city) check is intentionally omitted here since this file only tests
+  // the dictionary/name split, not the separate geo-data module.
+  function isValidAnagramQuestWord(word, allowNames) {
+    return isValidEnglishWord(word) || (allowNames === true && isValidFirstName(word));
+  }
+  // What the game actually checks at judge time in Rounds 1-4
+  // (isValidAnagramQuestWord(word, true) PLUS the length gate).
   function isAcceptedByGame(word) {
     return typeof word === 'string' &&
       word.length >= MIN_WORD_LEN && word.length <= MAX_WORD_LEN &&
       isValidEnglishWord(word);
+  }
+  // Rounds 1-4: dictionary OR first name.
+  function isAcceptedRounds1to4(word) {
+    return typeof word === 'string' &&
+      word.length >= MIN_WORD_LEN && word.length <= MAX_WORD_LEN &&
+      isValidAnagramQuestWord(word, true);
+  }
+  // Round 5: dictionary only — allowNames is never passed true.
+  function isAcceptedRound5(word) {
+    return typeof word === 'string' &&
+      word.length >= MIN_WORD_LEN && word.length <= MAX_WORD_LEN &&
+      isValidAnagramQuestWord(word, false);
   }
 
   const cases = [
@@ -88,6 +117,42 @@
     ['zzzzqqqq', false, 'random letter sequence, not a real word'],
   ];
 
+  // ---- first-name feature tests (Rounds 1-4 allow names, Round 5 never
+  //      does) — each entry: [input, expected, note, checkerName] where
+  //      checkerName picks isAcceptedRounds1to4 or isAcceptedRound5. ----
+  const nameCases = [
+    // ---- Rounds 1-4: names allowed ----
+    ['james', true, 'first name, Rounds 1-4', 'rounds1to4'],
+    ['JAMES', true, 'first name, uppercase, Rounds 1-4', 'rounds1to4'],
+    ['James', true, 'first name, title case, Rounds 1-4', 'rounds1to4'],
+    ['harry', true, 'first name, Rounds 1-4', 'rounds1to4'],
+    ['HARRY', true, 'first name, uppercase, Rounds 1-4', 'rounds1to4'],
+    ['hannah', true, 'first name, Rounds 1-4', 'rounds1to4'],
+    ['HaNnAh', true, 'first name, mixed case, Rounds 1-4', 'rounds1to4'],
+    ['luke', true, 'first name, Rounds 1-4', 'rounds1to4'],
+    ['bill', true, 'first name (4 letters, exactly MIN_WORD_LEN), Rounds 1-4', 'rounds1to4'],
+    ['santa', true, 'manual-override name (culturally established, not in the base GB/US dataset), Rounds 1-4', 'rounds1to4'],
+    ['SANTA', true, 'manual-override name, uppercase, Rounds 1-4', 'rounds1to4'],
+    ['apple', true, 'an ordinary dictionary word is still accepted via the OR, Rounds 1-4', 'rounds1to4'],
+    // ---- Rounds 1-4: still rejected ----
+    ['bob', false, 'first name but only 3 letters -- below MIN_WORD_LEN, no length exception for names', 'rounds1to4'],
+    ['tom', false, 'first name but only 3 letters -- below MIN_WORD_LEN', 'rounds1to4'],
+    ['zzzzqqqq', false, 'not a name and not a dictionary word', 'rounds1to4'],
+    ['mcdonald', false, 'surname-only entry -- this dataset is first names only, no surname list', 'rounds1to4'],
+    ['thompson', false, 'surname-only entry, not attested as a first name in the source dataset -- and not a dictionary word either', 'rounds1to4'],
+    // ---- Round 5: the exact same names must now be REJECTED ----
+    ['james', false, 'first name -- Round 5 never checks the name set', 'round5'],
+    ['JAMES', false, 'first name, uppercase -- Round 5 never checks the name set', 'round5'],
+    ['hannah', false, 'first name -- Round 5 never checks the name set', 'round5'],
+    ['santa', false, 'manual-override name -- Round 5 never checks the name set, even for this explicit override', 'round5'],
+    ['SANTA', false, 'manual-override name, uppercase -- Round 5 never checks the name set', 'round5'],
+    ['harry', true, '"harry" is ALSO a genuine dictionary verb (to harass/raid), so it is still accepted in Round 5 via the dictionary path -- this specifically confirms the name exception being off does not remove words that are independently real dictionary entries', 'round5'],
+    ['luke', false, 'first name and NOT an independent dictionary word -- Round 5 never checks the name set', 'round5'],
+    ['apple', true, 'an ordinary dictionary word is still accepted in Round 5 -- only the name exception is switched off', 'round5'],
+  ];
+
+  const CHECKERS = { rounds1to4: isAcceptedRounds1to4, round5: isAcceptedRound5, game: isAcceptedByGame };
+
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
   function render(results) {
@@ -96,7 +161,7 @@
       const cls = r.pass ? 'pass' : 'fail';
       return '<tr class="' + cls + '">' +
         '<td><code>' + escapeHtml(JSON.stringify(r.input)) + '</code></td>' +
-        '<td>' + (r.expected ? 'accepted' : 'rejected') + '</td>' +
+        '<td>' + (r.expected ? 'accepted' : 'rejected') + ' (' + r.checker + ')</td>' +
         '<td class="status">' + (r.pass ? 'PASS' : 'FAIL — got ' + (r.actual ? 'accepted' : 'rejected')) + '</td>' +
         '<td>' + escapeHtml(r.note) + '</td>' +
       '</tr>';
@@ -107,18 +172,23 @@
     summary.className = passCount === results.length ? 'ok' : 'bad';
   }
 
-  fetch('data/dictionary.txt')
-    .then((r) => r.text())
-    .then((text) => {
-      dictSet = new Set(text.split(/\r?\n/).map((w) => w.trim()).filter(Boolean));
-      const results = cases.map(([input, expected, note]) => {
-        const actual = isAcceptedByGame(input);
-        return { input, expected, actual, pass: actual === expected, note };
+  Promise.all([
+    fetch('data/dictionary.txt').then((r) => r.text()),
+    fetch('data/first-names.txt').then((r) => r.text())
+  ])
+    .then(([dictText, nameText]) => {
+      dictSet = new Set(dictText.split(/\r?\n/).map((w) => w.trim()).filter(Boolean));
+      nameSet = new Set(nameText.split(/\r?\n/).map((w) => w.trim()).filter(Boolean));
+      const allCases = cases.map(([input, expected, note]) => [input, expected, note, 'game'])
+        .concat(nameCases);
+      const results = allCases.map(([input, expected, note, checker]) => {
+        const actual = CHECKERS[checker](input);
+        return { input, expected, actual, pass: actual === expected, note, checker };
       });
       render(results);
     })
     .catch((err) => {
-      document.getElementById('summary').textContent = 'Could not load dictionary.txt: ' + err;
+      document.getElementById('summary').textContent = 'Could not load dictionary.txt / first-names.txt: ' + err;
       document.getElementById('summary').className = 'bad';
     });
 })();

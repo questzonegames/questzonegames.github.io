@@ -69,6 +69,52 @@ dictionaries like Oxford/Cambridge/Collins/Merriam-Webster).
 - **wordfreq** — frequency data, not a word list; also discontinued by its
   author in 2024. Not needed for a pure inclusion/exclusion dictionary.
 
+## 3. First-name list (Rounds 1-4 only — `first-names.txt`, added separately)
+
+- **What**: `games/anagram-quest/data/first-names.txt`, a SEPARATE set from
+  `dictionary.txt`, used only so a recognised human first name can count as
+  a valid answer in Rounds 1-4 (never Round 5 — see
+  `isValidAnagramQuestWord(word, allowNames)` in anagram-quest.js). Built by
+  `scripts/build-anagram-names.pl` from a genuine first-name database, not
+  hand-typed.
+- **Source**: [`firstname-database`](https://github.com/KarlAmort/firstname-database)
+  (originally compiled by Jörg Michael 2007-2008, updated 2016 by Matthias
+  Winkelmann; the GitHub repo has since been transferred to the `KarlAmort`
+  account, same content) — a global first-name list with gender and
+  per-country attestation, the author's own README describing it as
+  "prepared with utmost care" with names independently checked by native
+  speakers per country. It is a first-name database by construction (no
+  surnames mixed in), which is exactly the "is this an established first
+  name" test this feature needs — no separate surname-filtering step
+  required.
+  - **License**: GNU Free Documentation License (GFDL), version 1.2 or
+    later, no Invariant Sections/Front-Cover/Back-Cover texts. Copyright
+    Jörg Michael (2007-2008) and Matthias Winkelmann (2016 update) —
+    attribution preserved here and in the vendored copy below, satisfying
+    the license's attribution requirement.
+  - Fetched from: `firstnames.csv` (semicolon-delimited: name, gender, then
+    one frequency column per country, including "Great Britain" and
+    "U.S.A.")
+  - Commit: `bb040db50fec19558e853062c49e0029e1805a9`
+  - Fetched: 2026-09-08
+- **Vendored copy**: `scripts/name-sources/firstname-database/` (the CSV
+  plus the upstream README, which is itself the license/attribution
+  notice, reproduced verbatim).
+- **How the build applies it**: keep only rows with a non-empty value in
+  the "Great Britain" or "U.S.A." column (i.e. genuinely attested in
+  British or American usage — covers common AND established-but-less-common
+  names in both, per the feature spec) → drop anything outside 4-9 letters
+  (matching the game's own MIN_WORD_LEN/RACK_SIZE — there is no length
+  exception for names) or non-alphabetic → drop anything in
+  `manual-invalid-names.json` → add back anything in
+  `manual-valid-names.json` (e.g. "santa", which is a culturally-established
+  personal name but too rare to be GB/US-attested in the source dataset) →
+  write `games/anagram-quest/data/first-names.txt`.
+- **Explicitly not used for this feature**: any surname list, any
+  "celebrity names" list, or any generated/invented spellings — see the
+  feature's own request for why (no surname dictionary, no unverifiable
+  names).
+
 ## How the build applies these
 
 See `scripts/build-anagram-dictionary.pl` for the full pipeline. In short:
