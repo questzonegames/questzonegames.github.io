@@ -275,7 +275,215 @@
 
   .intel-widget-slot { margin-bottom: 18px; text-align: left; }
 
-  .hero-start-btn { font-size: clamp(16px, 2vw, 20px); padding: 17px 20px; }
+  /* ---- Start Game button — built from the real "Start Bar" art asset
+     (assets/img/anagram-quest/start-bar.png) rather than a CSS background.
+     The source PNG's own canvas (2172x724) carries a large transparent
+     margin above/below the actual bar art (the real bar only occupies
+     roughly the middle 61% of the canvas height) — sizing the button to
+     the full canvas left a big invisible hoverable/glowing rectangle
+     around the visible art. Fixed here by cropping to the art's real
+     pixel bounds: --art-w/--art-h/--art-x/--art-y size and position the
+     SAME full image (as both the visible <img> and every effect layer's
+     background/mask) so only its real bar fills the button, edge to
+     edge, at its native aspect ratio (2152x445 visible px) — never
+     stretched, never showing the transparent margin. */
+  .hero-start-btn {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+    aspect-ratio: 2152 / 445;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    /* Contains every effect layer to the button's own box — the shimmer
+       sweep in particular is a translateX'd child, and without this it
+       rendered fully outside the button (a "white shape" sliding across
+       the whole page) once translated off to one side. Scale/translate on
+       :hover below moves this WHOLE box, so the clip boundary moves with
+       it — nothing to reconcile there. */
+    overflow: hidden;
+    transition: transform 0.12s ease;
+    --art-url: url('../../assets/img/anagram-quest/start-bar.png');
+    --art-w: 100.93%;
+    --art-h: 162.7%;
+    --art-x: -0.42%;
+    --art-y: -28.99%;
+    /* mask-position/background-position use a DIFFERENT percentage formula
+       than top/left: offset = (container - image) * (pct/100), not a
+       direct percentage of the container. --art-x/--art-y above are
+       top/left-style values (used by the <img>); these two are the
+       equivalent position for a mask-size of --art-w/--art-h under that
+       formula, so the mask lines up with the actual image instead of
+       landing tens of percent off (which is what put nebula/frame pixels
+       in the wrong corners and cut the shimmer off asymmetrically before). */
+    --art-mask-x: 45.01%;
+    --art-mask-y: 46.24%;
+  }
+  /* Every effect layer shares this base: identical position/size to the
+     frame <img>, and — crucially — the SAME alpha mask as the frame
+     (matched 1:1, unzoomed), so no matter what a layer draws or how its
+     OWN background is zoomed/panned internally, the visible RESULT can
+     never extend past the real artwork's silhouette. (The galaxy layer
+     below zooms its background to 116% for the drift effect — without
+     this shared mask, that zoom shifts which source pixels land in the
+     button's own four corners, and since those corners are square while
+     the artwork's are cut at an angle, opaque nebula pixels ended up
+     showing exactly in the corners the real art doesn't occupy — the
+     "extra pieces" bug. Masking every layer to the true, unzoomed alpha
+     shape fixes that regardless of any layer's internal zoom/pan.) */
+  .hero-start-btn .hero-start-fx {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    mask-image: var(--art-url);
+    mask-repeat: no-repeat;
+    mask-size: var(--art-w) var(--art-h);
+    mask-position: var(--art-mask-x) var(--art-mask-y);
+    -webkit-mask-image: var(--art-url);
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-size: var(--art-w) var(--art-h);
+    -webkit-mask-position: var(--art-mask-x) var(--art-mask-y);
+  }
+  /* ---- layer 1 (bottom): galaxy drift ----
+     The SAME start-bar.png again, zoomed slightly and drifted via
+     background-position for the "slow space drift" feel. */
+  .hero-start-galaxy {
+    z-index: 1;
+    background-image: var(--art-url);
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    background-size: 116% auto;
+  }
+  /* ---- layer 2: the metal frame itself ----
+     Sits ABOVE the galaxy layer (it used to be bottom-most, which is what
+     let a fast-moving effect below it visually compete with the frame).
+     The frame's own opacity is the primary containment: nothing beneath
+     it can show except through its real transparent glass cutout. */
+  .hero-start-btn img {
+    position: absolute;
+    left: var(--art-x); top: var(--art-y);
+    width: var(--art-w); height: var(--art-h);
+    display: block;
+    z-index: 2;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+  /* ---- layer 3: energy glow ----
+     Small, precisely-placed cores sitting exactly on the artwork's own
+     left/right edge lights and top/bottom centre lights (measured off the
+     real image, not guessed) — tight and saturated so each reads as a
+     distinct gentle pulse of light rather than one big generic glow wash.
+     Screen-blended and stacked ABOVE the frame so it reads as light
+     adding onto the frame's own printed accents, not covering them. */
+  .hero-start-energy {
+    z-index: 3;
+    mix-blend-mode: screen;
+    opacity: 0.65;
+    background:
+      radial-gradient(ellipse 3.5% 20% at 1.2% 50%,  rgba(130,225,255,1), transparent 68%),
+      radial-gradient(ellipse 3.5% 20% at 98.8% 50%, rgba(130,225,255,1), transparent 68%),
+      radial-gradient(ellipse 15% 5% at 50% 5.3%,    rgba(150,230,255,1), transparent 68%),
+      radial-gradient(ellipse 15% 5% at 50% 89%,     rgba(150,230,255,1), transparent 68%);
+  }
+  /* ---- layer 4: hover shimmer sweep ----
+     A soft, wide, low-contrast glisten — NOT a hard bright line — moved
+     purely via background-position (never transform/translate) so it can
+     never render outside this layer's own box, and screen-blended +
+     alpha-masked (via .hero-start-fx) so it can only ever brighten the
+     real artwork, never show as a block. Slow (2.6s) and a much shorter
+     travel distance than before (own width to 2x own width, not a huge
+     -220%/220% throw) so it reads as one smooth, gentle pass rather than
+     a fast flicker. */
+  .hero-start-shimmer {
+    z-index: 4;
+    mix-blend-mode: screen;
+    opacity: 0;
+    background-repeat: no-repeat;
+    background-size: 240% 100%;
+    background-position: -100% 0;
+    background-image: linear-gradient(78deg,
+      transparent 0%, transparent 32%,
+      rgba(190,225,255,0.35) 42%,
+      rgba(255,255,255,0.7) 50%,
+      rgba(190,225,255,0.35) 58%,
+      transparent 68%, transparent 100%);
+  }
+  .hero-start-content {
+    position: absolute; inset: 0;
+    z-index: 5;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    pointer-events: none;
+  }
+  .hero-start-play {
+    width: clamp(13px, 1.8vw, 18px); height: clamp(13px, 1.8vw, 18px);
+    flex-shrink: 0; color: #eaf6ff;
+    filter: drop-shadow(0 0 5px rgba(140,210,255,0.85));
+  }
+  .hero-start-label {
+    font-family: 'Saira', sans-serif; font-weight: 800;
+    font-size: clamp(14px, 2.1vw, 20px);
+    letter-spacing: 0.14em;
+    color: #eaf6ff;
+    text-shadow: 0 0 10px rgba(140,210,255,0.8), 0 1px 3px rgba(0,0,0,0.7);
+  }
+
+  /* ---- ambient animation — slow, always-on "idle" life; sped up/
+     strengthened on hover, disabled under prefers-reduced-motion below.
+     Kept to transform/opacity/background-position only (no layout-
+     affecting properties), so this stays cheap to composite at 60fps. ---- */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-start-galaxy { animation: heroGalaxyDrift 16s ease-in-out infinite; }
+    .hero-start-energy { animation: heroEnergyPulse 4s ease-in-out infinite; }
+    .hero-start-btn:hover .hero-start-galaxy { animation-duration: 10s; }
+    .hero-start-btn:hover .hero-start-energy { animation-duration: 2.2s; }
+    .hero-start-btn:hover .hero-start-shimmer {
+      opacity: 1;
+      animation: heroShimmerSweep 2.6s ease-in-out infinite;
+    }
+  }
+  @keyframes heroGalaxyDrift {
+    0%, 100% { background-position: 45% 53%; }
+    50%      { background-position: 55% 47%; }
+  }
+  @keyframes heroEnergyPulse {
+    0%, 100% { opacity: 0.65; }
+    50%      { opacity: 1; }
+  }
+  @keyframes heroShimmerSweep {
+    0%   { background-position: -100% 0; }
+    100% { background-position: 140% 0; }
+  }
+
+  /* subtle, restrained game-feel — a small lift + pop-forward on hover
+     (kept from the previous implementation), a quick compress-and-release
+     on press.
+     IMPORTANT: no `filter` (brightness/contrast/etc.) on .hero-start-btn
+     itself, ever — combining a CSS filter with a transform: scale() on
+     the same element that contains a raster <img> is what was causing
+     the whole button (art included) to go soft/blurry on hover in Chrome/
+     Edge (the filter forces the element into an intermediate raster
+     buffer that then gets the transform's scale applied to it, instead of
+     the image being resampled fresh at the new size). The "brighter on
+     hover" feel now comes entirely from the energy-glow/shimmer layers
+     above intensifying instead — same visual intent, no quality loss on
+     the artwork itself. */
+  .hero-start-btn:hover {
+    transform: translateY(-2px) scale(1.03);
+  }
+  .hero-start-btn:hover .hero-start-energy { opacity: 1; }
+  .hero-start-btn:active {
+    transform: translateY(1px) scale(0.985);
+    transition: transform 0.05s ease;
+  }
+  /* filter here is safe (unlike on .hero-start-btn itself above) — this is
+     a small flat gradient overlay, not the transformed element holding the
+     raster artwork, so it can't trigger the same blur bug. */
+  .hero-start-btn:active .hero-start-energy { opacity: 1; filter: brightness(1.5); }
+  .hero-start-btn:focus-visible { outline: 2px solid #6fe3ff; outline-offset: 5px; border-radius: 10px; }
   .hero-start-caption { text-align: center; color: var(--text-dim); font-size: 11px; letter-spacing: 0.1em; margin-top: 10px; }
 
   /* ---- right: collapsible rules ---- */
@@ -676,7 +884,16 @@
                Mounted/refreshed in anagram-quest.js's updateFooterStats(). -->
           <div id="lobby-skillcard-slot" class="intel-widget-slot"></div>
 
-          <button class="btn btn-gold hero-start-btn" id="btn-start-game">&#9654; START GAME</button>
+          <button class="hero-start-btn" id="btn-start-game" aria-label="Start Game">
+            <img src="../../assets/img/anagram-quest/start-bar.png" alt="">
+            <span class="hero-start-fx hero-start-galaxy" aria-hidden="true"></span>
+            <span class="hero-start-fx hero-start-energy" aria-hidden="true"></span>
+            <span class="hero-start-fx hero-start-shimmer" aria-hidden="true"></span>
+            <span class="hero-start-content">
+              <svg class="hero-start-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8V4z"/></svg>
+              <span class="hero-start-label">START GAME</span>
+            </span>
+          </button>
           <div class="hero-start-caption">A SHARPER YOU AWAITS</div>
         </div>
 
