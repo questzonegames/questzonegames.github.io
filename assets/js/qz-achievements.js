@@ -43,6 +43,34 @@
     return TIERS[String(tierKey || '').toLowerCase()] || DEFAULT_TIER;
   }
 
+  // ---- icon helpers ----
+  // An achievement's `icon` column is either a plain emoji (every pre-
+  // existing achievement) or a path to a real badge image (currently
+  // only the Jack of All Trades family —
+  // assets/img/achievements/badges/jack-of-all-trades-<tier>.png). Every
+  // place that renders an achievement icon (the grid tile, the inspection
+  // card, a pinned badge slot) needs to tell these apart to know whether
+  // to build an <img> or drop the string in as text — centralized here so
+  // that decision is made the same way everywhere instead of each caller
+  // guessing at its own regex.
+  function isImageIcon(icon) {
+    return typeof icon === 'string' && /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(icon);
+  }
+  // Which icon/badge to show for an achievement: always its real one,
+  // locked or not — deliberately NOT gated on unlocked state. An
+  // achievement row can still carry an icon_locked value (see the Jack
+  // of All Trades migration) but it is unused by design: a locked
+  // achievement's CARD BACKGROUND still uses the Locked panel template
+  // (that swap stays tier-gated, see cardVars() in profile/achievements.
+  // html), but the badge in its icon box is always its true tier art —
+  // so even at a glance on a locked card, you can already see which
+  // tier it is. Kept as a named function (rather than callers just
+  // reading a.icon directly) so this "always the real badge" rule is
+  // one decision made in one place, not re-derived at each call site.
+  function pickIcon(a) {
+    return a ? a.icon : null;
+  }
+
   // Fire-and-collect: many "event" achievements (first word, first 7-
   // letter word, ...) get called unconditionally at the moment they
   // happen — unlock_achievement() is idempotent server-side, so no
@@ -115,5 +143,5 @@
     return unlock(name);
   }
 
-  window.QZAchievements = { TIERS, tierInfo, unlock, notify, checkStatAchievements };
+  window.QZAchievements = { TIERS, tierInfo, isImageIcon, pickIcon, unlock, notify, checkStatAchievements };
 })();

@@ -1216,7 +1216,14 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
   background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.1);
   position: relative;
 }
-.ach-card.locked .ach-card-icon-badge::after {
+/* Real badge art (e.g. Jack of All Trades) — scaled down to fit, aspect
+   ratio preserved, never stretched/cropped. */
+.ach-card-icon-badge.has-img { padding: 3px; }
+.ach-card-icon-badge.has-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* Emoji-icon achievements only — one with its own dedicated locked-state
+   badge (icon_locked) already reads as locked from the art itself, so
+   this generic overlay would just hide that art under a second lock. */
+.ach-card.locked .ach-card-icon-badge:not(.has-img)::after {
   content: '🔒'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: 13px; background: rgba(0,0,0,0.55); border-radius: 9px;
 }

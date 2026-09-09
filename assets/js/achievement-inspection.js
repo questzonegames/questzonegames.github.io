@@ -13,6 +13,11 @@
 //     id, name, tier, description, icon,
 //     unlocked, unlockedAt, progress, game, category, onPin, onUnpin
 //   }
+// icon can be a plain emoji OR a path to a real badge image (see
+// isImageIcon() in qz-achievements.js) — always shown as-is regardless
+// of unlocked state (only the card's BACKGROUND panel is locked-gated,
+// see panelUrlFor() below), so a locked achievement's real tier badge
+// is still visible at a glance.
 //
 // sourceEl is the element the tile visually flew out of — its
 // getBoundingClientRect() is the animation's start point, and close()
@@ -162,7 +167,19 @@
     cardEl.style.backgroundImage = "url('" + panelUrlFor(achievement.tier, unlocked) + "')";
     cardEl.classList.toggle('locked', !unlocked);
 
-    cardIconBadge.textContent = achievement.icon || '🏆';
+    // Real badge art (e.g. Jack of All Trades) vs a plain emoji glyph —
+    // always the achievement's real one, locked or not (see pickIcon()
+    // in qz-achievements.js) — only the card BACKGROUND above is
+    // locked-gated, so even a locked card's badge shows its true tier
+    // at a glance.
+    const iconToShow = achievement.icon || '🏆';
+    const iconIsImg = window.QZAchievements && window.QZAchievements.isImageIcon(iconToShow);
+    cardIconBadge.classList.toggle('has-img', !!iconIsImg);
+    if (iconIsImg) {
+      cardIconBadge.innerHTML = '<img src="' + iconToShow + '" alt="">';
+    } else {
+      cardIconBadge.textContent = iconToShow;
+    }
     nameEl.textContent = achievement.name;
     tierEl.textContent = achievement.tier;
     tierEl.className = 'ach-card-tier tier-' + String(achievement.tier || '').toLowerCase();

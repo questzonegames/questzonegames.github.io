@@ -115,6 +115,21 @@
   }
   .ach-tile:hover { transform: translateY(-3px); filter: brightness(1.12); }
   .ach-tile.locked:hover { filter: brightness(1.08); transform: translateY(-2px); }
+  /* Blank grid filler (see renderGrid's padding loop) — same Locked
+     panel/size as a real card, just inert and a touch dimmer so it
+     reads as "nothing here yet" rather than an actual achievement. */
+  /* Grid rows stretch every item in that row to the row's tallest cell
+     (CSS Grid's default align-items:stretch) — fine for a row that has
+     at least one real card to set that height, but a row made ENTIRELY
+     of placeholders (e.g. every row after the last real card on a short
+     page) has nothing to size against, so without an explicit height
+     those rows collapse down to just the empty box's own padding —
+     short, wide, "squished" rectangles instead of a normal card shape.
+     A fixed min-height (matched to a typical real card's rendered
+     height) keeps every placeholder row the same size as a real one,
+     regardless of whether that particular row has any real card in it. */
+  .ach-tile-placeholder { cursor: default; opacity: 0.5; min-height: 112px; }
+  .ach-tile-placeholder:hover { transform: none; filter: none; }
   .ach-tile.pinned::before {
     content: '📌'; position: absolute; top: 8px; right: 9px; font-size: 12px; opacity: 0.9;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
@@ -125,8 +140,17 @@
     display: flex; align-items: center; justify-content: center; font-size: 20px;
     background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.1);
   }
+  /* Real badge art (e.g. Jack of All Trades) — scaled down to fit this
+     box, aspect ratio preserved, never stretched/cropped. */
+  .ach-tile-icon.has-img { padding: 3px; }
+  .ach-tile-icon.has-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .ach-tile.locked .ach-tile-icon { position: relative; }
-  .ach-tile.locked .ach-tile-icon::after {
+  /* The generic dark-box-plus-🔒 overlay is for emoji icons only — an
+     achievement with its own dedicated locked-state badge (icon_locked,
+     rendered via has-img the same as its unlocked badge) already reads
+     as locked from the art itself, so doubling up here would just hide
+     that art under a second, redundant lock treatment. */
+  .ach-tile.locked .ach-tile-icon:not(.has-img)::after {
     content: '🔒'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-size: 13px; background: rgba(0,0,0,0.5); border-radius: 9px;
   }
@@ -286,7 +310,13 @@
   const PAGE_SIZE = 18;
   const PIN_MAX = 7;
 
-  const CATEGORY_LABELS = { all: 'All', games: 'Games', levels: 'Levels', ranks: 'Ranks', misc: 'Miscellaneous', pinned: 'Pinned' };
+  const CATEGORY_LABELS = { all: 'All', owned: 'Owned', games: 'Games', levels: 'Levels', ranks: 'Ranks', misc: 'Miscellaneous', pinned: 'Pinned' };
+  // Default-sort grouping — Games, then Levels, then Ranks, then
+  // Miscellaneous, so "All" reads as tidy same-category blocks instead
+  // of interleaving by the catalog's raw sort_order (which only
+  // guarantees order WITHIN a category, not between them — see
+  // filteredSorted()'s 'default' case).
+  const CATEGORY_ORDER = { games: 0, levels: 1, ranks: 2, misc: 3 };
   // Human-readable game names for the "Games" sub-filter and card meta
   // line — keyed by the achievements.game_key label (the game's own
   // slug), NOT public.games (the skill/XP registry) — see the migration
@@ -338,17 +368,23 @@
 
   // ---- data loading ----
   async function loadStats() {
-    // Only the two stat sources today's placeholder achievements need —
-    // add another `case` here (and a matching requirement_type in the
-    // catalog + achievement_requirement_met() server-side) to support a
-    // new progress-trackable stat later. Keyed 'requirementType|gameKey'
-    // so the same stat source can back several achievements at once.
+    // Only the stat sources today's achievements need — add another
+    // `case` here (and a matching requirement_type in the catalog +
+    // achievement_requirement_met() server-side) to support a new
+    // progress-trackable stat later. Keyed 'requirementType|gameKey' so
+    // the same stat source can back several achievements at once.
     const stats = {};
     if (!client || !uid) return stats;
     try {
-      const [{ data: gs }, { data: gp }] = await Promise.all([
+      const [{ data: gs }, { data: gp }, { data: totalLevel }] = await Promise.all([
         client.from('game_stats').select('game_key,games_played,high_score').eq('user_id', uid),
-        client.from('game_progress').select('game_key,xp,level').eq('user_id', uid)
+        client.from('game_progress').select('game_key,xp,level').eq('user_id', uid),
+        // The SAME public.total_level() the server itself checks a
+        // 'total_level' requirement against (see achievement_requirement_
+        // met() in the migration) — not a client-side approximation, so
+        // the Jack of All Trades progress bars can never show a number
+        // that disagrees with what actually unlocks them.
+        client.rpc('total_level', { p_user: uid })
       ]);
       (gs || []).forEach((row) => {
         stats['games_played|' + row.game_key] = row.games_played || 0;
@@ -358,12 +394,7 @@
         stats['game_xp|' + row.game_key] = row.xp || 0;
         stats['game_level|' + row.game_key] = row.level || 1;
       });
-      if (window.QZXp) {
-        const totalLevel = Object.keys(stats)
-          .filter((k) => k.startsWith('game_level|'))
-          .reduce((sum, k) => sum + stats[k], 0);
-        stats['total_level|'] = totalLevel || null; // null, not 0 — "can't compute yet" vs "genuinely zero"
-      }
+      stats['total_level|'] = typeof totalLevel === 'number' ? totalLevel : null; // null, not 0 — "can't compute yet" vs "genuinely zero"
     } catch (err) {
       console.warn('Achievements: could not load stats for progress bars', err);
     }
@@ -393,7 +424,7 @@
 
     const { data: catalog, error } = await client
       .from('achievements')
-      .select('achievement_id,name,description,icon,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value')
+      .select('achievement_id,name,description,icon,icon_locked,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value')
       .order('sort_order', { ascending: true });
     if (error || !catalog) { renderError('Could not load achievements right now.'); return; }
 
@@ -418,6 +449,7 @@
         name: a.name,
         description: a.description || '',
         icon: a.icon || '🏆',
+        iconLocked: a.icon_locked || null,
         tier: a.tier || '',
         category: a.category || 'misc',
         game_key: a.game_key || null,
@@ -446,12 +478,13 @@
   function renderFilters() {
     const root = $('ach-filters');
     root.innerHTML = '';
-    const categories = ['all', 'games', 'levels', 'ranks', 'misc', 'pinned'];
+    const categories = ['all', 'owned', 'games', 'levels', 'ranks', 'misc', 'pinned'];
     categories.forEach((cat) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ach-filter' + (activeCategory === cat ? ' active' : '');
       const count = cat === 'all' ? allAchievements.length
+        : cat === 'owned' ? allAchievements.filter((a) => a.unlocked).length
         : cat === 'pinned' ? allAchievements.filter((a) => a.pinned).length
         : allAchievements.filter((a) => a.category === cat).length;
       btn.innerHTML = escapeHtml(CATEGORY_LABELS[cat] || cat) + '<span class="count">' + count + '</span>';
@@ -523,6 +556,8 @@
     let list = allAchievements.slice();
     if (activeCategory === 'pinned') {
       list = list.filter((a) => a.pinned);
+    } else if (activeCategory === 'owned') {
+      list = list.filter((a) => a.unlocked);
     } else if (activeCategory !== 'all') {
       list = list.filter((a) => a.category === activeCategory);
       if (activeCategory === 'games' && activeGame) list = list.filter((a) => a.game_key === activeGame);
@@ -551,7 +586,22 @@
         return b.unlocked - a.unlocked;
       }); break;
       case 'alpha': list.sort((a, b) => a.name.localeCompare(b.name)); break;
-      default: list.sort((a, b) => a.sort_order - b.sort_order);
+      default:
+        // Category block (Games -> Levels -> Ranks -> Misc) first, so
+        // "All" never interleaves categories; within a category, Locked
+        // first then Bronze -> Mythic (tierRank, with locked forced to
+        // rank 0 regardless of the achievement's real tier) so a glance
+        // at any one category reads Locked, Bronze, Silver, ... Mythic;
+        // sort_order is only the final tiebreak within one identical
+        // category+tier bucket.
+        list.sort((a, b) => {
+          const catDiff = (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99);
+          if (catDiff) return catDiff;
+          const bucketA = a.unlocked ? tierRank(a.tier) : 0;
+          const bucketB = b.unlocked ? tierRank(b.tier) : 0;
+          if (bucketA !== bucketB) return bucketA - bucketB;
+          return a.sort_order - b.sort_order;
+        });
     }
     return list;
   }
@@ -602,6 +652,23 @@
     return vars;
   }
 
+  // Real badge image (e.g. the Jack of All Trades family) vs a plain
+  // emoji glyph — see isImageIcon()/pickIcon() in qz-achievements.js.
+  // pickIcon() always returns the achievement's real badge, locked or
+  // not — only the card's PANEL (above) is locked-gated, so the badge
+  // itself stays visible at a glance even on a locked card. 'has-img'
+  // just suppresses the generic dark-box-plus-lock-emoji overlay
+  // (.ach-tile.locked .ach-tile-icon::after), which exists for emoji
+  // icons only — real badge art doesn't need a second lock indicator
+  // drawn over it.
+  function iconBoxHtml(a) {
+    const icon = window.QZAchievements ? window.QZAchievements.pickIcon(a) : a.icon;
+    const isImg = window.QZAchievements && window.QZAchievements.isImageIcon(icon);
+    return '<span class="ach-tile-icon' + (isImg ? ' has-img' : '') + '">' +
+      (isImg ? '<img src="' + icon + '" alt="" loading="lazy">' : escapeHtml(icon)) +
+      '</span>';
+  }
+
   function renderGrid(list) {
     const root = $('ach-grid');
     root.innerHTML = '';
@@ -625,7 +692,7 @@
 
       card.innerHTML =
         '<div class="ach-tile-top">' +
-          '<span class="ach-tile-icon">' + a.icon + '</span>' +
+          iconBoxHtml(a) +
           '<div style="min-width:0;">' +
             '<div class="ach-tile-name">' + escapeHtml(a.name) + '</div>' +
             '<div class="ach-tile-tier">' + escapeHtml(tierLabel) + '</div>' +
@@ -650,8 +717,22 @@
       root.appendChild(card);
     });
 
-    // pad to a full row-consistent look isn't necessary with auto-fill,
-    // unlike the fixed-column inventory grid — nothing else to do here.
+    // Pad this page out to a full PAGE_SIZE grid with blank Locked-
+    // template placeholder tiles. Without this, a short page (e.g. one
+    // lone achievement on the last page) sits by itself with a lot of
+    // empty row around it, which reads as an odd stretched/squashed
+    // card rather than a normal-sized one — filling the rest of the
+    // grid with the same Locked panel every real locked card already
+    // uses keeps every page looking as full and even as the first.
+    // Purely cosmetic: no data, no click handler, never affects
+    // filtering/search/pagination counts.
+    for (let i = pageItems.length; i < PAGE_SIZE; i++) {
+      const filler = document.createElement('div');
+      filler.className = 'ach-tile ach-tile-placeholder';
+      filler.style.setProperty('--panel-img', 'url(' + PANEL_IMAGES.locked + ')');
+      filler.setAttribute('aria-hidden', 'true');
+      root.appendChild(filler);
+    }
   }
 
   function renderPagination(tp) {
@@ -680,7 +761,7 @@
   function openDetails(a, sourceEl) {
     if (!window.QZAchievementInspection) return;
     window.QZAchievementInspection.open({
-      id: a.id, name: a.name, tier: a.tier || 'unranked', description: a.description, icon: a.icon,
+      id: a.id, name: a.name, tier: a.tier || 'unranked', description: a.description, icon: a.icon, iconLocked: a.iconLocked,
       unlocked: a.unlocked, unlockedAt: a.unlockedAt, game: GAME_LABELS[a.game_key] || a.game_key,
       category: CATEGORY_LABELS[a.category] || a.category,
       requirement: requirementText(a), progress: a.progress, pinned: a.pinned,

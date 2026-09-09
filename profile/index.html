@@ -709,6 +709,17 @@
     filter: drop-shadow(0 0 7px rgba(90,160,255,0.4));
     transition: filter 0.2s ease;
   }
+  /* Plain-emoji achievements (no real badge art) — same box, sized as
+     text instead of an <img>. */
+  .pin-slot-emoji {
+    font-size: clamp(22px, 4vw, 34px);
+    line-height: 1;
+    filter: drop-shadow(0 0 7px rgba(90,160,255,0.4));
+    transition: filter 0.2s ease;
+  }
+  .pin-slot:hover .pin-slot-emoji { filter: drop-shadow(0 0 15px rgba(120,190,255,0.8)) drop-shadow(0 0 4px rgba(255,255,255,0.45)); }
+  .pin-slot.pin-slot-locked .pin-slot-emoji { filter: grayscale(0.85) brightness(0.55) saturate(0.35); }
+  .pin-slot.pin-slot-locked:hover .pin-slot-emoji { filter: grayscale(0.75) brightness(0.6) saturate(0.4) drop-shadow(0 0 4px rgba(110,130,160,0.3)); }
   /* soft glint burst on hover — absent for the locked slot */
   .pin-slot::after {
     content: '';
@@ -1663,11 +1674,22 @@
       slot.className = 'pin-slot' + (data.tier === 'Locked' ? ' pin-slot-locked' : '');
       const label = data.name + ' (' + data.tier + ')';
 
-      const img = document.createElement('img');
-      img.src = data.icon;
-      img.alt = '';
-      img.loading = 'lazy';
-      slot.appendChild(img);
+      // Real badge art (e.g. Jack of All Trades) vs a plain emoji glyph
+      // — see isImageIcon() in qz-achievements.js. A pinned achievement
+      // is always unlocked, so this is always its real tier badge, never
+      // iconLocked.
+      if (window.QZAchievements && window.QZAchievements.isImageIcon(data.icon)) {
+        const img = document.createElement('img');
+        img.src = data.icon;
+        img.alt = '';
+        img.loading = 'lazy';
+        slot.appendChild(img);
+      } else {
+        const emoji = document.createElement('span');
+        emoji.className = 'pin-slot-emoji';
+        emoji.textContent = data.icon || '🏆';
+        slot.appendChild(emoji);
+      }
 
       const tooltip = document.createElement('span');
       tooltip.className = 'pin-tooltip';
@@ -1695,6 +1717,23 @@
       return slot;
     }
 
+    // Mirrors requirementText()/GAME_LABELS in profile/achievements.html
+    // (kept in sync by hand — see that file's own copy) so the "View
+    // Details" pop-out reached from a pinned badge shows the same
+    // requirement line the Achievements page itself would.
+    const GAME_LABELS = { 'anagram-quest': 'Anagram Quest', 'space-snake': 'Space Snake' };
+    function requirementText(a) {
+      const v = a.requirement_value;
+      switch (a.requirement_type) {
+        case 'game_level': return 'Reach level ' + v + (a.requirement_game_key ? ' in ' + (GAME_LABELS[a.requirement_game_key] || a.requirement_game_key) : '');
+        case 'game_xp': return 'Earn ' + Number(v).toLocaleString() + ' XP' + (a.requirement_game_key ? ' in ' + (GAME_LABELS[a.requirement_game_key] || a.requirement_game_key) : '');
+        case 'total_level': return 'Reach Total Level ' + v;
+        case 'games_played': return 'Play ' + v + ' game' + (v === 1 ? '' : 's');
+        case 'high_score': return 'Score ' + v + ' points in a single game';
+        default: return null;
+      }
+    }
+
     async function loadPinnedForCurrentUser() {
       const pinnedBySlot = {};
       if (window.QZAuth && window.QZAuth.client) {
@@ -1717,10 +1756,29 @@
         if (targetUserId) {
           const { data, error } = await window.QZAuth.client
             .from('pinned_achievements')
-            .select('slot, achievements(achievement_id, name, tier, description, icon)')
+            .select('slot, achievements(achievement_id, name, tier, description, icon, icon_locked, requirement_type, requirement_game_key, requirement_value)')
             .eq('user_id', targetUserId);
           if (!error && data) {
             data.forEach((row) => { if (row.achievements) pinnedBySlot[row.slot] = row.achievements; });
+          }
+          // Best-effort — unlocked_achievements is own-account-or-admin
+          // only (see schema.sql), so this silently returns nothing when
+          // viewing someone else's public profile; the pop-out already
+          // renders fine with unlockedAt simply absent in that case.
+          const ids = Object.values(pinnedBySlot).map((a) => a.achievement_id);
+          if (ids.length) {
+            try {
+              const { data: ua } = await window.QZAuth.client
+                .from('unlocked_achievements')
+                .select('achievement_id, unlocked_at')
+                .eq('user_id', targetUserId)
+                .in('achievement_id', ids);
+              (ua || []).forEach((row) => {
+                Object.keys(pinnedBySlot).forEach((slot) => {
+                  if (pinnedBySlot[slot].achievement_id === row.achievement_id) pinnedBySlot[slot].unlocked_at = row.unlocked_at;
+                });
+              });
+            } catch (err) { /* not our own account's data — fine, just no date shown */ }
           }
         }
       }
@@ -1735,7 +1793,8 @@
         if (a) {
           list.appendChild(renderFilledSlot({
             id: a.achievement_id, name: a.name, tier: a.tier || '',
-            description: a.description || '', icon: a.icon || '',
+            description: a.description || '', icon: a.icon || '', iconLocked: a.icon_locked || null,
+            requirement: requirementText(a), unlockedAt: a.unlocked_at || null,
             unlocked: true // a pinned achievement is always an unlocked one — see pinned_achievements' own constraints
           }));
         } else {

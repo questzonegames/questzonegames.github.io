@@ -45,8 +45,23 @@ table.hs-table tr.hs-row-clickable { cursor: pointer; }
    pixel-identical on the main table, a player's own page, and Compare. */
 table.hs-table th.hs-col-rank, table.hs-table td.hs-col-rank { width: 60px; text-align: center; }
 table.hs-table th.hs-col-name, table.hs-table td.hs-col-name { text-align: left; white-space: normal; }
-table.hs-table th.hs-col-level, table.hs-table td.hs-col-level { width: 76px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--blue-light); }
-table.hs-table th.hs-col-xp, table.hs-table td.hs-col-xp { width: 96px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; color: #d8e4ff; }
+/* Level/XP columns are deliberately smaller text than the rest of the
+   table, not wider boxes — XP alone can run into the hundreds of
+   millions or billions once a player's total is high enough, and
+   table-layout:fixed above means a wide value can never nudge the
+   column itself wider to fit, only overflow it and force .hs-table-
+   wrap's horizontal scrollbar. A smaller, fixed size here comfortably
+   fits an XP value into the low billions (13 characters incl. commas)
+   without that scrollbar, on every row alike. tabular-nums keeps every
+   digit the same width so this stays predictable digit-to-digit. */
+table.hs-table th.hs-col-level, table.hs-table td.hs-col-level {
+  width: 76px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--blue-light);
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
+table.hs-table th.hs-col-xp, table.hs-table td.hs-col-xp {
+  width: 108px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; color: #d8e4ff;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
 table.hs-table th.hs-arrow-col, table.hs-table td.hs-arrow-col { width: 36px; text-align: center; }
 
 /* Name/skill cell content — icon + label, vertically centred as one unit
