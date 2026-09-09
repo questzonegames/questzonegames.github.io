@@ -399,6 +399,12 @@
   .inv-card:hover { transform: translateY(-2px); border-color: rgba(150,200,255,0.6); box-shadow: 0 6px 16px rgba(0,0,0,0.4), 0 0 14px rgba(70,140,255,0.3); }
   .inv-card-icon { font-size: 22px; line-height: 1; }
   .inv-card-icon img { width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 0 5px rgba(120,180,255,0.35)); }
+  /* A split-parts item (e.g. left+right boots) shows both pieces of art
+     side by side as one combined thumbnail — see thumbHtml() in
+     assets/js/inventory.js. Same box everywhere an item's icon appears
+     (this card, Worn Equipment, the examine popover). */
+  .inv-thumb-parts { display: inline-flex; gap: 2px; }
+  .inv-thumb-parts img { width: 20px; height: 30px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(120,180,255,0.3)); }
   .inv-card-name { font-size: 11px; text-align: center; line-height: 1.25; }
   .inv-card-slot { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
   .inv-card.equipped { opacity: 0.5; }

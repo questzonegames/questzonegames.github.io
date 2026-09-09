@@ -183,6 +183,96 @@ these should recalibrate that anchor properly (find the actual brow/eye
 row by colour, not alpha silhouette) rather than trusting the placeholder
 percentage.
 
+## Split left/right parts — boots, gloves (and any future item like them)
+
+Some items physically come in a left-and-right pair (a left boot + a right
+boot, a left glove + a right glove) that need to be positioned
+*independently* in the rig editor — one boot resting correctly on the left
+foot doesn't mean the same art, mirrored, lands correctly on the right foot
+too. This is still **one item** — one catalog entry, one `inventory_items`/
+`player_item_stacks` row, one equip/unequip action, one slot in
+`equipped_items` — the split is purely a *rendering* detail, layered on
+top of the ordinary equip system, never an ownership one.
+
+**Catalog shape** (`assets/js/inventory-data.js`):
+
+```js
+{
+  id: 'santa-boots',
+  name: 'Santa Boots',
+  slot: 'boots',
+  parts: ['left', 'right'],       // <- presence of this array is what turns split-parts rendering on
+  views: {
+    left:  { front: '...-left-front.png',  right: '...', back: '...', left: '...' },
+    right: { front: '...-right-front.png', right: '...', back: '...', left: '...' }
+  }
+  // partAnchor: { left: 'left_foot', right: 'right_foot' } — optional;
+  // this is also the DEFAULT for a boots/gloves item, so you don't
+  // normally need to set it explicitly.
+}
+```
+
+An item with no `parts` array is completely unaffected — this is 100%
+additive; Admin Crown and every other single-piece item render exactly as
+before.
+
+**New rig anchors** — `LEFT_FOOT`/`RIGHT_FOOT`/`LEFT_HAND`/`RIGHT_HAND`,
+measured the same rigorous alpha-silhouette way as SKULL (see
+`assets/js/avatar-rig.js` / the `avatar_rig_anchors` table), per direction.
+"Left"/"right" here are **screen position within that direction's own
+image** (whichever foot/fist cluster has the smaller on-canvas X), not
+anatomical — this sidesteps front/back mirroring confusion entirely.
+Front and back views measure the two feet/fists as genuinely separate
+alpha clusters; **right/left (profile) views cannot** — the near and far
+foot (or the fist against the hip) overlap into one merged silhouette in
+profile, so `left_foot`/`right_foot` (and `left_hand`/`right_hand`) share
+the *same* measured anchor in those two directions. An admin still
+separates the two pieces visually there via each row's own
+`offset_x`/`offset_y` — same per-item calibration as any other item, just
+starting from a shared anchor instead of two distinct ones.
+
+**Database** — `avatar_rig_items` gained a `part` column
+(`'single'` default / `'left'` / `'right'`), now part of its primary key,
+so one item can have two independent calibration rows per direction
+instead of one. `admin_save_avatar_rig_item()` /
+`admin_reset_avatar_rig_item_to_factory()` both take an optional `p_part`
+(defaults to `'single'` — every existing call site, i.e. Admin Crown,
+needs no changes). See `supabase/migrations/
+20260909060000_avatar_rig_split_parts.sql`.
+
+**Admin Zone → Avatar Rig editor** — selecting an item with a `parts`
+array reveals a **Part** selector (Left/Right) right under the Item
+dropdown. Switching it loads/saves that part's own calibration completely
+independently — position, scale, and rotation for the left boot never
+touch the right boot's row. A part with no saved calibration yet defaults
+its anchor to `left_foot`/`right_foot` (boots) or `left_hand`/`right_hand`
+(gloves) automatically, so a brand-new split item starts pointed at a
+sensible anchor instead of `skull`.
+
+**Renderer** (`assets/js/avatar-viewer.js`) — a split-parts item gets TWO
+independent DOM layers per pose (`equipLayers['boots#left']`,
+`equipLayers['boots#right']`), each positioned via its own anchor +
+calibration row, exactly like a normal item's single layer. Equipping/
+unequipping still touches exactly one `equipped_items` row — the two
+render layers are created/destroyed together, driven by that one
+equip state, never independently.
+
+**Inventory/Worn Equipment/examine icon** — a split-parts item's
+thumbnail shows both pieces of art side by side (`thumbHtml()` in
+`assets/js/inventory.js`, mirrored in `profile/admin-inventory.html`) —
+"both boots next to each other" in one inventory slot, not two separate
+entries.
+
+**Adding a real split-parts item**: get 4 directional views for EACH
+piece (8 images total for boots — `<item>-left-front.png` /
+`<item>-right-front.png` / etc per direction), add the catalog entry
+above, then in Admin Zone → Avatar Rig: pick the item, use the Part
+selector to switch between Left and Right, and position each exactly like
+any other item (drag on the stage, or the numeric X/Y/Scale/Rotation
+fields) — save each part separately. No code changes needed for a new
+split-parts item once one exists; this is now a data-only addition, same
+as any other item.
+
 ## What is NOT built yet, and why (read before promising a feature)
 
 The base body art (`avatar-<dir>.png` etc) is **one single flattened image

@@ -217,6 +217,14 @@
               <label>Item</label>
               <select id="sel-item"></select>
             </div>
+            <div class="rig-field" id="field-part-picker" hidden>
+              <label>Part</label>
+              <select id="sel-part">
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+              <p class="rig-mirror-hint" style="margin-top:6px;">This item has separate left/right art (e.g. a left boot and a right boot) — each is calibrated independently. Switch here to edit the other one; both still equip/unequip together as one item.</p>
+            </div>
             <div class="rig-field" id="field-anchor-type-picker">
               <label>Anchor (rig anchor mode)</label>
               <select id="sel-anchor-pick">
@@ -224,6 +232,10 @@
                 <option value="skull">Skull</option>
                 <option value="forehead">Forehead</option>
                 <option value="neck">Neck</option>
+                <option value="left_foot">Left Foot</option>
+                <option value="right_foot">Right Foot</option>
+                <option value="left_hand">Left Hand</option>
+                <option value="right_hand">Right Hand</option>
               </select>
             </div>
             <div class="rig-field">
@@ -284,6 +296,10 @@
                 <option value="skull">Skull</option>
                 <option value="forehead">Forehead</option>
                 <option value="neck">Neck</option>
+                <option value="left_foot">Left Foot</option>
+                <option value="right_foot">Right Foot</option>
+                <option value="left_hand">Left Hand</option>
+                <option value="right_hand">Right Hand</option>
               </select>
             </div>
 
@@ -388,6 +404,7 @@
   let bodyType = 'male';
   let slot = 'head';
   let itemId = null;
+  let part = 'single'; // 'single' (every item so far) | 'left' | 'right' — see field-part-picker
   let direction = 'front';
   let pickedAnchorType = 'skull'; // for RIG ANCHOR mode's anchor-type picker
 
@@ -399,6 +416,17 @@
   let localAnchor = {};
   let savedAnchor = {};
 
+  // A part's default anchor before any calibration has ever been saved —
+  // same left_foot/right_foot/left_hand/right_hand derivation
+  // avatar-viewer.js's defaultAnchorForPart() uses, so a brand-new
+  // split-parts item starts pointed at a sensible anchor instead of
+  // 'skull'.
+  function defaultCalibFor(curSlot, curPart) {
+    const anchorType = (curPart === 'left' || curPart === 'right')
+      ? curPart + '_' + (curSlot === 'boots' ? 'foot' : 'hand')
+      : 'skull';
+    return { anchor_type: anchorType, offset_x: 0, offset_y: 0, scale: 1, rotation: 0 };
+  }
   const DEFAULT_ITEM_CALIB = { anchor_type: 'skull', offset_x: 0, offset_y: 0, scale: 1, rotation: 0 };
 
   // ================= undo/redo =================
@@ -470,10 +498,11 @@
     rigData = await AV.loadRigData(client);
     localItemCalib = {}; savedItemCalib = {};
     POSES.forEach((dir) => {
-      const row = rigData.items[bodyType] && rigData.items[bodyType][slot] && rigData.items[bodyType][slot][itemId] && rigData.items[bodyType][slot][itemId][dir];
+      const itemRig = rigData.items[bodyType] && rigData.items[bodyType][slot] && rigData.items[bodyType][slot][itemId];
+      const row = itemRig && itemRig[part] && itemRig[part][dir];
       const val = row
         ? { anchor_type: row.anchor_type, offset_x: Number(row.offset_x), offset_y: Number(row.offset_y), scale: Number(row.scale), rotation: Number(row.rotation) }
-        : Object.assign({}, DEFAULT_ITEM_CALIB);
+        : defaultCalibFor(slot, part);
       localItemCalib[dir] = Object.assign({}, val);
       savedItemCalib[dir] = Object.assign({}, val);
     });
@@ -509,6 +538,34 @@
   }
   refreshItemOptions();
 
+  // ---- part picker — shown only for an item whose catalog entry
+  // declares `parts` (e.g. ['left','right'] for a split boots/gloves
+  // item). Every item so far has no `parts` array, so this stays hidden
+  // and `part` stays 'single' — zero behaviour change for them. ----
+  const partField = document.getElementById('field-part-picker');
+  const partSel = document.getElementById('sel-part');
+  function currentCatalogItem() {
+    return (window.QZ_ITEM_CATALOG || []).find((i) => i.id === itemId) || null;
+  }
+  function refreshPartOptions() {
+    const item = currentCatalogItem();
+    const parts = item && Array.isArray(item.parts) ? item.parts : null;
+    if (!parts || !parts.length) {
+      partField.hidden = true;
+      part = 'single';
+      return;
+    }
+    partField.hidden = false;
+    partSel.innerHTML = '';
+    parts.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p; opt.textContent = p[0].toUpperCase() + p.slice(1);
+      partSel.appendChild(opt);
+    });
+    part = parts[0];
+    partSel.value = part;
+  }
+
   slotSel.addEventListener('change', async () => {
     slot = slotSel.value;
     refreshItemOptions();
@@ -518,9 +575,17 @@
     itemId = itemSel.value || null;
     await onItemChanged();
   });
+  partSel.addEventListener('change', async () => {
+    part = partSel.value;
+    history = []; historyIndex = -1; refreshUndoRedoButtons();
+    await loadItemCalibForCurrentItem();
+    syncControlsFromState();
+    renderStage();
+  });
 
   async function onItemChanged() {
     history = []; historyIndex = -1; refreshUndoRedoButtons();
+    refreshPartOptions();
     if (itemId) await loadItemCalibForCurrentItem();
     syncControlsFromState();
     renderStage();
@@ -949,10 +1014,19 @@
     });
 
     if (mode === 'item') {
-      if (!itemId) { itemImg.style.display = 'none'; }
+      const item = itemId ? window.QZ_ITEM_CATALOG.find((i) => i.id === itemId) : null;
+      // Split-parts item (item.views keyed by part, not direction) —
+      // show whichever part is currently selected (see field-part-
+      // picker); every other item's item.views is keyed by direction
+      // directly. An item with NO views at all (e.g. Doggy Slippers,
+      // icon-only so far) has nothing to preview on the stage yet —
+      // that's a real, valid state (calibration can't mean anything
+      // without art to position), not an error; hide the preview image
+      // instead of crashing on it.
+      const views = item && ((part !== 'single' && item.views && item.views[part]) ? item.views[part] : item.views);
+      if (!item || !views || !views[direction]) { itemImg.style.display = 'none'; }
       else {
-        const item = window.QZ_ITEM_CATALOG.find((i) => i.id === itemId);
-        const src = '../' + item.views[direction];
+        const src = '../' + views[direction];
         if (itemImg.dataset.src !== src) { itemImg.src = src; itemImg.dataset.src = src; }
         itemImg.style.display = '';
         const natImg = await preloadImage(src);
@@ -992,7 +1066,7 @@
       '<b>MODE:</b> ' + mode.toUpperCase() + '<br>' +
       (mode === 'anchor'
         ? '<b>ANCHOR:</b> ' + pickedAnchorType + '<br><b>X%:</b> ' + (c.center_x_pct != null ? c.center_x_pct.toFixed(2) : '—') + '<br><b>Y%:</b> ' + (c.y_pct != null ? c.y_pct.toFixed(2) : '—') + '<br><b>W%:</b> ' + (c.width_pct != null ? c.width_pct.toFixed(2) : '—')
-        : '<b>SLOT:</b> ' + slot + '<br><b>ITEM:</b> ' + (itemId || '—') + '<br><b>ANCHOR:</b> ' + c.anchor_type + '<br><b>X:</b> ' + c.offset_x.toFixed(1) + '<br><b>Y:</b> ' + c.offset_y.toFixed(1) + '<br><b>SCALE:</b> ' + c.scale.toFixed(3) + '<br><b>ROTATION:</b> ' + c.rotation.toFixed(1) + '°') +
+        : '<b>SLOT:</b> ' + slot + '<br><b>ITEM:</b> ' + (itemId || '—') + (part !== 'single' ? '<br><b>PART:</b> ' + part : '') + '<br><b>ANCHOR:</b> ' + c.anchor_type + '<br><b>X:</b> ' + c.offset_x.toFixed(1) + '<br><b>Y:</b> ' + c.offset_y.toFixed(1) + '<br><b>SCALE:</b> ' + c.scale.toFixed(3) + '<br><b>ROTATION:</b> ' + c.rotation.toFixed(1) + '°') +
       '<br><b>STATE:</b> ' + (isDirty(direction) ? 'Unsaved' : 'Saved');
   }
 
@@ -1028,7 +1102,8 @@
     const c = localItemCalib[dir];
     const { error } = await client.rpc('admin_save_avatar_rig_item', {
       p_body_type: bodyType, p_slot: slot, p_item_id: itemId, p_direction: dir,
-      p_anchor_type: c.anchor_type, p_offset_x: c.offset_x, p_offset_y: c.offset_y, p_scale: c.scale, p_rotation: c.rotation
+      p_anchor_type: c.anchor_type, p_offset_x: c.offset_x, p_offset_y: c.offset_y, p_scale: c.scale, p_rotation: c.rotation,
+      p_part: part
     });
     if (error) throw error;
     savedItemCalib[dir] = Object.assign({}, c);
@@ -1097,7 +1172,7 @@
     if (!ok) return;
     setSaveStatus('Resetting…');
     try {
-      const { error } = await client.rpc('admin_reset_avatar_rig_item_to_factory', { p_body_type: bodyType, p_slot: slot, p_item_id: itemId, p_direction: direction });
+      const { error } = await client.rpc('admin_reset_avatar_rig_item_to_factory', { p_body_type: bodyType, p_slot: slot, p_item_id: itemId, p_direction: direction, p_part: part });
       if (error) throw error;
       await loadItemCalibForCurrentItem();
       history = []; historyIndex = -1; refreshUndoRedoButtons();

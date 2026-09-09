@@ -222,10 +222,17 @@
       });
       const items = {};
       (itemsRes.data || []).forEach((r) => {
+        // keyed one level deeper than before — [.. item_id][part][direction]
+        // — 'single' is every existing row (Admin Crown) and every item
+        // that only ever has one piece of art; 'left'/'right' let a
+        // boots/gloves item carry two independently-calibrated pieces.
+        // See docs/avatar-equipment.md's "split left/right parts" section.
+        const part = r.part || 'single';
         items[r.body_type] = items[r.body_type] || {};
         items[r.body_type][r.slot] = items[r.body_type][r.slot] || {};
         items[r.body_type][r.slot][r.item_id] = items[r.body_type][r.slot][r.item_id] || {};
-        items[r.body_type][r.slot][r.item_id][r.direction] = r;
+        items[r.body_type][r.slot][r.item_id][part] = items[r.body_type][r.slot][r.item_id][part] || {};
+        items[r.body_type][r.slot][r.item_id][part][r.direction] = r;
       });
       return { anchors, items };
     }).catch((err) => {
@@ -599,12 +606,27 @@
     // to the same equippedItems state, just not pretending to be pixel-
     // attached to a character with no art for that slot.
     const SLOT_ORDER = ['back', 'body', 'legs', 'boots', 'necklace', 'head', 'gloves', 'mainHand', 'offHand', 'accessory'];
-    function clearEquipLayer(slotKey) {
-      const limgs = equipLayers[slotKey];
+    function clearEquipLayer(layerKey) {
+      const limgs = equipLayers[layerKey];
       if (!limgs) return;
       limgs.forEach((img) => img.remove());
-      delete equipLayers[slotKey];
-      delete equipLive[slotKey];
+      delete equipLayers[layerKey];
+      delete equipLive[layerKey];
+    }
+    // slotKey -> ['left','right'] while that slot currently holds a
+    // split-parts item (see setAvatarEquipment) — tracked separately from
+    // equipLayers/equipLive because those are keyed by the composite
+    // layerKey ('boots#left'), not the real slot, and clearing a slot that
+    // just changed away from a split item needs to know which layerKeys
+    // to remove.
+    const equipPartsBySlot = {};
+    // A boots/gloves item with no explicit item.partAnchor override uses
+    // this — 'left'/'right' + the slot's natural body region — matching
+    // the anchor_type values seeded in the avatar_rig_split_parts
+    // migration (left_foot/right_foot/left_hand/right_hand).
+    function defaultAnchorForPart(slotKey, part) {
+      if (slotKey === 'boots') return part + '_foot';
+      return part + '_hand'; // gloves today; any future split-parts slot defaults here too
     }
 
     // Live-position one slot's 4 view images against the current rig data
@@ -612,10 +634,17 @@
     // window resize (the container's own on-screen size changed, so the
     // screen-space rect every item is placed at must be recomputed; the
     // underlying canvas-space calibration itself hasn't changed at all).
-    function layoutEquipLayer(slotKey, rigData) {
-      const limgs = equipLayers[slotKey];
+    function layoutEquipLayer(layerKey, rigData) {
+      const limgs = equipLayers[layerKey];
+      if (!limgs || !limgs[0]) return;
+      // The real slot (for rig/anchor lookups) and, for a split-parts
+      // item, which part this particular layer is — both stamped onto
+      // the images themselves at creation time (see setEquipLayer), since
+      // layerKey itself ('boots#left') isn't a real slot key.
+      const slotKey = limgs[0].dataset.slot;
+      const part = limgs[0].dataset.part || 'single';
       const item = currentEquipment[slotKey];
-      if (!limgs || !item) return;
+      if (!item) return;
       const bodyType = currentGender || 'male';
       POSES.forEach((pose, i) => {
         const img = limgs[i];
@@ -626,7 +655,8 @@
         const renderedRect = computeRenderedImageRect(contentBox, dims.w, dims.h);
         const anchorRow = rigData.anchors[bodyType] && rigData.anchors[bodyType][pose] && rigData.anchors[bodyType][pose][img.dataset.anchorType];
         if (!anchorRow) { img.style.opacity = '0'; img.dataset.broken = 'true'; return; }
-        const calibRow = (rigData.items[bodyType] && rigData.items[bodyType][slotKey] && rigData.items[bodyType][slotKey][item.id] && rigData.items[bodyType][slotKey][item.id][pose]) || {};
+        const itemRig = rigData.items[bodyType] && rigData.items[bodyType][slotKey] && rigData.items[bodyType][slotKey][item.id];
+        const calibRow = (itemRig && itemRig[part] && itemRig[part][pose]) || {};
         const layout = computeItemLayout(
           renderedRect, dims.w, dims.h, anchorRow, calibRow,
           Number(img.dataset.itemNaturalW), Number(img.dataset.itemNaturalH)
@@ -642,7 +672,7 @@
     }
     function layoutAllLiveEquipLayers() {
       loadRigData(client()).then((rigData) => {
-        Object.keys(equipLive).forEach((slotKey) => { if (equipLive[slotKey]) layoutEquipLayer(slotKey, rigData); });
+        Object.keys(equipLive).forEach((layerKey) => { if (equipLive[layerKey]) layoutEquipLayer(layerKey, rigData); });
       });
     }
     // A plain debounced setTimeout, not requestAnimationFrame — rAF is
@@ -673,30 +703,45 @@
     // - item.views + the old EQUIP_POSITIONS percentages: last-resort,
     //   for a slot that isn't full-canvas and has no rig row and no
     //   frames either.
-    function setEquipLayer(slotKey, item) {
-      clearEquipLayer(slotKey);
+    // part is undefined/null for a normal single-piece item (Admin Crown,
+    // and every item so far); 'left'/'right' for one piece of a
+    // split-parts boots/gloves item — see docs/avatar-equipment.md. Each
+    // part gets its OWN layerKey ('boots#left') so the two pieces are
+    // fully independent DOM layers, independently positioned, while
+    // still being the exact same equip/unequip action and the exact same
+    // equipped_items row (the split is purely a rendering detail, never
+    // an ownership/inventory one).
+    function setEquipLayer(slotKey, item, part) {
+      const layerKey = part ? slotKey + '#' + part : slotKey;
+      clearEquipLayer(layerKey);
       const bodyType = currentGender || 'male';
+      const views = part ? (item.views && item.views[part]) : item.views;
       let rigLooksAvailable = false;
       loadRigData(client()).then((rigData) => {
         rigLooksAvailable = !!(rigData.anchors[bodyType] && Object.keys(rigData.anchors[bodyType]).length);
-        const useFrames = !rigLooksAvailable && item.frames;
+        const useFrames = !rigLooksAvailable && item.frames && !part; // split-parts items have no legacy `frames` fallback — live rig only
+        const classSlot = slotKey + (part ? '-' + part : '');
         const limgs = POSES.map((pose) => {
           const img = document.createElement('img');
-          const directionClass = 'avatar-equip-' + slotKey + ' avatar-equip-' + slotKey + '-' + pose;
+          const directionClass = 'avatar-equip-' + classSlot + ' avatar-equip-' + classSlot + '-' + pose;
+          img.dataset.slot = slotKey;
+          if (part) img.dataset.part = part;
           if (useFrames) {
             img.className = 'avatar-sprite avatar-equip-frame ' + directionClass;
             img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
             img.src = prefix + item.frames[pose];
-          } else if (item.views) {
+          } else if (views) {
             img.className = 'avatar-equip-live ' + directionClass;
             img.style.position = 'absolute';
             img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
-            img.dataset.anchorType = item.anchorType || 'skull';
-            img.src = prefix + item.views[pose];
+            img.dataset.anchorType = part
+              ? ((item.partAnchor && item.partAnchor[part]) || defaultAnchorForPart(slotKey, part))
+              : (item.anchorType || 'skull');
+            img.src = prefix + views[pose];
             img.addEventListener('load', () => {
               img.dataset.itemNaturalW = String(img.naturalWidth);
               img.dataset.itemNaturalH = String(img.naturalHeight);
-              loadRigData(client()).then((rd) => layoutEquipLayer(slotKey, rd));
+              loadRigData(client()).then((rd) => layoutEquipLayer(layerKey, rd));
             });
           } else {
             // no views art at all — nothing to place; the loadout chip
@@ -712,9 +757,9 @@
           container.appendChild(img);
           return img;
         });
-        equipLayers[slotKey] = limgs;
-        equipLive[slotKey] = !useFrames && !!item.views;
-        if (!useFrames && item.views) layoutEquipLayer(slotKey, rigData);
+        equipLayers[layerKey] = limgs;
+        equipLive[layerKey] = !useFrames && !!views;
+        if (!useFrames && views) layoutEquipLayer(layerKey, rigData);
         render();
       });
     }
@@ -724,6 +769,21 @@
       loadout.innerHTML = '';
       SLOT_ORDER.forEach((slotKey) => {
         const item = items[slotKey];
+        // Split-parts item: item.parts is an explicit array, e.g.
+        // ['left','right'] — one independent equip layer per part,
+        // instead of the single layer every other item uses.
+        if (item && Array.isArray(item.parts) && item.parts.length && item.views) {
+          if (equipPartsBySlot[slotKey] && !item.parts.every((p) => equipPartsBySlot[slotKey].includes(p))) {
+            equipPartsBySlot[slotKey].forEach((p) => clearEquipLayer(slotKey + '#' + p));
+          }
+          equipPartsBySlot[slotKey] = item.parts.slice();
+          item.parts.forEach((part) => setEquipLayer(slotKey, item, part));
+          return;
+        }
+        if (equipPartsBySlot[slotKey]) {
+          equipPartsBySlot[slotKey].forEach((p) => clearEquipLayer(slotKey + '#' + p));
+          delete equipPartsBySlot[slotKey];
+        }
         if (item && (item.frames || item.views)) {
           setEquipLayer(slotKey, item);
           return;

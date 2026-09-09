@@ -112,6 +112,10 @@
   .ainv-card.owned { border-color: rgba(90,220,150,0.4); }
   .ainv-card-icon { font-size: 26px; line-height: 1; }
   .ainv-card-icon img { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 5px rgba(120,180,255,0.35)); }
+  /* Split-parts item (left+right boots/gloves) — both pieces side by
+     side as one combined thumbnail, see thumbHtml() above. */
+  .inv-thumb-parts { display: inline-flex; gap: 2px; }
+  .inv-thumb-parts img { width: 26px; height: 40px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(120,180,255,0.3)); }
   .ainv-card-name { font-size: 11.5px; text-align: center; line-height: 1.25; }
   .ainv-card-slot { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
   .ainv-card-tag {
@@ -299,12 +303,24 @@
       document.removeEventListener('pointerdown', onOutsideExamine, true);
     }
     function onOutsideExamine(e) { if (examineEl && !examineEl.contains(e.target)) closeExamine(); }
+    // Mirrors thumbHtml() in assets/js/inventory.js — a split-parts item
+    // (item.parts, e.g. ['left','right'] for a left/right boot or glove
+    // pair — see docs/avatar-equipment.md) shows both pieces side by
+    // side rather than picking one arbitrarily.
+    function thumbHtml(item) {
+      if (item.parts && item.views) {
+        return '<span class="inv-thumb-parts">' +
+          item.parts.map((p) => '<img src="' + item.views[p].front + '" alt="">').join('') +
+          '</span>';
+      }
+      return item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+    }
     function openExamine(item, x, y) {
       closeExamine(); closeMenu();
       examineEl = document.createElement('div');
       examineEl.className = 'qz-examine';
       examineEl.innerHTML =
-        '<div class="qz-examine-icon">' + (item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon) + '</div>' +
+        '<div class="qz-examine-icon">' + thumbHtml(item) + '</div>' +
         '<div class="qz-examine-name">' + item.name + '</div>' +
         '<div class="qz-examine-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</div>';
       document.body.appendChild(examineEl);
@@ -364,7 +380,7 @@
         card.type = 'button';
         card.className = 'ainv-card' + (owned ? ' owned' : '');
         card.title = item.name + '\n' + slotLabel + (owned ? '\nAlready owned' : '');
-        const thumb = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+        const thumb = thumbHtml(item);
         card.innerHTML =
           '<span class="ainv-card-icon">' + thumb + '</span>' +
           '<span class="ainv-card-name">' + item.name + '</span>' +

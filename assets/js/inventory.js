@@ -76,6 +76,23 @@
     return CATALOG.filter((it) => ownedIds.has(it.id));
   }
 
+  // One item's icon, wherever it needs to show as a single small thumb
+  // (a worn-equipment tile, the inventory grid, the examine popover) —
+  // real front-view art if the item has it, else its emoji icon. A
+  // split-parts item (item.parts, e.g. ['left','right'] — see docs/
+  // avatar-equipment.md) is still ONE item with one inventory slot, but
+  // its "icon" is genuinely two pieces of art, so this shows both side
+  // by side rather than picking one arbitrarily — the "both boots next
+  // to each other" thumbnail.
+  function thumbHtml(item) {
+    if (item.parts && item.views) {
+      return '<span class="inv-thumb-parts">' +
+        item.parts.map((p) => '<img src="' + item.views[p].front + '" alt="">').join('') +
+        '</span>';
+    }
+    return item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+  }
+
   // "8:37 PM on 03/09/2026" — UK date order, UTC, 12-hour clock. Reads
   // the actual acquired_at stored on the inventory row, not "now".
   function formatAcquired(isoString) {
@@ -105,26 +122,30 @@
     return out;
   }
 
+  // Both go through the equip_item()/unequip_item() RPCs (see
+  // supabase/migrations/20260909050100_item_economy_rpcs.sql) — direct
+  // client writes to equipped_items were deliberately revoked in that
+  // same migration. For a stackable item, equipping moves exactly one
+  // unit out of player_item_stacks atomically with the equip; a bare
+  // client UPDATE could never do that safely (nothing would stop it
+  // equipping an item, or a quantity, the account doesn't actually have).
+  // For today's simple-ownership items (Admin Crown, Doggy Slippers) this
+  // is the same operation as before, just server-verified now instead of
+  // a raw upsert/delete.
   async function equip(itemId) {
     if (adminReadOnly) return; // admin viewing someone else's inventory — view only, no write path yet
     const item = catalogById[itemId];
     if (!item || !ownedIds.has(itemId) || !client) return;
-    const { error } = await client
-      .from('equipped_items')
-      .upsert({ user_id: uid, slot: item.slot, item_id: itemId }, { onConflict: 'user_id,slot' });
-    if (error) { console.warn('Quest Zone: could not equip', error); return; }
+    const { error } = await client.rpc('equip_item', { p_slot: item.slot, p_item_id: itemId });
+    if (error) { console.warn('Quest Zone: could not equip', error); if (window.qzToast) window.qzToast(error.message || 'Could not equip that item.'); return; }
     equipped[item.slot] = itemId;
     renderAll();
   }
   async function unequip(slotKey) {
     if (adminReadOnly) return;
     if (!equipped[slotKey] || !client) return;
-    const { error } = await client
-      .from('equipped_items')
-      .delete()
-      .eq('user_id', uid)
-      .eq('slot', slotKey);
-    if (error) { console.warn('Quest Zone: could not unequip', error); return; }
+    const { error } = await client.rpc('unequip_item', { p_slot: slotKey });
+    if (error) { console.warn('Quest Zone: could not unequip', error); if (window.qzToast) window.qzToast(error.message || 'Could not unequip that item.'); return; }
     delete equipped[slotKey];
     renderAll();
   }
@@ -225,7 +246,7 @@
     examineEl = document.createElement('div');
     examineEl.className = 'qz-examine';
     examineEl.innerHTML =
-      '<div class="qz-examine-icon">' + (item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon) + '</div>' +
+      '<div class="qz-examine-icon">' + thumbHtml(item) + '</div>' +
       '<div class="qz-examine-name">' + item.name + '</div>' +
       '<div class="qz-examine-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</div>' +
       (isEquipped(item.id) ? '<div class="qz-examine-tag">Equipped</div>' : '');
@@ -255,7 +276,7 @@
       const iconEl = document.createElement('div');
       iconEl.className = 'worn-slot-icon';
       if (item) {
-        iconEl.innerHTML = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+        iconEl.innerHTML = thumbHtml(item);
       } else {
         iconEl.innerHTML = silhouetteSVG(slotDef.key);
       }
@@ -360,7 +381,7 @@
       card.type = 'button';
       card.className = 'inv-card' + (equippedNow ? ' equipped' : '');
       card.title = item.name + '\n' + slotLabel + (acquired ? '\nDate acquired: ' + acquired : '');
-      const thumb = item.views ? '<img src="' + item.views.front + '" alt="">' : item.icon;
+      const thumb = thumbHtml(item);
       card.innerHTML =
         '<span class="inv-card-icon">' + thumb + '</span>' +
         '<span class="inv-card-name">' + item.name + '</span>' +
