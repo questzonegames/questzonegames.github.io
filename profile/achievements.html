@@ -363,6 +363,10 @@
       case 'total_level': return 'Reach Total Level ' + v;
       case 'games_played': return 'Play ' + v + ' game' + (v === 1 ? '' : 's') + (a.game_key ? ' of ' + (GAME_LABELS[a.game_key] || a.game_key) : '');
       case 'high_score': return 'Score ' + v + ' points in a single game' + (a.game_key ? ' of ' + (GAME_LABELS[a.game_key] || a.game_key) : '');
+      case 'anagram_final_rounds': return 'Solve ' + v + ' Final Round' + (v === 1 ? '' : 's') + ' in Anagram Quest';
+      case 'anagram_hard_high_score': return 'Score ' + v + ' points in a single Anagram Quest game on Hard difficulty';
+      case 'anagram_hard_final_round': return 'Solve the Round 5 Final Round in Anagram Quest on Hard difficulty';
+      case 'anagram_perfect_game': return 'Score in every round and solve the Final Round in the same Anagram Quest game';
       default: return a.description || 'Special achievement.';
     }
   }
@@ -377,7 +381,7 @@
     const stats = {};
     if (!client || !uid) return stats;
     try {
-      const [{ data: gs }, { data: gp }, { data: totalLevel }] = await Promise.all([
+      const [{ data: gs }, { data: gp }, { data: totalLevel }, { data: aqs }] = await Promise.all([
         client.from('game_stats').select('game_key,games_played,high_score').eq('user_id', uid),
         client.from('game_progress').select('game_key,xp,level').eq('user_id', uid),
         // The SAME public.total_level() the server itself checks a
@@ -385,7 +389,13 @@
         // met() in the migration) — not a client-side approximation, so
         // the Jack of All Trades progress bars can never show a number
         // that disagrees with what actually unlocks them.
-        client.rpc('total_level', { p_user: uid })
+        client.rpc('total_level', { p_user: uid }),
+        // Anagram Quest's own stats table (final_rounds_solved/
+        // hard_high_score/hard_final_round_solved/perfect_game_achieved)
+        // — see supabase/migrations/20260909080000_anagram_quest_
+        // achievements_v2.sql. No row yet (never played) is a normal,
+        // valid state, not an error — every field below defaults to 0.
+        client.from('anagram_quest_stats').select('final_rounds_solved,hard_high_score,hard_final_round_solved,perfect_game_achieved').eq('user_id', uid).maybeSingle()
       ]);
       (gs || []).forEach((row) => {
         stats['games_played|' + row.game_key] = row.games_played || 0;
@@ -396,6 +406,10 @@
         stats['game_level|' + row.game_key] = row.level || 1;
       });
       stats['total_level|'] = typeof totalLevel === 'number' ? totalLevel : null; // null, not 0 — "can't compute yet" vs "genuinely zero"
+      stats['anagram_final_rounds|'] = (aqs && aqs.final_rounds_solved) || 0;
+      stats['anagram_hard_high_score|'] = (aqs && aqs.hard_high_score) || 0;
+      stats['anagram_hard_final_round|'] = aqs && aqs.hard_final_round_solved ? 1 : 0;
+      stats['anagram_perfect_game|'] = aqs && aqs.perfect_game_achieved ? 1 : 0;
     } catch (err) {
       console.warn('Achievements: could not load stats for progress bars', err);
     }

@@ -1364,13 +1364,21 @@
     // ---- achievement unlocks (see assets/js/qz-achievements.js) — every
     // call is unconditional and idempotent server-side, so no "have I
     // already got this" bookkeeping is needed here, just "did this exact
-    // condition just happen". ----
+    // condition just happen". These three are the only event-type (no
+    // stored stat, trust-the-caller) Anagram Quest achievements left —
+    // Seven Up/Octoword only need "did it ever happen once", and Nine
+    // Rack is deliberately scoped to Rounds 1-4 only (word.length===9
+    // during Round 5 is the Final Round solve itself, tracked completely
+    // separately as a cumulative server-verified stat — see
+    // anagram_final_rounds/finishGame() below — never this event id).
+    // Final Word/Final Form/Nine-Letter Legend/Anagram God/Against the
+    // Clock/Hard Hitter/Five for Five are ALL stat-based now (verified
+    // server-side against anagram_quest_stats), so they unlock via
+    // checkStatAchievements() in finishGame() below, not here.
     if (window.QZAchievements) {
-      if (valid) window.QZAchievements.unlock('anagram_first_word');
-      if (valid && word.length === 7) window.QZAchievements.unlock('anagram_first_7');
-      if (valid && word.length === 8) window.QZAchievements.unlock('anagram_first_8');
-      if (valid && word.length === 9) window.QZAchievements.unlock('anagram_first_9');
-      if (bonus && valid) window.QZAchievements.unlock('anagram_first_final');
+      if (valid && word.length === 7) window.QZAchievements.unlock('anagram_seven_up');
+      if (valid && word.length === 8) window.QZAchievements.unlock('anagram_octoword');
+      if (valid && word.length === 9 && !bonus) window.QZAchievements.unlock('anagram_nine_rack');
     }
 
     // ---- word line + exactly one success/failure icon ----
@@ -1636,13 +1644,23 @@
   // response (same "never trust a stale local copy" pattern as
   // awardIntelligenceXp's level readback) so the lobby shows the correct
   // new numbers the instant the player backs out, with no extra re-fetch.
+  // p_final_round_solved / p_round_scores feed the achievement stats added
+  // for the 20-achievement set (see supabase/migrations/20260909080000_
+  // anagram_quest_achievements_v2.sql): final_rounds_solved (Final Word/
+  // Final Form/Nine-Letter Legend/Anagram God), hard_final_round_solved
+  // (Against the Clock), and perfect_game_achieved (Five for Five, derived
+  // server-side from the 5 round scores — every Round 1-4 score plus
+  // Round 5's must all be >0). hard_high_score (Hard Hitter) already
+  // existed and needs nothing extra here.
   async function saveDifficultyStats(difficulty, finalScore, nineLetterCount) {
     if (!window.QZAuth || !window.QZAuth.client || !state.profile) return;
     try {
       const { data, error } = await window.QZAuth.client.rpc('record_anagram_quest_difficulty_result', {
         p_difficulty: difficulty,
         p_score: finalScore,
-        p_nine_letter_count: nineLetterCount
+        p_nine_letter_count: nineLetterCount,
+        p_final_round_solved: state.roundScores[4] > 0,
+        p_round_scores: state.roundScores
       });
       if (error) { console.warn('Anagram Quest: could not save difficulty stats', error); return; }
       const row = Array.isArray(data) ? data[0] : data;
@@ -1686,23 +1704,19 @@
     updateFooterStats();
 
     // ---- achievement unlocks ----
-    // One explicit event id (first-game-completed has no stored stat to
-    // check, so it's a plain trust-the-caller unlock — see
-    // unlock_achievement()) PLUS a full re-check of every stat-based
-    // achievement that exists (games played, high score, Intelligence
-    // level, total level, ...) against this account's now-just-updated
-    // real stats. That second part is deliberately generic rather than a
-    // hand-picked id list: it's what makes "reached Level 25 mid-game"
-    // or any future stat achievement unlock automatically, the moment
-    // its real threshold is actually crossed, with nothing here needing
-    // to know which achievements exist. Awaited (not fire-and-forget)
-    // specifically so state.unlockedThisGame is fully populated before
-    // the Game Over banner below reads it.
+    // Every Anagram Quest achievement that isn't Seven Up/Octoword/Nine
+    // Rack (see judgeAndEndRound() above) is a full re-check of every
+    // stat-based achievement against this account's now-just-updated real
+    // stats (games played, high score, Final Round solves, Hard-specific
+    // stats, ...) — deliberately generic rather than a hand-picked id
+    // list, so a newly-crossed threshold unlocks automatically with
+    // nothing here needing to know which achievements exist. Relies on
+    // saveDifficultyStats() (already awaited above) having written this
+    // game's stats FIRST. Awaited (not fire-and-forget) specifically so
+    // state.unlockedThisGame is fully populated before the Game Over
+    // banner below reads it.
     if (window.QZAchievements) {
-      await Promise.all([
-        window.QZAchievements.unlock('anagram_first_game'),
-        window.QZAchievements.checkStatAchievements()
-      ]);
+      await window.QZAchievements.checkStatAchievements();
     }
 
     // ---- "Achievement Unlocked" banner — Game Over screen ONLY ----

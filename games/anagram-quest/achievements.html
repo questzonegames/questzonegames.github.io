@@ -109,7 +109,17 @@
 <script src="../../assets/js/stars-plain.js"></script>
 <script>
 (function () {
-  const GAME_KEY = 'intelligence'; // the skill Anagram Quest trains — see supabase/migrations/20260905020000_intelligence_skill.sql
+  // The achievements CATALOG filter/display key is game_key='anagram-quest'
+  // (every Anagram Quest achievement row, event-based or stat-based alike —
+  // see supabase/migrations/20260909080000_anagram_quest_achievements_v2.sql).
+  // This used to filter by requirement_game_key='intelligence' instead —
+  // that column is null for every event-type achievement (Seven Up,
+  // Octoword, Nine Rack, Five for Five, ...), so those silently never
+  // appeared on this page at all. requirement_game_key is Anagram Quest's
+  // underlying skill (used only server-side, to verify a STAT-based
+  // requirement against game_stats) — a different concept from which game
+  // an achievement belongs to for display purposes.
+  const CATALOG_GAME_KEY = 'anagram-quest';
   const listEl = document.getElementById('ach-list');
   const emptyEl = document.getElementById('ach-empty');
 
@@ -135,7 +145,7 @@
     const { data: achievements, error } = await client
       .from('achievements')
       .select('achievement_id,name,description,icon,sort_order')
-      .eq('requirement_game_key', GAME_KEY)
+      .eq('game_key', CATALOG_GAME_KEY)
       .order('sort_order', { ascending: true });
 
     if (error || !achievements || achievements.length === 0) {
