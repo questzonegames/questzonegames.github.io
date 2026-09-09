@@ -8,6 +8,178 @@
 <link rel="icon" type="image/png" sizes="16x16" href="../assets/img/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="../assets/img/apple-touch-icon.png">
 <link rel="stylesheet" href="../assets/css/site.css">
+<style>
+  /* ===== Achievements page — full-width browser ==================
+     Same component family as profile/inventory.html (search/filter bar,
+     card grid, pagination, right-click context menu) just laid out full
+     width instead of a narrow sidebar-plus-grid split, since this is a
+     browse-everything page rather than a small personal item list. Every
+     class below is prefixed ach- and scoped to this page, same
+     per-page-CSS convention the rest of the site already uses. ==== */
+  .ach-page { max-width: 1400px; margin: 0 auto; padding: 26px 0 60px; }
+  .ach-panel {
+    position: relative;
+    background: var(--qp-fill);
+    border-radius: 16px;
+    padding: 2px;
+    background: var(--chrome-frame-soft);
+  }
+  .ach-panel-inner {
+    background: var(--qp-fill);
+    border-radius: 14px;
+    padding: clamp(18px, 3vw, 34px);
+  }
+
+  .ach-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px; margin-bottom: 18px; }
+  .ach-header h1 {
+    font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0.04em;
+    font-size: clamp(22px, 3vw, 30px); margin: 0; color: var(--text);
+    text-shadow: 0 0 18px rgba(90,150,255,0.35);
+  }
+  .ach-summary { font-size: 13.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .ach-summary b { color: var(--blue-light); font-weight: 700; }
+  .ach-summary-bar { width: 100%; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.08); margin-top: 8px; overflow: hidden; }
+  .ach-summary-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #7fb3ff); border-radius: 4px; transition: width 0.6s cubic-bezier(.2,.8,.2,1); }
+
+  .ach-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .ach-search {
+    flex: 1 1 260px; padding: 10px 14px; border-radius: 8px;
+    border: 1px solid rgba(120,160,220,0.3); background: rgba(4,8,16,0.6);
+    color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .ach-search::placeholder { color: var(--text-dim); }
+  .ach-search:focus { outline: none; border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+  .ach-sort {
+    padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.6); color: var(--text); font-size: 12.5px; font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.03em; cursor: pointer;
+  }
+
+  .ach-filters, .ach-game-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+  .ach-game-filters { padding-left: 4px; border-left: 2px solid rgba(120,160,220,0.25); margin-left: 2px; }
+  .ach-filter {
+    font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 7px 13px; border-radius: 7px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(10,16,30,0.6); color: var(--text-dim); cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ach-filter:hover { color: var(--text); border-color: rgba(150,200,255,0.5); }
+  .ach-filter.active {
+    color: #fff; background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%);
+    border-color: rgba(150,200,255,0.8); box-shadow: 0 0 12px rgba(70,140,255,0.5);
+  }
+  .ach-filter .count { opacity: 0.7; margin-left: 5px; font-weight: 400; }
+  .ach-game-filters.hidden { display: none; }
+
+  .ach-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+    min-height: 200px;
+    margin-top: 6px;
+  }
+  .ach-tile {
+    position: relative; text-align: left; font-family: inherit;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 14px 14px 12px; border-radius: 12px; cursor: pointer;
+    border: 1.5px solid var(--tier-border, rgba(120,160,220,0.25));
+    background: var(--tier-bg, linear-gradient(165deg, rgba(20,32,56,0.7) 0%, rgba(8,14,26,0.7) 100%));
+    box-shadow: var(--tier-shadow, none);
+    transition: transform 0.15s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+  .ach-tile:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.45), var(--tier-shadow, 0 0 14px rgba(70,140,255,0.25)); }
+  .ach-tile.locked { filter: grayscale(0.85) brightness(0.55); border-color: rgba(120,140,180,0.18); box-shadow: none; }
+  .ach-tile.locked:hover { filter: grayscale(0.7) brightness(0.68); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.4); }
+  .ach-tile.pinned::before {
+    content: '📌'; position: absolute; top: 8px; right: 9px; font-size: 12px; opacity: 0.9;
+  }
+  .ach-tile-top { display: flex; align-items: center; gap: 10px; }
+  .ach-tile-icon {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 21px;
+    background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .ach-tile.locked .ach-tile-icon { position: relative; }
+  .ach-tile.locked .ach-tile-icon::after {
+    content: '🔒'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; background: rgba(0,0,0,0.45); border-radius: 10px;
+  }
+  .ach-tile-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12.5px; line-height: 1.3; color: var(--text); }
+  .ach-tile-tier { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--tier-color, var(--text-dim)); }
+  .ach-tile-desc { font-size: 11px; color: var(--text-dim); line-height: 1.4; flex: 1; }
+  .ach-tile-meta { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+  .ach-tile-progress-track { height: 4px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 2px; }
+  .ach-tile-progress-fill { height: 100%; background: var(--tier-color, #3b82f6); border-radius: 3px; }
+  .ach-tile-empty { min-height: 92px; border-style: dashed; border-color: rgba(120,160,220,0.12); background: rgba(10,16,28,0.3); cursor: default; box-shadow: none; }
+  .ach-tile-empty:hover { transform: none; box-shadow: none; }
+
+  .ach-empty-msg { grid-column: 1 / -1; text-align: center; padding: 40px 10px; color: var(--text-dim); }
+  .ach-empty-msg .big { font-size: 34px; margin-bottom: 8px; }
+
+  .ach-pagination { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 20px; }
+  .ach-page-btn {
+    font-family: 'Orbitron', sans-serif; font-size: 10.5px; padding: 7px 11px; border-radius: 6px;
+    border: 1px solid rgba(120,160,220,0.3); background: rgba(10,16,30,0.6); color: var(--text-dim); cursor: pointer;
+  }
+  .ach-page-btn:hover { color: var(--text); border-color: rgba(150,200,255,0.5); }
+  .ach-page-btn.active { color: #fff; background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%); border-color: rgba(150,200,255,0.8); box-shadow: 0 0 10px rgba(70,140,255,0.45); }
+  .ach-page-btn:disabled { opacity: 0.35; cursor: default; }
+
+  /* right-click context menu — same component as profile/inventory.html */
+  .qz-context-menu {
+    position: fixed; z-index: 500; min-width: 170px; padding: 6px; border-radius: 9px;
+    border: 1.5px solid rgba(140,195,255,0.4);
+    background: linear-gradient(165deg, #101a30 0%, #060b16 100%);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.55), 0 0 20px rgba(60,140,255,0.25);
+  }
+  .qz-context-menu button {
+    display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; border: none;
+    background: transparent; color: var(--text); font-family: 'Orbitron', sans-serif; font-size: 11px;
+    letter-spacing: 0.05em; cursor: pointer; transition: background 0.12s ease, color 0.12s ease;
+  }
+  .qz-context-menu button:hover { background: rgba(59,130,246,0.22); color: #fff; }
+  .qz-context-menu button:disabled { opacity: 0.35; cursor: default; }
+  .qz-context-menu button:disabled:hover { background: transparent; color: var(--text); }
+
+  .ach-toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(12px);
+    background: linear-gradient(165deg, #101a30 0%, #060b16 100%); border: 1.5px solid rgba(140,195,255,0.4);
+    color: var(--text); padding: 10px 18px; border-radius: 9px; font-size: 12.5px; z-index: 600;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .ach-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- extra fields on the shared achievement-inspection.js card ---- */
+  .ach-tile-status-line { font-size: 11.5px; color: var(--text-dim); margin-top: 6px; }
+  .ach-tile-status-line.unlocked-line { color: #6be3a0; }
+  .ach-tile-requirement { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
+  .ach-tile-progress-wrap { margin-top: 10px; }
+  .ach-tile-progress-label { font-size: 10.5px; color: var(--text-dim); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .ach-tile-progress-outer { height: 8px; border-radius: 5px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .ach-tile-progress-inner { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #3b82f6, #7fb3ff); transition: width 0.5s ease; }
+  .ach-tile-pin-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .ach-tile-pin-actions button {
+    font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.05em; padding: 8px 14px;
+    border-radius: 7px; border: 1px solid rgba(150,200,255,0.5); cursor: pointer;
+    background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%); color: #fff;
+  }
+  .ach-tile-pin-actions button.unpin { background: rgba(255,255,255,0.06); border-color: rgba(120,160,220,0.3); color: var(--text-dim); }
+
+  /* Tier colour classes — mirrors QZ_ACHIEVEMENT_TIERS in
+     assets/js/qz-achievements.js exactly (kept in sync by hand; the JS
+     is the source of truth for card inline vars, this is only for the
+     .ach-tile-tier text on the inspection card, which doesn't get an
+     inline style from JS). */
+  .tier-bronze { color: #c98452; }
+  .tier-silver { color: #c7d3e6; }
+  .tier-gold { color: #ffcf4d; }
+  .tier-platinum { color: #8fe8e0; }
+  .tier-diamond { color: #9fc3ff; }
+
+  @media (max-width: 640px) {
+    .ach-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  }
+</style>
 </head>
 <body>
 
@@ -44,17 +216,38 @@
   </div>
 </nav>
 
-<main style="padding: 60px 0;">
-  <div class="container">
-    <div class="placeholder-panel">
-      <div class="icon">🏅</div>
-      <h1>Achievements</h1>
-      <p>
-        Every achievement &mdash; locked, unlocked, and organised by tier and game,
-        with filters to find exactly what you're after &mdash; will show up here.
-        This page is coming soon &mdash; check back once Quest Zone accounts launch.
-      </p>
-      <a href="index.html" class="btn btn-chrome-dark">← Back to Profile</a>
+<main>
+  <div class="container ach-page">
+    <div class="ach-panel">
+      <div class="ach-panel-inner">
+
+        <div class="ach-header">
+          <h1>Achievements</h1>
+          <div>
+            <div class="ach-summary" id="ach-summary">Loading…</div>
+            <div class="ach-summary-bar"><div class="ach-summary-fill" id="ach-summary-fill" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div class="ach-toolbar">
+          <input type="text" id="ach-search" class="ach-search" placeholder="Search achievements..." autocomplete="off">
+          <select id="ach-sort" class="ach-sort">
+            <option value="default">Sort: Default</option>
+            <option value="unlocked-first">Sort: Unlocked First</option>
+            <option value="locked-first">Sort: Locked First</option>
+            <option value="tier">Sort: Tier</option>
+            <option value="newest">Sort: Newest Unlocked</option>
+            <option value="alpha">Sort: Alphabetical</option>
+          </select>
+        </div>
+
+        <div class="ach-filters" id="ach-filters"><!-- rendered by JS --></div>
+        <div class="ach-game-filters hidden" id="ach-game-filters"><!-- rendered by JS, only under "Games" --></div>
+
+        <div class="ach-grid" id="ach-grid"><div class="ach-empty-msg"><div class="big">🏅</div>Loading achievements…</div></div>
+        <div class="ach-pagination" id="ach-pagination"></div>
+
+      </div>
     </div>
   </div>
 </main>
@@ -68,14 +261,470 @@
   </div>
 </footer>
 
+<div class="ach-toast" id="ach-toast"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="../assets/js/qz-config.js"></script>
 <script src="../assets/js/qz-auth.js"></script>
+<script src="../assets/js/qz-xp.js"></script>
+<script src="../assets/js/qz-achievements.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/email-verify-modal.js"></script>
-<script src="../assets/js/inventory-data.js"></script>
-<script src="../assets/js/item-notify.js"></script>
+<script src="../assets/js/achievement-inspection.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
+
+<script>
+(function () {
+  'use strict';
+  const PAGE_SIZE = 18;
+  const PIN_MAX = 7;
+
+  const CATEGORY_LABELS = { all: 'All', games: 'Games', levels: 'Levels', ranks: 'Ranks', misc: 'Miscellaneous', pinned: 'Pinned' };
+  // Human-readable game names for the "Games" sub-filter and card meta
+  // line — keyed by the achievements.game_key label (the game's own
+  // slug), NOT public.games (the skill/XP registry) — see the migration
+  // comment for why those two are deliberately different things. Add a
+  // new game here (and to achievement rows' game_key) and it shows up
+  // automatically, no other file needs touching.
+  const GAME_LABELS = { 'anagram-quest': 'Anagram Quest', 'space-snake': 'Space Snake' };
+
+  let client = null;
+  let uid = null;
+  let allAchievements = [];   // raw catalog rows, enriched with unlocked/pinned/progress
+  let activeCategory = 'all';
+  let activeGame = null;      // sub-filter under "games"
+  let searchTerm = '';
+  let sortMode = 'default';
+  let currentPage = 1;
+  let pinnedSlots = {};       // slot(1-7) -> achievement_id
+
+  const $ = (id) => document.getElementById(id);
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function toast(msg) {
+    const el = $('ach-toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 2400);
+  }
+
+  function requirementText(a) {
+    const v = a.requirement_value;
+    switch (a.requirement_type) {
+      case 'game_level': return 'Reach level ' + v + (a.game_key ? ' in ' + (GAME_LABELS[a.game_key] || a.game_key) : '');
+      case 'game_xp': return 'Earn ' + Number(v).toLocaleString() + ' XP' + (a.game_key ? ' in ' + (GAME_LABELS[a.game_key] || a.game_key) : '');
+      case 'total_level': return 'Reach Total Level ' + v;
+      case 'games_played': return 'Play ' + v + ' game' + (v === 1 ? '' : 's') + (a.game_key ? ' of ' + (GAME_LABELS[a.game_key] || a.game_key) : '');
+      case 'high_score': return 'Score ' + v + ' points in a single game' + (a.game_key ? ' of ' + (GAME_LABELS[a.game_key] || a.game_key) : '');
+      default: return a.description || 'Special achievement.';
+    }
+  }
+
+  // ---- data loading ----
+  async function loadStats() {
+    // Only the two stat sources today's placeholder achievements need —
+    // add another `case` here (and a matching requirement_type in the
+    // catalog + achievement_requirement_met() server-side) to support a
+    // new progress-trackable stat later. Keyed 'requirementType|gameKey'
+    // so the same stat source can back several achievements at once.
+    const stats = {};
+    if (!client || !uid) return stats;
+    try {
+      const [{ data: gs }, { data: gp }] = await Promise.all([
+        client.from('game_stats').select('game_key,games_played,high_score').eq('user_id', uid),
+        client.from('game_progress').select('game_key,xp,level').eq('user_id', uid)
+      ]);
+      (gs || []).forEach((row) => {
+        stats['games_played|' + row.game_key] = row.games_played || 0;
+        stats['high_score|' + row.game_key] = row.high_score || 0;
+      });
+      (gp || []).forEach((row) => {
+        stats['game_xp|' + row.game_key] = row.xp || 0;
+        stats['game_level|' + row.game_key] = row.level || 1;
+      });
+      if (window.QZXp) {
+        const totalLevel = Object.keys(stats)
+          .filter((k) => k.startsWith('game_level|'))
+          .reduce((sum, k) => sum + stats[k], 0);
+        stats['total_level|'] = totalLevel || null; // null, not 0 — "can't compute yet" vs "genuinely zero"
+      }
+    } catch (err) {
+      console.warn('Achievements: could not load stats for progress bars', err);
+    }
+    return stats;
+  }
+
+  function progressFor(a, stats) {
+    if (!a.requirement_type || a.requirement_value == null) return null;
+    const key = a.requirement_type + '|' + (a.requirement_type === 'total_level' ? '' : (a.requirement_game_key || ''));
+    const current = stats[key];
+    if (current == null) return null;
+    return { current: Math.min(current, a.requirement_value), max: a.requirement_value };
+  }
+
+  async function loadAll() {
+    if (!window.QZAuth || !window.QZAuth.client) { renderError('Sign in to browse achievements.'); return; }
+    client = window.QZAuth.client;
+    const profile = await window.QZAuth.getProfile();
+    uid = profile ? profile.id : null;
+
+    // "Backtrack" pass — catches this account up on anything it already
+    // qualifies for by real stats (level, games played, etc.) but never
+    // got the RPC call for, e.g. an account that reached Intelligence
+    // Level 25 before these achievements existed at all. Awaited so the
+    // very first render already reflects it, not a laggy pop-in after.
+    if (uid && window.QZAchievements) await window.QZAchievements.checkStatAchievements();
+
+    const { data: catalog, error } = await client
+      .from('achievements')
+      .select('achievement_id,name,description,icon,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value')
+      .order('sort_order', { ascending: true });
+    if (error || !catalog) { renderError('Could not load achievements right now.'); return; }
+
+    let unlockedMap = {}; // id -> unlocked_at
+    pinnedSlots = {};
+    if (uid) {
+      const [{ data: unlocked }, { data: pinned }] = await Promise.all([
+        client.from('unlocked_achievements').select('achievement_id,unlocked_at').eq('user_id', uid),
+        client.from('pinned_achievements').select('slot,achievement_id').eq('user_id', uid)
+      ]);
+      (unlocked || []).forEach((u) => { unlockedMap[u.achievement_id] = u.unlocked_at; });
+      (pinned || []).forEach((p) => { if (p.achievement_id) pinnedSlots[p.slot] = p.achievement_id; });
+    }
+    const pinnedIds = new Set(Object.values(pinnedSlots));
+
+    const stats = await loadStats();
+
+    allAchievements = catalog
+      .filter((a) => !a.hidden || unlockedMap[a.achievement_id]) // secret achievements only show once earned
+      .map((a) => ({
+        id: a.achievement_id,
+        name: a.name,
+        description: a.description || '',
+        icon: a.icon || '🏆',
+        tier: a.tier || '',
+        category: a.category || 'misc',
+        game_key: a.game_key || null,
+        requirement_type: a.requirement_type,
+        requirement_game_key: a.requirement_game_key,
+        requirement_value: a.requirement_value,
+        sort_order: a.sort_order || 0,
+        unlocked: !!unlockedMap[a.achievement_id],
+        unlockedAt: unlockedMap[a.achievement_id] || null,
+        pinned: pinnedIds.has(a.achievement_id),
+        progress: progressFor(a, stats)
+      }));
+
+    renderFilters();
+    currentPage = 1;
+    renderAll();
+  }
+
+  function renderError(msg) {
+    $('ach-summary').textContent = msg;
+    $('ach-grid').innerHTML = '<div class="ach-empty-msg"><div class="big">🏅</div>' + escapeHtml(msg) + '</div>';
+    $('ach-pagination').innerHTML = '';
+  }
+
+  // ---- filters ----
+  function renderFilters() {
+    const root = $('ach-filters');
+    root.innerHTML = '';
+    const categories = ['all', 'games', 'levels', 'ranks', 'misc', 'pinned'];
+    categories.forEach((cat) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ach-filter' + (activeCategory === cat ? ' active' : '');
+      const count = cat === 'all' ? allAchievements.length
+        : cat === 'pinned' ? allAchievements.filter((a) => a.pinned).length
+        : allAchievements.filter((a) => a.category === cat).length;
+      btn.innerHTML = escapeHtml(CATEGORY_LABELS[cat] || cat) + '<span class="count">' + count + '</span>';
+      btn.addEventListener('click', () => {
+        activeCategory = cat;
+        activeGame = null;
+        currentPage = 1;
+        renderFilters();
+        renderGameFilters();
+        renderAll();
+      });
+      root.appendChild(btn);
+    });
+    renderGameFilters();
+  }
+
+  function renderGameFilters() {
+    const root = $('ach-game-filters');
+    if (activeCategory !== 'games') { root.classList.add('hidden'); root.innerHTML = ''; return; }
+    const gameKeys = Array.from(new Set(allAchievements.filter((a) => a.category === 'games' && a.game_key).map((a) => a.game_key)));
+    if (gameKeys.length === 0) { root.classList.add('hidden'); return; }
+    root.classList.remove('hidden');
+    root.innerHTML = '';
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'ach-filter' + (!activeGame ? ' active' : '');
+    allBtn.textContent = 'All Games';
+    allBtn.addEventListener('click', () => { activeGame = null; currentPage = 1; renderGameFilters(); renderAll(); });
+    root.appendChild(allBtn);
+    gameKeys.forEach((gk) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ach-filter' + (activeGame === gk ? ' active' : '');
+      btn.textContent = GAME_LABELS[gk] || gk;
+      btn.addEventListener('click', () => { activeGame = gk; currentPage = 1; renderGameFilters(); renderAll(); });
+      root.appendChild(btn);
+    });
+  }
+
+  // ---- filter/search/sort pipeline ----
+  function filteredSorted() {
+    let list = allAchievements.slice();
+    if (activeCategory === 'pinned') {
+      list = list.filter((a) => a.pinned);
+    } else if (activeCategory !== 'all') {
+      list = list.filter((a) => a.category === activeCategory);
+      if (activeCategory === 'games' && activeGame) list = list.filter((a) => a.game_key === activeGame);
+    }
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter((a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.description.toLowerCase().includes(q) ||
+        (GAME_LABELS[a.game_key] || a.game_key || '').toLowerCase().includes(q) ||
+        (CATEGORY_LABELS[a.category] || a.category || '').toLowerCase().includes(q)
+      );
+    }
+    const tierRank = (t) => (window.QZAchievements ? window.QZAchievements.tierInfo(t).rank : 0);
+    switch (sortMode) {
+      case 'unlocked-first': list.sort((a, b) => (b.unlocked - a.unlocked) || (a.sort_order - b.sort_order)); break;
+      case 'locked-first': list.sort((a, b) => (a.unlocked - b.unlocked) || (a.sort_order - b.sort_order)); break;
+      case 'tier': list.sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || (a.sort_order - b.sort_order)); break;
+      case 'newest': list.sort((a, b) => {
+        if (a.unlocked && b.unlocked) return new Date(b.unlockedAt) - new Date(a.unlockedAt);
+        return b.unlocked - a.unlocked;
+      }); break;
+      case 'alpha': list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      default: list.sort((a, b) => a.sort_order - b.sort_order);
+    }
+    return list;
+  }
+
+  function totalPages(list) { return Math.max(1, Math.ceil(list.length / PAGE_SIZE)); }
+
+  function renderAll() {
+    const list = filteredSorted();
+    const summaryEl = $('ach-summary');
+    const unlockedCount = allAchievements.filter((a) => a.unlocked).length;
+    const total = allAchievements.length;
+    const pct = total ? Math.round((unlockedCount / total) * 100) : 0;
+    summaryEl.innerHTML = 'Achievements <b>' + unlockedCount + ' / ' + total + '</b> — <b>' + pct + '%</b> Complete';
+    $('ach-summary-fill').style.width = pct + '%';
+
+    const tp = totalPages(list);
+    if (currentPage > tp) currentPage = tp;
+    if (currentPage < 1) currentPage = 1;
+
+    renderGrid(list);
+    renderPagination(tp);
+  }
+
+  // ---- grid ----
+  function tierVars(tierKey) {
+    if (!window.QZAchievements) return {};
+    const t = window.QZAchievements.tierInfo(tierKey);
+    return { '--tier-color': t.color, '--tier-border': t.color + '55', '--tier-bg': t.bg, '--tier-shadow': '0 0 16px ' + t.glow };
+  }
+
+  function renderGrid(list) {
+    const root = $('ach-grid');
+    root.innerHTML = '';
+    if (list.length === 0) {
+      root.innerHTML = '<div class="ach-empty-msg"><div class="big">🏅</div>No achievements match your filters.</div>';
+      return;
+    }
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = list.slice(start, start + PAGE_SIZE);
+
+    pageItems.forEach((a) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'ach-tile' + (a.unlocked ? '' : ' locked') + (a.pinned ? ' pinned' : '');
+      const vars = a.unlocked ? tierVars(a.tier) : {};
+      Object.keys(vars).forEach((k) => card.style.setProperty(k, vars[k]));
+
+      const tierLabel = window.QZAchievements ? window.QZAchievements.tierInfo(a.tier).label : a.tier;
+      const gameLabel = GAME_LABELS[a.game_key] || (CATEGORY_LABELS[a.category] || a.category);
+      const prog = a.progress;
+
+      card.innerHTML =
+        '<div class="ach-tile-top">' +
+          '<span class="ach-tile-icon">' + a.icon + '</span>' +
+          '<div style="min-width:0;">' +
+            '<div class="ach-tile-name">' + escapeHtml(a.name) + '</div>' +
+            '<div class="ach-tile-tier">' + escapeHtml(tierLabel) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ach-tile-desc">' + escapeHtml(a.description) + '</div>' +
+        (prog && !a.unlocked
+          ? '<div class="ach-tile-progress-track"><div class="ach-tile-progress-fill" style="width:' + (100 * prog.current / prog.max).toFixed(1) + '%"></div></div>'
+          : '') +
+        '<div class="ach-tile-meta"><span>' + escapeHtml(gameLabel) + '</span><span>' + (a.unlocked ? 'Unlocked' : 'Locked') + '</span></div>';
+
+      card.addEventListener('click', () => openDetails(a, card));
+      card.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openContextMenu(e.clientX, e.clientY, a, card);
+      });
+      // keyboard/touch equivalent of right-click (long-press substitute:
+      // a keyboard user gets the same actions via Shift+F10/Menu key,
+      // which browsers already map to a native contextmenu event on the
+      // focused element — no extra code needed here beyond focusability,
+      // which a <button> already has).
+      root.appendChild(card);
+    });
+
+    // pad to a full row-consistent look isn't necessary with auto-fill,
+    // unlike the fixed-column inventory grid — nothing else to do here.
+  }
+
+  function renderPagination(tp) {
+    const root = $('ach-pagination');
+    root.innerHTML = '';
+    if (tp <= 1) return;
+    const mkBtn = (label, page, opts) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ach-page-btn' + (opts && opts.active ? ' active' : '');
+      btn.textContent = label;
+      if (opts && opts.disabled) btn.disabled = true;
+      else btn.addEventListener('click', () => { currentPage = page; renderAll(); window.scrollTo({ top: $('ach-grid').getBoundingClientRect().top + window.scrollY - 90, behavior: 'smooth' }); });
+      return btn;
+    };
+    root.appendChild(mkBtn('‹', currentPage - 1, { disabled: currentPage <= 1 }));
+    const windowSize = 5;
+    let startP = Math.max(1, currentPage - Math.floor(windowSize / 2));
+    let endP = Math.min(tp, startP + windowSize - 1);
+    startP = Math.max(1, endP - windowSize + 1);
+    for (let p = startP; p <= endP; p++) root.appendChild(mkBtn(String(p), p, { active: p === currentPage }));
+    root.appendChild(mkBtn('›', currentPage + 1, { disabled: currentPage >= tp }));
+  }
+
+  // ---- details modal (extends assets/js/achievement-inspection.js) ----
+  function openDetails(a, sourceEl) {
+    if (!window.QZAchievementInspection) return;
+    window.QZAchievementInspection.open({
+      id: a.id, name: a.name, tier: a.tier || 'unranked', description: a.description, icon: a.icon,
+      unlocked: a.unlocked, unlockedAt: a.unlockedAt, game: GAME_LABELS[a.game_key] || a.game_key,
+      category: CATEGORY_LABELS[a.category] || a.category,
+      requirement: requirementText(a), progress: a.progress, pinned: a.pinned,
+      onPin: a.unlocked ? () => { pinAchievement(a); } : null,
+      onUnpin: a.pinned ? () => { unpinAchievement(a); } : null
+    }, sourceEl);
+  }
+
+  // ---- context menu ----
+  let menuEl = null;
+  function closeMenu() {
+    if (menuEl) { menuEl.remove(); menuEl = null; }
+    document.removeEventListener('pointerdown', onOutside, true);
+    document.removeEventListener('keydown', onEsc, true);
+  }
+  function onOutside(e) { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }
+  function onEsc(e) { if (e.key === 'Escape') closeMenu(); }
+  function openContextMenu(x, y, a, sourceEl) {
+    closeMenu();
+    menuEl = document.createElement('div');
+    menuEl.className = 'qz-context-menu';
+    const actions = [];
+    if (a.unlocked) {
+      if (a.pinned) {
+        actions.push({ label: 'Unpin Achievement', onClick: () => unpinAchievement(a) });
+      } else {
+        // One "Pin in Slot N" action per FREE slot only — an already-
+        // occupied slot never shows as pinnable here, so choosing a slot
+        // is exactly how a player reorders their showcase: unpin the one
+        // they want moved, then pin the new one into that now-free slot.
+        for (let slot = 1; slot <= PIN_MAX; slot++) {
+          if (pinnedSlots[slot]) continue;
+          actions.push({ label: 'Pin in Slot ' + slot, onClick: () => pinAchievement(a, slot) });
+        }
+        if (actions.length === 0) {
+          actions.push({ label: 'Pin Achievement', disabled: true, onClick: () => {} });
+        }
+      }
+    } else {
+      actions.push({ label: 'Pin Achievement', disabled: true, onClick: () => {} });
+    }
+    actions.push({ label: 'View Details', onClick: () => openDetails(a, sourceEl) });
+    actions.forEach((act) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = act.label;
+      if (act.disabled) btn.disabled = true;
+      btn.addEventListener('click', () => { closeMenu(); act.onClick(); });
+      menuEl.appendChild(btn);
+    });
+    document.body.appendChild(menuEl);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const rect = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.max(8, Math.min(x, vw - rect.width - 8)) + 'px';
+    menuEl.style.top = Math.max(8, Math.min(y, vh - rect.height - 8)) + 'px';
+    setTimeout(() => {
+      document.addEventListener('pointerdown', onOutside, true);
+      document.addEventListener('keydown', onEsc, true);
+    }, 0);
+  }
+
+  // ---- pin / unpin — writes straight to pinned_achievements (own-row
+  // RLS covers this, no RPC needed — see the table's policies in
+  // supabase/schema.sql). profile/index.html's own pinned-badges render
+  // reads this exact table, so a pin made here shows up there next time
+  // that page loads with zero extra wiring. ----
+  async function pinAchievement(a, requestedSlot) {
+    if (!client || !uid) { toast('Sign in to pin achievements.'); return; }
+    if (!a.unlocked) return; // belt-and-suspenders — menu already hides this
+    const usedSlots = Object.keys(pinnedSlots).map(Number);
+    if (usedSlots.length >= PIN_MAX) { toast('You can only pin up to 7 achievements.'); return; }
+    let slot = requestedSlot;
+    if (!slot || pinnedSlots[slot]) {
+      // No explicit slot given (e.g. the details modal's quick "Pin
+      // Achievement" button), or the requested one filled in the split
+      // second since the menu was opened — fall back to the first free
+      // slot rather than failing outright.
+      slot = 1;
+      while (pinnedSlots[slot]) slot++;
+    }
+    const { error } = await client.from('pinned_achievements').insert({ user_id: uid, slot, achievement_id: a.id });
+    if (error) { toast('Could not pin that achievement.'); return; }
+    pinnedSlots[slot] = a.id;
+    a.pinned = true;
+    toast('Pinned "' + a.name + '".');
+    renderFilters();
+    renderAll();
+  }
+  async function unpinAchievement(a) {
+    if (!client || !uid) return;
+    const slot = Object.keys(pinnedSlots).find((s) => pinnedSlots[s] === a.id);
+    if (slot == null) return;
+    const { error } = await client.from('pinned_achievements').delete().eq('user_id', uid).eq('slot', slot);
+    if (error) { toast('Could not unpin that achievement.'); return; }
+    delete pinnedSlots[slot];
+    a.pinned = false;
+    toast('Unpinned "' + a.name + '".');
+    renderFilters();
+    renderAll();
+  }
+
+  // ---- toolbar wiring ----
+  let searchDebounce = null;
+  $('ach-search').addEventListener('input', (e) => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => { searchTerm = e.target.value.trim(); currentPage = 1; renderAll(); }, 150);
+  });
+  $('ach-sort').addEventListener('change', (e) => { sortMode = e.target.value; currentPage = 1; renderAll(); });
+
+  loadAll();
+})();
+</script>
 </body>
 </html>

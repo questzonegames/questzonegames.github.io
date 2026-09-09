@@ -19,7 +19,7 @@
 // (works even if the page scrolled/resized while the card was open).
 (function () {
   let backdropEl, cardEl, flyerEl, flyerImg, closeBtn;
-  let cardIconImg, nameEl, tierEl, descEl;
+  let cardIconImg, nameEl, tierEl, descEl, statusEl, requirementEl, progressWrap, progressLabel, progressInner, pinActionsEl;
   let currentSource = null;
   let isOpen = false;
   let lastFocused = null;
@@ -44,6 +44,13 @@
         '<h2 class="ach-card-name" id="ach-card-title"></h2>' +
         '<div class="ach-card-tier"></div>' +
         '<p class="ach-card-desc"></p>' +
+        '<div class="ach-card-status-line"></div>' +
+        '<div class="ach-card-requirement"></div>' +
+        '<div class="ach-card-progress-wrap" hidden>' +
+          '<div class="ach-card-progress-label"></div>' +
+          '<div class="ach-card-progress-outer"><div class="ach-card-progress-inner" style="width:0%"></div></div>' +
+        '</div>' +
+        '<div class="ach-card-pin-actions"></div>' +
       '</div>';
     document.body.appendChild(backdropEl);
 
@@ -55,6 +62,12 @@
     nameEl = cardEl.querySelector('.ach-card-name');
     tierEl = cardEl.querySelector('.ach-card-tier');
     descEl = cardEl.querySelector('.ach-card-desc');
+    statusEl = cardEl.querySelector('.ach-card-status-line');
+    requirementEl = cardEl.querySelector('.ach-card-requirement');
+    progressWrap = cardEl.querySelector('.ach-card-progress-wrap');
+    progressLabel = cardEl.querySelector('.ach-card-progress-label');
+    progressInner = cardEl.querySelector('.ach-card-progress-inner');
+    pinActionsEl = cardEl.querySelector('.ach-card-pin-actions');
 
     // click the dark backdrop (not the card) to close
     backdropEl.addEventListener('click', (e) => {
@@ -92,6 +105,52 @@
     tierEl.textContent = achievement.tier;
     tierEl.className = 'ach-card-tier tier-' + String(achievement.tier || '').toLowerCase();
     descEl.textContent = achievement.description || '';
+
+    // ---- optional richer fields — every caller so far (profile/index.html's
+    // pinned-badge slots) only ever passes icon/name/tier/description, so
+    // all of this is skipped/hidden gracefully when absent, exactly as
+    // this file's own header comment always promised it would be. ----
+    if (statusEl) {
+      if (achievement.unlocked === true) {
+        statusEl.textContent = 'Unlocked' + (achievement.unlockedAt ? ' — ' + new Date(achievement.unlockedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+        statusEl.className = 'ach-card-status-line unlocked-line';
+        statusEl.hidden = false;
+      } else if (achievement.unlocked === false) {
+        statusEl.textContent = 'Locked';
+        statusEl.className = 'ach-card-status-line';
+        statusEl.hidden = false;
+      } else {
+        statusEl.hidden = true;
+      }
+    }
+    if (requirementEl) {
+      if (achievement.requirement) { requirementEl.textContent = achievement.requirement; requirementEl.hidden = false; }
+      else { requirementEl.hidden = true; }
+    }
+    if (progressWrap) {
+      const p = achievement.progress;
+      if (p && p.max > 0) {
+        progressWrap.hidden = false;
+        progressLabel.textContent = 'Progress: ' + p.current.toLocaleString() + ' / ' + p.max.toLocaleString();
+        progressInner.style.width = Math.min(100, (100 * p.current / p.max)).toFixed(1) + '%';
+      } else {
+        progressWrap.hidden = true;
+      }
+    }
+    if (pinActionsEl) {
+      pinActionsEl.innerHTML = '';
+      if (typeof achievement.onPin === 'function') {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = 'Pin Achievement';
+        btn.addEventListener('click', () => { achievement.onPin(); close(); });
+        pinActionsEl.appendChild(btn);
+      } else if (typeof achievement.onUnpin === 'function') {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'unpin'; btn.textContent = 'Unpin Achievement';
+        btn.addEventListener('click', () => { achievement.onUnpin(); close(); });
+        pinActionsEl.appendChild(btn);
+      }
+    }
 
     document.documentElement.classList.add('ach-scroll-lock');
     backdropEl.setAttribute('aria-hidden', 'false');

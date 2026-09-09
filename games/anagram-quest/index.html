@@ -161,6 +161,27 @@
   }
   .subtitle { text-align: center; color: var(--text-main); font-weight: 700; margin: 0 0 10px; opacity: 0.92; }
 
+  /* ---- Game Over "Achievement Unlocked" banners — see
+     showUnlockedAchievementsOnGameOver() in anagram-quest.js. Deliberately
+     the ONLY place these ever render (never mid-round) — see
+     state.trackingAchievementUnlocks. Empty #go-achievement-banners has
+     no size of its own, so it's fully invisible when nothing unlocked. */
+  .aq-achieve-banner {
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, rgba(255,207,77,0.16), rgba(10,14,26,0.85));
+    border: 1.5px solid rgba(255,207,77,0.5);
+    border-radius: 12px; padding: 10px 14px; margin: 0 0 8px;
+    box-shadow: 0 0 18px rgba(255,207,77,0.2);
+    opacity: 0; transform: translateY(-8px);
+    animation: aqAchieveIn 0.4s ease forwards;
+  }
+  .aq-achieve-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+  .aq-achieve-text { display: flex; flex-direction: column; text-align: left; min-width: 0; }
+  .aq-achieve-label { font-family: 'Saira', sans-serif; font-weight: 900; font-size: 10.5px; letter-spacing: 0.1em; color: var(--gold); text-transform: uppercase; }
+  .aq-achieve-name { font-weight: 700; font-size: 14px; color: var(--text-main); }
+  .aq-achieve-tier { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  @keyframes aqAchieveIn { to { opacity: 1; transform: translateY(0); } }
+
   .btn {
     font-family: 'Saira', sans-serif; font-weight: 700;
     border: none; cursor: pointer; border-radius: 999px;
@@ -1123,7 +1144,7 @@
           <button class="hero-icon-btn" type="button" data-coming-soon="Settings are coming soon!" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 17.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 13 1.7 1.7 0 0 0 3.09 12H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 6.6a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.24a1.7 1.7 0 0 0 1-1.55V2.6a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V6.6a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
           </button>
-          <a class="hero-icon-btn" href="achievements.html" title="Achievements">
+          <a class="hero-icon-btn" href="../../profile/achievements.html" title="Achievements">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H4v2a4 4 0 0 0 4 4"/><path d="M16 5h4v2a4 4 0 0 1-4 4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
           </a>
         </div>
@@ -1460,6 +1481,12 @@
   <section id="screen-gameover" class="screen hidden">
     <div class="panel">
       <div class="gold-heading">GAME OVER</div>
+      <!-- Achievement Unlocked banners — populated ONLY here, by
+           showUnlockedAchievementsOnGameOver() in anagram-quest.js, and
+           ONLY once the game has actually finished (never mid-round) —
+           see state.unlockedThisGame/trackingAchievementUnlocks. Empty
+           and invisible (no min-height) when nothing unlocked. -->
+      <div id="go-achievement-banners"></div>
       <div class="diff-chip" id="go-diff-chip">EASY</div>
       <div class="final-score-line"><span class="name" id="go-name">Player</span>: <span class="num" id="go-score">0</span></div>
 
@@ -1499,6 +1526,7 @@
 <script src="../../assets/js/qz-config.js"></script>
 <script src="../../assets/js/qz-auth.js"></script>
 <script src="../../assets/js/qz-xp.js"></script>
+<script src="../../assets/js/qz-achievements.js"></script>
 <script src="../../assets/js/skill-card.js"></script>
 <script src="../../assets/js/site.js"></script>
 <script src="../../assets/js/starfield.js"></script>

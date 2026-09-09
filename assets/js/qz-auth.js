@@ -184,6 +184,13 @@
     if (!user) return null;
     const { data, error } = await client.from('profiles').select('*').eq('id', user.id).single();
     if (error) return null;
+    // Fires on every successful getProfile() call, not just a true first
+    // session — deliberately, since unlock_achievement() is idempotent
+    // (see assets/js/qz-achievements.js) so repeat calls after the first
+    // are free no-ops. Simpler and more reliable than trying to detect
+    // "this is genuinely the first login" precisely, and only runs at all
+    // on pages that also loaded qz-achievements.js.
+    if (window.QZAchievements) window.QZAchievements.unlock('misc_first_login');
     return data;
   }
 

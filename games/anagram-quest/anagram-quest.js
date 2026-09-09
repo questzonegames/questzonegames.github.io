@@ -613,6 +613,13 @@
     bonusWord: null,
     round5Solutions: null,
     nineLetterCount: 0,  // valid 9-letter solves THIS game (any round) — reset in selectDifficulty(), sent once to record_anagram_quest_difficulty_result() in finishGame()
+    // Every achievement unlocked since selectDifficulty() started THIS
+    // game (see the document-level 'qz-achievement-unlocked' listener
+    // near the bottom of this file) — collected silently through every
+    // round, then shown as a batch of banners on the Game Over screen
+    // only (see showUnlockedAchievementsOnGameOver()), never mid-round.
+    unlockedThisGame: [],
+    trackingAchievementUnlocks: false,
     selecting: false,     // true while V/C picks are still being made (round timer not started)
     profile: null,        // { id, username, ... } or null for a guest
     highScore: 0,
@@ -857,6 +864,13 @@
       state.gamesPlayed = (statsRow && statsRow.games_played) || 0;
       await loadDifficultyStats();
       await loadIntelligenceLevel();
+      // Catches this account up on any achievement it already qualifies
+      // for by real, already-recorded stats (level, games played, high
+      // score, ...) the moment the lobby loads — not awaited, since
+      // nothing on this screen depends on it finishing; it just needs to
+      // run. Covers "reached Level 25 before this achievement existed" /
+      // "played 10+ games already" without needing a fresh game first.
+      if (window.QZAchievements) window.QZAchievements.checkStatAchievements();
     } catch (err) {
       console.warn('Anagram Quest: could not load account data', err);
     }
@@ -1347,6 +1361,18 @@
     else if (bonus && !valid) playSound('final-round-fail');
     else playSound(valid ? 'word-valid' : 'word-invalid');
 
+    // ---- achievement unlocks (see assets/js/qz-achievements.js) — every
+    // call is unconditional and idempotent server-side, so no "have I
+    // already got this" bookkeeping is needed here, just "did this exact
+    // condition just happen". ----
+    if (window.QZAchievements) {
+      if (valid) window.QZAchievements.unlock('anagram_first_word');
+      if (valid && word.length === 7) window.QZAchievements.unlock('anagram_first_7');
+      if (valid && word.length === 8) window.QZAchievements.unlock('anagram_first_8');
+      if (valid && word.length === 9) window.QZAchievements.unlock('anagram_first_9');
+      if (bonus && valid) window.QZAchievements.unlock('anagram_first_final');
+    }
+
     // ---- word line + exactly one success/failure icon ----
     if (word) {
       resultLabel.textContent = 'Your answer (' + word.length + ' letter' + (word.length === 1 ? '' : 's') + '):';
@@ -1658,7 +1684,77 @@
     ]);
     goGamesPlayed.textContent = state.gamesPlayed;
     updateFooterStats();
+
+    // ---- achievement unlocks ----
+    // One explicit event id (first-game-completed has no stored stat to
+    // check, so it's a plain trust-the-caller unlock — see
+    // unlock_achievement()) PLUS a full re-check of every stat-based
+    // achievement that exists (games played, high score, Intelligence
+    // level, total level, ...) against this account's now-just-updated
+    // real stats. That second part is deliberately generic rather than a
+    // hand-picked id list: it's what makes "reached Level 25 mid-game"
+    // or any future stat achievement unlock automatically, the moment
+    // its real threshold is actually crossed, with nothing here needing
+    // to know which achievements exist. Awaited (not fire-and-forget)
+    // specifically so state.unlockedThisGame is fully populated before
+    // the Game Over banner below reads it.
+    if (window.QZAchievements) {
+      await Promise.all([
+        window.QZAchievements.unlock('anagram_first_game'),
+        window.QZAchievements.checkStatAchievements()
+      ]);
+    }
+
+    // ---- "Achievement Unlocked" banner — Game Over screen ONLY ----
+    // state.unlockedThisGame was populated by the 'qz-achievement-
+    // unlocked' listener (see near the top of this file) picking up
+    // every unlock that actually happened since this game started
+    // (selectDifficulty() below resets the list and starts tracking) —
+    // covers both the per-round event unlocks (7/8/9-letter words, the
+    // Final Round) AND the stat re-check just above, in one place,
+    // deliberately never shown mid-round so it can't distract from
+    // actual play.
+    await showUnlockedAchievementsOnGameOver();
   }
+
+  // Fetches display info (name/icon/tier) for whatever actually unlocked
+  // this game and renders one small banner per achievement at the top of
+  // the Game Over panel. Silently does nothing if nothing unlocked, or if
+  // the achievements catalog can't be reached — this is a nice-to-have
+  // celebration, never something that should be able to break Game Over.
+  async function showUnlockedAchievementsOnGameOver() {
+    const container = document.getElementById('go-achievement-banners');
+    if (container) container.innerHTML = '';
+    const ids = Array.from(new Set(
+      state.unlockedThisGame.filter((u) => u && u.newlyUnlocked).map((u) => u.achievementId)
+    ));
+    state.trackingAchievementUnlocks = false; // stop collecting until the next game starts
+    if (ids.length === 0 || !container || !window.QZAuth || !window.QZAuth.client) return;
+    try {
+      const { data, error } = await window.QZAuth.client
+        .from('achievements')
+        .select('achievement_id,name,icon,tier')
+        .in('achievement_id', ids);
+      if (error || !data || !data.length) return;
+      data.forEach((a, i) => {
+        const el = document.createElement('div');
+        el.className = 'aq-achieve-banner';
+        el.style.animationDelay = (i * 0.15) + 's';
+        el.innerHTML =
+          '<span class="aq-achieve-icon">' + (a.icon || '🏆') + '</span>' +
+          '<div class="aq-achieve-text">' +
+            '<span class="aq-achieve-label">Achievement Unlocked</span>' +
+            '<span class="aq-achieve-name">' + escapeAqText(a.name) + '</span>' +
+            '<span class="aq-achieve-tier">' + escapeAqText(a.tier || '') + '</span>' +
+          '</div>';
+        container.appendChild(el);
+      });
+      playSound('nine-letter-success'); // reuse the existing big celebratory cue — no dedicated achievement sound exists yet
+    } catch (err) {
+      console.warn('Anagram Quest: could not show unlocked achievements', err);
+    }
+  }
+  function escapeAqText(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
   document.getElementById('btn-back-lobby').addEventListener('click', () => {
     playSound('back');
@@ -1675,6 +1771,8 @@
     state.totalScore = 0;
     state.roundScores = [0, 0, 0, 0, 0];
     state.nineLetterCount = 0;
+    state.unlockedThisGame = [];
+    state.trackingAchievementUnlocks = true; // see the 'qz-achievement-unlocked' listener below — starts collecting fresh for this game only
     updateDifficultyChips();
     playIntro();
   }
@@ -1889,6 +1987,15 @@
       if (e.key === 'Escape' && openKind) closePopover();
     });
   }
+
+  // Collects every achievement unlocked while state.trackingAchievementUnlocks
+  // is true (set/cleared by selectDifficulty()/showUnlockedAchievementsOnGameOver())
+  // — bound once, for the page's whole lifetime, regardless of how many
+  // games get played in a row. See qz-achievements.js for where this
+  // event actually gets fired.
+  document.addEventListener('qz-achievement-unlocked', (e) => {
+    if (state.trackingAchievementUnlocks) state.unlockedThisGame.push(e.detail);
+  });
 
   // ================= init =================
   loadAccountData();
