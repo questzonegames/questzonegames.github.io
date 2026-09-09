@@ -300,6 +300,7 @@
 <script src="../assets/js/qz-achievements.js"></script>
 <script src="../assets/js/qz-header-auth.js"></script>
 <script src="../assets/js/email-verify-modal.js"></script>
+<script src="../assets/js/inventory-data.js"></script>
 <script src="../assets/js/achievement-inspection.js"></script>
 <script src="../assets/js/starfield.js"></script>
 <script src="../assets/js/site.js"></script>
@@ -424,7 +425,7 @@
 
     const { data: catalog, error } = await client
       .from('achievements')
-      .select('achievement_id,name,description,icon,icon_locked,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value')
+      .select('achievement_id,name,description,icon,icon_locked,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value,reward_item_ids')
       .order('sort_order', { ascending: true });
     if (error || !catalog) { renderError('Could not load achievements right now.'); return; }
 
@@ -450,6 +451,7 @@
         description: a.description || '',
         icon: a.icon || '🏆',
         iconLocked: a.icon_locked || null,
+        rewardItemIds: a.reward_item_ids || null,
         tier: a.tier || '',
         category: a.category || 'misc',
         game_key: a.game_key || null,
@@ -762,6 +764,7 @@
     if (!window.QZAchievementInspection) return;
     window.QZAchievementInspection.open({
       id: a.id, name: a.name, tier: a.tier || 'unranked', description: a.description, icon: a.icon, iconLocked: a.iconLocked,
+      rewardItemIds: a.rewardItemIds,
       unlocked: a.unlocked, unlockedAt: a.unlockedAt, game: GAME_LABELS[a.game_key] || a.game_key,
       category: CATEGORY_LABELS[a.category] || a.category,
       requirement: requirementText(a), progress: a.progress, pinned: a.pinned,

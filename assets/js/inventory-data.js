@@ -40,6 +40,28 @@
   ];
 
   const ITEMS = [
+    // First normal (non-admin-only) item in the catalog — awarded, not
+    // found/bought/gifted, by "Welcome to Your Profile" (see
+    // supabase/migrations/20260909040000_achievement_item_rewards.sql's
+    // reward_item_ids and unlock_achievement()'s reward-grant step).
+    // `tradeable: false` / `source` / `sourceAchievementId` aren't
+    // consumed by any code yet — Quest Zone has no trading/marketplace
+    // system to restrict against today — but are here so one exists the
+    // moment that system does, and so this item's own listing already
+    // documents where it came from. No `views`/`frames` yet (see this
+    // file's header comment) — `icon` alone is a fully working item
+    // everywhere (Worn Equipment, Inventory, examine, item-notify's "you
+    // received an item" popup); add real on-body art here later without
+    // touching anything else.
+    {
+      id: 'doggy-slippers',
+      name: 'Doggy Slippers',
+      slot: 'boots',
+      icon: '🥿',
+      tradeable: false,
+      source: 'achievement',
+      sourceAchievementId: 'welcome_to_your_profile'
+    },
     {
       id: 'admin-crown',
       name: 'Admin Crown',

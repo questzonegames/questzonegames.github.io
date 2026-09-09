@@ -6,13 +6,19 @@
 //   window.QZAchievementInspection.open(achievement, sourceEl);
 //
 // achievement shape (only icon/name/tier/description are required —
-// progress/unlocked/unlockedAt/game/category/onPin/onUnpin are accepted
-// and skipped gracefully when absent, so a caller passing the minimal
-// set still works):
+// progress/unlocked/unlockedAt/game/category/rewardItemIds/onPin/onUnpin
+// are accepted and skipped gracefully when absent, so a caller passing
+// the minimal set still works):
 //   {
 //     id, name, tier, description, icon,
-//     unlocked, unlockedAt, progress, game, category, onPin, onUnpin
+//     unlocked, unlockedAt, progress, game, category, rewardItemIds,
+//     onPin, onUnpin
 //   }
+// rewardItemIds (from achievements.reward_item_ids — see
+// supabase/migrations/20260909040000_achievement_item_rewards.sql), when
+// present, renders a generic "Reward: <item name(s)>" line with each
+// item's icon, resolved from window.QZ_ITEM_CATALOG — see
+// rewardItemsFor() below. Works for any achievement, not just one.
 // icon can be a plain emoji OR a path to a real badge image (see
 // isImageIcon() in qz-achievements.js) — always shown as-is regardless
 // of unlocked state (only the card's BACKGROUND panel is locked-gated,
@@ -53,8 +59,24 @@
     return PANEL_IMAGES[key] || PANEL_IMAGES.locked;
   }
 
+  // Generic reward display — ANY achievement can carry rewardItemIds (see
+  // reward_item_ids in supabase/migrations/20260909040000_achievement_
+  // item_rewards.sql), not just "Welcome to Your Profile"/Doggy Slippers.
+  // Item NAMES/ICONS are resolved from window.QZ_ITEM_CATALOG (assets/js/
+  // inventory-data.js) — the same reference-data catalog Inventory itself
+  // reads — so adding a future item-reward achievement never means
+  // touching this file: give the achievement row a reward_item_ids entry
+  // and make sure the item already exists in the catalog, and it shows
+  // up here automatically.
+  function rewardItemsFor(achievement) {
+    const ids = achievement && achievement.rewardItemIds;
+    if (!ids || !ids.length) return [];
+    const catalog = window.QZ_ITEM_CATALOG || [];
+    return ids.map((id) => catalog.find((it) => it.id === id) || { id, name: id }).filter(Boolean);
+  }
+
   let backdropEl, cardEl, flyerEl, closeBtn;
-  let cardIconBadge, nameEl, tierEl, descEl, statusEl, requirementEl, progressWrap, progressLabel, progressInner, pinActionsEl;
+  let cardIconBadge, nameEl, tierEl, descEl, statusEl, requirementEl, rewardEl, progressWrap, progressLabel, progressInner, pinActionsEl;
   let currentSource = null;
   let isOpen = false;
   let lastFocused = null;
@@ -83,6 +105,7 @@
         '<p class="ach-card-desc"></p>' +
         '<div class="ach-card-status-line"></div>' +
         '<div class="ach-card-requirement"></div>' +
+        '<div class="ach-card-reward"></div>' +
         '<div class="ach-card-progress-wrap" hidden>' +
           '<div class="ach-card-progress-label"></div>' +
           '<div class="ach-card-progress-outer"><div class="ach-card-progress-inner" style="width:0%"></div></div>' +
@@ -100,6 +123,7 @@
     descEl = cardEl.querySelector('.ach-card-desc');
     statusEl = cardEl.querySelector('.ach-card-status-line');
     requirementEl = cardEl.querySelector('.ach-card-requirement');
+    rewardEl = cardEl.querySelector('.ach-card-reward');
     progressWrap = cardEl.querySelector('.ach-card-progress-wrap');
     progressLabel = cardEl.querySelector('.ach-card-progress-label');
     progressInner = cardEl.querySelector('.ach-card-progress-inner');
@@ -209,6 +233,20 @@
     if (requirementEl) {
       if (achievement.requirement) { requirementEl.textContent = achievement.requirement; requirementEl.hidden = false; }
       else { requirementEl.hidden = true; }
+    }
+    if (rewardEl) {
+      const rewardItems = rewardItemsFor(achievement);
+      if (rewardItems.length) {
+        const names = rewardItems.map((it) => it.name).join(', ');
+        const icons = rewardItems.map((it) =>
+          it.views ? '<img src="' + it.views.front + '" alt="">' : '<span class="ach-card-reward-emoji">' + (it.icon || '🎁') + '</span>'
+        ).join('');
+        rewardEl.innerHTML = '<span class="ach-card-reward-icons">' + icons + '</span><span>Reward: ' + names + '</span>';
+        rewardEl.hidden = false;
+      } else {
+        rewardEl.innerHTML = '';
+        rewardEl.hidden = true;
+      }
     }
     if (progressWrap) {
       const p = achievement.progress;

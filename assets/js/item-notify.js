@@ -47,6 +47,8 @@
       'box-shadow:0 0 24px rgba(90,180,255,0.35);}' +
       '.qz-itemnotify-icon img{max-width:78%;max-height:78%;object-fit:contain;' +
       'filter:drop-shadow(0 0 10px rgba(255,210,90,0.5));}' +
+      '.qz-itemnotify-icon-emoji{font-size:42px;line-height:1;' +
+      'filter:drop-shadow(0 0 10px rgba(255,210,90,0.5));}' +
       '.qz-itemnotify-title{font-family:"Orbitron",sans-serif;font-weight:800;font-size:14px;' +
       'letter-spacing:0.04em;color:#8fd2ff;margin-bottom:8px;text-shadow:0 0 12px rgba(90,180,255,0.5);}' +
       '.qz-itemnotify-name{font-family:"Orbitron",sans-serif;font-weight:700;font-size:19px;color:#fff;margin-bottom:8px;}' +
@@ -66,7 +68,7 @@
     backdropEl.setAttribute('aria-hidden', 'true');
     backdropEl.innerHTML =
       '<div class="qz-itemnotify-card" role="dialog" aria-modal="true">' +
-        '<div class="qz-itemnotify-icon"><img alt=""></div>' +
+        '<div class="qz-itemnotify-icon"><img alt=""><span class="qz-itemnotify-icon-emoji"></span></div>' +
         '<div class="qz-itemnotify-title"></div>' +
         '<div class="qz-itemnotify-name"></div>' +
         '<div class="qz-itemnotify-meta"></div>' +
@@ -115,9 +117,26 @@
     if (entry.gifterName) meta += '\nGifted by an admin: ' + entry.gifterName;
     metaEl.textContent = meta;
     metaEl.style.whiteSpace = 'pre-line';
-    img.src = item && item.views ? item.views.front : '';
-    img.style.display = item ? '' : 'none';
-    if (!item) backdropEl.querySelector('.qz-itemnotify-icon').textContent = '🎁';
+    // Three states, same fallback order as everywhere else an item
+    // renders (inventory.js, achievement-inspection.js): real on-body art
+    // (item.views) if it exists yet, else the item's own icon (an item
+    // like Doggy Slippers can be fully real — owned, equippable — before
+    // its art does), else (item not even in the catalog, shouldn't
+    // normally happen) a generic gift emoji. Both the <img> and the
+    // emoji <span> stay permanently in the DOM (see build()) with only
+    // their visibility toggled — swapping via innerHTML/textContent
+    // instead would delete whichever element isn't current, so the next
+    // queued item (which might need the OTHER one) would find it gone.
+    const emojiEl = backdropEl.querySelector('.qz-itemnotify-icon-emoji');
+    if (item && item.views) {
+      img.src = item.views.front;
+      img.style.display = '';
+      emojiEl.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      emojiEl.textContent = item ? (item.icon || '🎁') : '🎁';
+      emojiEl.style.display = '';
+    }
 
     backdropEl.setAttribute('aria-hidden', 'false');
     // requestAnimationFrame only fires once the tab is actually painting —

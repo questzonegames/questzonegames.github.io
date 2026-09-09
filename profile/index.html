@@ -1593,6 +1593,25 @@
       const qpEl = document.getElementById('quest-points-value');
       if (qpEl) qpEl.textContent = Number(profile.quest_points || 0).toLocaleString();
 
+      // "Welcome to Your Profile" — unlocks on a first real visit to your
+      // OWN Profile page specifically (this exact branch: signed in, not
+      // admin-view, not public-view, past the email-verification gate
+      // above), not on login/account creation. unlock_achievement() is
+      // idempotent (see qz-achievements.js), so every later visit is a
+      // free no-op — nothing here needs its own "have I already done
+      // this" bookkeeping, and the reward (Doggy Slippers) is granted
+      // server-side exactly once alongside the unlock itself, gated on
+      // inventory_items' own primary key (see the migration). checkNow()
+      // re-runs the "you received an item" popup check right after, so a
+      // first-time visitor sees it on THIS load rather than the next one
+      // — item-notify.js's own on-load check already ran before this
+      // async unlock could possibly have finished.
+      if (window.QZAchievements) {
+        window.QZAchievements.unlock('welcome_to_your_profile').then(() => {
+          if (window.QZItemNotify) window.QZItemNotify.checkNow();
+        });
+      }
+
       // Stardust — own profile only, same as Customise/the profile-picture
       // button below: never shown in admin-view or public-view (see
       // supabase/migrations/20260907010000_stardust_currency.sql — it's
@@ -1756,7 +1775,7 @@
         if (targetUserId) {
           const { data, error } = await window.QZAuth.client
             .from('pinned_achievements')
-            .select('slot, achievements(achievement_id, name, tier, description, icon, icon_locked, requirement_type, requirement_game_key, requirement_value)')
+            .select('slot, achievements(achievement_id, name, tier, description, icon, icon_locked, requirement_type, requirement_game_key, requirement_value, reward_item_ids)')
             .eq('user_id', targetUserId);
           if (!error && data) {
             data.forEach((row) => { if (row.achievements) pinnedBySlot[row.slot] = row.achievements; });
@@ -1794,7 +1813,7 @@
           list.appendChild(renderFilledSlot({
             id: a.achievement_id, name: a.name, tier: a.tier || '',
             description: a.description || '', icon: a.icon || '', iconLocked: a.icon_locked || null,
-            requirement: requirementText(a), unlockedAt: a.unlocked_at || null,
+            requirement: requirementText(a), unlockedAt: a.unlocked_at || null, rewardItemIds: a.reward_item_ids || null,
             unlocked: true // a pinned achievement is always an unlocked one — see pinned_achievements' own constraints
           }));
         } else {

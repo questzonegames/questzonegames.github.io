@@ -1278,6 +1278,17 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
 .ach-card-status-line { font-size: 10px; color: #eef1f8; text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-top: 8px; }
 .ach-card-status-line.unlocked-line { color: #79f0ac; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
 .ach-card-requirement { font-size: 10px; color: #dfe4f0; text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-top: 3px; }
+/* Reward line — any achievement with rewardItemIds (see rewardItemsFor()
+   in achievement-inspection.js). Small item icon(s) + name(s), same
+   text weight as the status/requirement lines above it. */
+.ach-card-reward {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 700; color: #ffe9a8;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-top: 6px;
+}
+.ach-card-reward-icons { display: flex; gap: 3px; }
+.ach-card-reward-icons img { width: 18px; height: 18px; object-fit: contain; display: block; }
+.ach-card-reward-emoji { font-size: 14px; line-height: 1; }
 .ach-card-progress-wrap { margin-top: 8px; }
 .ach-card-progress-label { font-size: 9.5px; color: #dfe4f0; text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
 .ach-card-progress-outer { height: 5px; border-radius: 4px; background: rgba(0,0,0,0.4); overflow: hidden; }
