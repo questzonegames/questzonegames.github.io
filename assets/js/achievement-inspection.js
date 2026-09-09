@@ -238,8 +238,14 @@
       const rewardItems = rewardItemsFor(achievement);
       if (rewardItems.length) {
         const names = rewardItems.map((it) => it.name).join(', ');
+        // iconImage (a dedicated flat icon, e.g. Doggy Slippers' combined
+        // left+right art) takes priority — a split-parts item's `views`
+        // is keyed by part (left/right), not by direction, so
+        // `it.views.front` doesn't mean what it used to for those.
         const icons = rewardItems.map((it) =>
-          it.views ? '<img src="' + it.views.front + '" alt="">' : '<span class="ach-card-reward-emoji">' + (it.icon || '🎁') + '</span>'
+          it.iconImage ? '<img src="' + it.iconImage + '" alt="">'
+          : (it.views && it.views.front) ? '<img src="' + it.views.front + '" alt="">'
+          : '<span class="ach-card-reward-emoji">' + (it.icon || '🎁') + '</span>'
         ).join('');
         rewardEl.innerHTML = '<span class="ach-card-reward-icons">' + icons + '</span><span>Reward: ' + names + '</span>';
         rewardEl.hidden = false;

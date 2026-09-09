@@ -44,20 +44,39 @@
     // found/bought/gifted, by "Welcome to Your Profile" (see
     // supabase/migrations/20260909040000_achievement_item_rewards.sql's
     // reward_item_ids and unlock_achievement()'s reward-grant step).
-    // `tradeable: false` / `source` / `sourceAchievementId` aren't
-    // consumed by any code yet — Quest Zone has no trading/marketplace
-    // system to restrict against today — but are here so one exists the
-    // moment that system does, and so this item's own listing already
-    // documents where it came from. No `views`/`frames` yet (see this
-    // file's header comment) — `icon` alone is a fully working item
-    // everywhere (Worn Equipment, Inventory, examine, item-notify's "you
-    // received an item" popup); add real on-body art here later without
-    // touching anything else.
+    // `tradeable: false` here is display-only/documentary — the real,
+    // enforced rule lives server-side on item_definitions.tradeable (see
+    // supabase/migrations/20260909050000_item_economy_foundation.sql),
+    // seeded to match. `source`/`sourceAchievementId` document where it
+    // came from; nothing reads them yet.
+    //
+    // Boots (and gloves) are a LEFT + RIGHT pair that needs independent
+    // on-body positioning per foot — see docs/avatar-equipment.md's
+    // "Split left/right parts" section. `parts` is what turns that on:
+    // still ONE item (one inventory row, one equip action, one combined
+    // icon below), but `views.left`/`views.right` are each their own
+    // small on-body art, each calibrated separately in Admin Zone ->
+    // Avatar Rig (pick "Doggy Slippers", then the Part selector switches
+    // between Left Foot/Right Foot). Only `front` exists per side today
+    // — Quest Zone is front-view-only live (see avatar-mode.js) — add
+    // right/back/left later the same way if multi-angle ever returns.
+    // `iconImage` is the dedicated combined-icon art (both slippers side
+    // by side, already composed) — shown everywhere a flat "this item"
+    // thumbnail is needed (Inventory grid, Worn Equipment, examine,
+    // item-notify's "you received an item" popup); takes priority over
+    // auto-compositing the two on-body views, which thumbHtml() only
+    // does for a split-parts item with no dedicated iconImage.
     {
       id: 'doggy-slippers',
       name: 'Doggy Slippers',
       slot: 'boots',
       icon: '🥿',
+      iconImage: '../assets/img/equipment/boots/doggy-slippers-icon.png',
+      parts: ['left', 'right'],
+      views: {
+        left:  { front: '../assets/img/equipment/boots/doggy-slippers-left-front.png' },
+        right: { front: '../assets/img/equipment/boots/doggy-slippers-right-front.png' }
+      },
       tradeable: false,
       source: 'achievement',
       sourceAchievementId: 'welcome_to_your_profile'

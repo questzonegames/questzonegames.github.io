@@ -99,11 +99,16 @@
   .rig-sprite { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 9% 11% 5%; pointer-events: none; }
   .rig-item-layer { position: absolute; cursor: grab; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3)); }
   .rig-item-layer.dragging { cursor: grabbing; }
+  .rig-item-layer-ghost { position: absolute; opacity: 0.45; filter: grayscale(35%) drop-shadow(0 0 6px rgba(120,180,255,0.5)); pointer-events: none; display: none; }
   .rig-marker { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,0.7); pointer-events: none; }
   .rig-marker.above_head { background: #ffd24d; }
   .rig-marker.skull { background: #4dd2ff; }
   .rig-marker.forehead { background: #7fff8f; }
   .rig-marker.neck { background: #c98bff; }
+  .rig-marker.left_foot { background: #ff8f6b; }
+  .rig-marker.right_foot { background: #ff5e9e; }
+  .rig-marker.left_hand { background: #6bffce; }
+  .rig-marker.right_hand { background: #ffe36b; }
   .rig-marker.active-anchor { width: 16px; height: 16px; margin: -8px 0 0 -8px; cursor: grab; pointer-events: auto; box-shadow: 0 0 0 3px #fff, 0 0 10px 3px rgba(255,255,255,0.7); }
   .rig-marker.active-anchor.dragging { cursor: grabbing; }
   .rig-debug-line { position: absolute; font-family: 'Orbitron', monospace; font-size: 9.5px; color: #7fff8f; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 3px; white-space: nowrap; pointer-events: none; }
@@ -198,8 +203,15 @@
           <span class="rig-mode-label">Mode:</span>
           <button type="button" class="rig-mode-btn item active" id="mode-item" data-mode="item">Item</button>
           <button type="button" class="rig-mode-btn anchor" id="mode-anchor" data-mode="anchor">Rig Anchor</button>
-          <button type="button" class="rig-mode-btn pose" id="mode-pose" data-mode="pose">Pose</button>
+          <!-- Pose mode (per-limb rigging: separate arm/hand/upper-arm
+               parts) removed from the UI until that actually exists —
+               nothing to configure yet. The underlying mode/JS plumbing
+               is left in place (harmless, unreachable with no button to
+               trigger it) so it's ready to wire back in later instead of
+               rebuilding it. -->
+
         </div>
+        <p class="rig-mirror-hint" style="margin:-6px 0 14px 2px;"><b>Item</b> mode places an equipped item (Admin Crown, Doggy Slippers, …) — this is what you use to actually position things. <b>Rig Anchor</b> mode instead moves one of the shared reference points itself (Skull, Left Foot, …) that items are pinned to — you'd only ever open this if the base body artwork changed and a point no longer lines up on the character; it's not part of normal item placement.</p>
 
         <div class="rig-grid">
           <!-- LEFT: selectors -->
@@ -237,22 +249,7 @@
                 <option value="left_hand">Left Hand</option>
                 <option value="right_hand">Right Hand</option>
               </select>
-            </div>
-            <div class="rig-field">
-              <label>Direction</label>
-              <div class="rig-dir-row">
-                <button type="button" class="rig-dir-btn active" data-dir="front">Front<span class="rig-dir-sub">Active</span></button>
-                <button type="button" class="rig-dir-btn" data-dir="right" disabled title="Archived — see Admin Zone → 3D Avatar Storage">Right<span class="rig-dir-sub">Disabled</span></button>
-                <button type="button" class="rig-dir-btn" data-dir="back" disabled title="Archived — see Admin Zone → 3D Avatar Storage">Back<span class="rig-dir-sub">Disabled</span></button>
-                <button type="button" class="rig-dir-btn" data-dir="left" disabled title="Archived — see Admin Zone → 3D Avatar Storage">Left<span class="rig-dir-sub">Disabled</span></button>
-              </div>
-              <p class="rig-mirror-hint" style="margin-top:8px;">Quest Zone is currently front-view-only on the live site. Right/Back/Left calibration is preserved but disabled here — see <a href="admin-avatar-storage.html" style="color:var(--blue-light);">3D Avatar Storage</a>.</p>
-            </div>
-            <div class="rig-field" id="mirror-box" hidden>
-              <label>Mirror Left ↔ Right</label>
-              <button type="button" class="rig-btn" id="btn-mirror-copy" style="width:100%;margin-bottom:6px;justify-content:center;"></button>
-              <button type="button" class="rig-btn" id="btn-mirror-paste" style="width:100%;justify-content:center;" disabled></button>
-              <div class="rig-mirror-hint" id="mirror-hint"></div>
+              <p class="rig-mirror-hint" style="margin-top:6px;">Rig Anchor mode moves the reference POINT itself (e.g. exactly where "Skull" is on this body) by dragging the coloured dot on the character. You'd only touch this if the base body artwork changes and a point like Skull or Left Foot no longer lines up — everyday item placement (a crown, a boot) happens in Item mode instead, using the Anchor Type dropdown there to pick one of these points and X/Y/Scale to offset from it.</p>
             </div>
             <div class="rig-panel-title" style="margin-top:6px;">View Options</div>
             <div class="rig-toggle-row"><input type="checkbox" id="tog-anchors" checked> Show anchors</div>
@@ -287,7 +284,7 @@
 
           <!-- RIGHT: transform controls -->
           <div class="rig-panel">
-            <div class="rig-panel-title">Transform — <span id="transform-scope">Admin Crown / Front</span></div>
+            <div class="rig-panel-title">Transform — <span id="transform-scope">Admin Crown</span></div>
 
             <div class="rig-field">
               <label>Anchor Type</label>
@@ -301,6 +298,7 @@
                 <option value="left_hand">Left Hand</option>
                 <option value="right_hand">Right Hand</option>
               </select>
+              <p class="rig-mirror-hint" style="margin-top:6px;">Which reference point on the body this item is pinned to and follows. The X/Y/Scale below are an offset FROM that point, not an absolute position — so if the base body art ever changes, you fix it once in Rig Anchor mode and every item using that anchor moves with it, instead of re-placing every item by hand.</p>
             </div>
 
             <div class="rig-field">
@@ -349,8 +347,7 @@
           <button type="button" class="rig-btn danger" id="btn-reset-factory">Reset to Factory Default</button>
           <div class="spacer"></div>
           <span id="unsaved-indicator"></span>
-          <button type="button" class="rig-btn" id="btn-save-direction">Save Front</button>
-          <button type="button" class="rig-btn" id="btn-save-all-directions">Save Item — All Directions</button>
+          <button type="button" class="rig-btn" id="btn-save-direction">Save</button>
           <button type="button" class="rig-btn primary" id="btn-save-whole-rig">Save Whole Rig</button>
         </div>
         <div class="rig-save-status" id="save-status"></div>
@@ -390,7 +387,7 @@
 <script>
 (function () {
   const POSES = ['front', 'right', 'back', 'left'];
-  const ANCHOR_TYPES = ['above_head', 'skull', 'forehead', 'neck'];
+  const ANCHOR_TYPES = ['above_head', 'skull', 'forehead', 'neck', 'left_foot', 'right_foot', 'left_hand', 'right_hand'];
   const stateEl = document.getElementById('rig-state');
   const contentEl = document.getElementById('rig-content');
   let client = null, myId = null;
@@ -494,27 +491,67 @@
   }
   function anyDirty() { return POSES.some((d) => isDirty(d)); }
 
+  // Session working-state cache, kept for the lifetime of this page load
+  // only (a real close/reload legitimately starts fresh from the DB — see
+  // init()). Keyed so switching Slot, Item, or Part and then switching
+  // BACK restores exactly what you left, unsaved edits included, instead
+  // of re-fetching from the database (which only knows about your last
+  // SAVE, not what you're still mid-dragging). Previously
+  // loadItemCalibForCurrentItem()/loadAnchorForCurrentPick() re-fetched
+  // from the DB on every single switch, silently discarding any not-yet-
+  // saved position — reported as "swapping Left/Right foot resets it".
+  // localItemCalib/localAnchor below are direct references INTO these
+  // cache objects (not copies), so every drag/nudge that mutates them
+  // mutates the cache too, with no separate sync-back step needed.
+  const itemCalibCache = {};   // key -> { front: {...}, ... }
+  const itemCalibSavedCache = {}; // same shape, the last-actually-saved baseline
+  const anchorPickCache = {};
+  const anchorPickSavedCache = {};
+  function itemCalibKey(s, i, p) { return bodyType + '|' + s + '|' + i + '|' + p; }
+
   async function loadItemCalibForCurrentItem() {
-    rigData = await AV.loadRigData(client);
-    localItemCalib = {}; savedItemCalib = {};
-    POSES.forEach((dir) => {
-      const itemRig = rigData.items[bodyType] && rigData.items[bodyType][slot] && rigData.items[bodyType][slot][itemId];
-      const row = itemRig && itemRig[part] && itemRig[part][dir];
-      const val = row
-        ? { anchor_type: row.anchor_type, offset_x: Number(row.offset_x), offset_y: Number(row.offset_y), scale: Number(row.scale), rotation: Number(row.rotation) }
-        : defaultCalibFor(slot, part);
-      localItemCalib[dir] = Object.assign({}, val);
-      savedItemCalib[dir] = Object.assign({}, val);
-    });
+    if (!rigData) rigData = await AV.loadRigData(client);
+    const key = itemCalibKey(slot, itemId, part);
+    if (!itemCalibCache[key]) {
+      const fresh = {}, freshSaved = {};
+      POSES.forEach((dir) => {
+        const itemRig = rigData.items[bodyType] && rigData.items[bodyType][slot] && rigData.items[bodyType][slot][itemId];
+        const row = itemRig && itemRig[part] && itemRig[part][dir];
+        const val = row
+          ? { anchor_type: row.anchor_type, offset_x: Number(row.offset_x), offset_y: Number(row.offset_y), scale: Number(row.scale), rotation: Number(row.rotation) }
+          : defaultCalibFor(slot, part);
+        fresh[dir] = Object.assign({}, val);
+        freshSaved[dir] = Object.assign({}, val);
+      });
+      itemCalibCache[key] = fresh;
+      itemCalibSavedCache[key] = freshSaved;
+    }
+    localItemCalib = itemCalibCache[key];
+    savedItemCalib = itemCalibSavedCache[key];
+  }
+  // Forces the NEXT loadItemCalibForCurrentItem() for this exact key to
+  // re-seed from the database instead of reusing the session cache — used
+  // only by Factory Reset, where re-fetching (now the row's gone, so it
+  // falls back to defaultCalibFor) is the whole point.
+  function forgetItemCalibCache(s, i, p) {
+    const key = itemCalibKey(s, i, p);
+    delete itemCalibCache[key];
+    delete itemCalibSavedCache[key];
   }
   function loadAnchorForCurrentPick() {
-    localAnchor = {}; savedAnchor = {};
-    POSES.forEach((dir) => {
-      const row = rigData.anchors[bodyType] && rigData.anchors[bodyType][dir] && rigData.anchors[bodyType][dir][pickedAnchorType];
-      const val = row ? { center_x_pct: Number(row.center_x_pct), y_pct: Number(row.y_pct), width_pct: Number(row.width_pct), canvas_w: row.canvas_w, canvas_h: row.canvas_h } : null;
-      localAnchor[dir] = val ? Object.assign({}, val) : null;
-      savedAnchor[dir] = val ? Object.assign({}, val) : null;
-    });
+    if (!anchorPickCache[pickedAnchorType]) {
+      const fresh = {}, freshSaved = {};
+      POSES.forEach((dir) => {
+        const row = rigData.anchors[bodyType] && rigData.anchors[bodyType][dir] && rigData.anchors[bodyType][dir][pickedAnchorType];
+        const val = row ? { center_x_pct: Number(row.center_x_pct), y_pct: Number(row.y_pct), width_pct: Number(row.width_pct), canvas_w: row.canvas_w, canvas_h: row.canvas_h } : null;
+        fresh[dir] = val ? Object.assign({}, val) : null;
+        freshSaved[dir] = val ? Object.assign({}, val) : null;
+      });
+      anchorPickCache[pickedAnchorType] = fresh;
+      anchorPickSavedCache[pickedAnchorType] = freshSaved;
+    }
+    localAnchor = anchorPickCache[pickedAnchorType];
+    savedAnchor = anchorPickSavedCache[pickedAnchorType];
   }
 
   // ================= UI: selectors =================
@@ -657,9 +694,13 @@
   const ctlRotation = document.getElementById('ctl-rotation');
 
   function syncControlsFromState() {
+    // No " / Front" suffix — Quest Zone is front-view-only and `direction`
+    // is always 'front' now (see the removed Direction selector; other
+    // camera angles live in Admin Zone → 3D Avatar Storage instead), so
+    // showing it here would just be unexplained jargon with no choice
+    // behind it.
     document.getElementById('transform-scope').textContent =
-      (mode === 'anchor' ? (pickedAnchorType + ' anchor') : ((window.QZ_ITEM_CATALOG.find((i) => i.id === itemId) || {}).name || '—')) + ' / ' + direction[0].toUpperCase() + direction.slice(1);
-    document.getElementById('btn-save-direction').textContent = 'Save ' + direction[0].toUpperCase() + direction.slice(1);
+      mode === 'anchor' ? (pickedAnchorType + ' anchor') : ((window.QZ_ITEM_CATALOG.find((i) => i.id === itemId) || {}).name || '—');
 
     if (mode === 'anchor') {
       ctlAnchorType.parentElement.style.display = 'none';
@@ -686,75 +727,7 @@
     }
     refreshDirtyDots();
     markDirtyUI();
-    syncMirrorBox();
   }
-
-  // ================= Mirror Left <-> Right =================
-  // Right and Left are the same item viewed from opposite sides of a
-  // (roughly) symmetric head — copying one side's calibration to the
-  // other needs to flip offset_x and rotation (a +X nudge or a clockwise
-  // tilt on the Right view is the mirror-image -X nudge / counter-
-  // clockwise tilt on the Left view), while offset_y, scale and
-  // anchor_type carry across unchanged. Only ever offered in ITEM mode,
-  // and only for Right/Left (Front/Back aren't mirror images of each
-  // other — they're different silhouettes entirely).
-  let mirrorClipboard = null; // { fromDirection: 'right'|'left', calib: {...} }
-  function mirrorCalib(calib) {
-    return {
-      anchor_type: calib.anchor_type,
-      offset_x: -calib.offset_x,
-      offset_y: calib.offset_y,
-      scale: calib.scale,
-      rotation: -calib.rotation
-    };
-  }
-  function otherSide(dir) { return dir === 'right' ? 'left' : 'right'; }
-
-  function syncMirrorBox() {
-    const box = document.getElementById('mirror-box');
-    const copyBtn = document.getElementById('btn-mirror-copy');
-    const pasteBtn = document.getElementById('btn-mirror-paste');
-    const hint = document.getElementById('mirror-hint');
-    const applicable = mode === 'item' && (direction === 'right' || direction === 'left');
-    box.hidden = !applicable;
-    if (!applicable) return;
-
-    const label = direction[0].toUpperCase() + direction.slice(1);
-    copyBtn.textContent = '📋 Copy ' + label + ' Settings';
-
-    const other = otherSide(direction);
-    const otherLabel = other[0].toUpperCase() + other.slice(1);
-    if (mirrorClipboard && mirrorClipboard.fromDirection === other) {
-      pasteBtn.disabled = false;
-      pasteBtn.textContent = '📥 Paste ' + otherLabel + ' → ' + label + ' (Mirrored)';
-      hint.textContent = 'Ready to paste ' + otherLabel + '’s settings, mirrored, onto ' + label + '.';
-    } else if (mirrorClipboard && mirrorClipboard.fromDirection === direction) {
-      pasteBtn.disabled = true;
-      pasteBtn.textContent = '📥 Paste ' + otherLabel + ' → ' + label + ' (Mirrored)';
-      hint.textContent = 'Copied ' + label + '. Switch to ' + otherLabel + ' to paste it there, mirrored.';
-    } else {
-      pasteBtn.disabled = true;
-      pasteBtn.textContent = '📥 Paste ' + otherLabel + ' → ' + label + ' (Mirrored)';
-      hint.textContent = 'Copy ' + label + ' here, or switch to ' + otherLabel + ' and copy that instead.';
-    }
-  }
-
-  document.getElementById('btn-mirror-copy').addEventListener('click', () => {
-    const calib = localItemCalib[direction] || DEFAULT_ITEM_CALIB;
-    mirrorClipboard = { fromDirection: direction, calib: Object.assign({}, calib) };
-    syncMirrorBox();
-    setSaveStatus('Copied ' + direction + ' settings. Switch to ' + otherSide(direction) + ' to paste (mirrored).');
-  });
-  document.getElementById('btn-mirror-paste').addEventListener('click', () => {
-    if (!mirrorClipboard || mirrorClipboard.fromDirection !== otherSide(direction)) return;
-    const before = Object.assign({}, localItemCalib[direction] || DEFAULT_ITEM_CALIB);
-    const after = mirrorCalib(mirrorClipboard.calib);
-    localItemCalib[direction] = after;
-    pushHistory({ kind: 'item', direction, before, after: Object.assign({}, after) });
-    syncControlsFromState();
-    renderStage();
-    setSaveStatus('Pasted ' + mirrorClipboard.fromDirection + '’s settings onto ' + direction + ', mirrored. Remember to Save.');
-  });
 
   function commitFieldChange(field, oldVal, newVal) {
     if (oldVal === newVal) return;
@@ -830,7 +803,7 @@
 
   // ================= stage rendering =================
   const stageEl = document.getElementById('rig-stage');
-  let baseImg, hairImg, itemImg;
+  let baseImg, hairImg, itemImg, itemImgGhost;
   const markerEls = {}; // anchor_type -> persistent <div>, repositioned in place — never destroyed mid-drag
 
   // Drag handlers are attached ONCE, here, to elements that live for the
@@ -850,6 +823,13 @@
     stageEl.innerHTML = '';
     baseImg = document.createElement('img'); baseImg.className = 'rig-sprite'; stageEl.appendChild(baseImg);
     hairImg = document.createElement('img'); hairImg.className = 'rig-sprite'; stageEl.appendChild(hairImg);
+    // Read-only preview of the split-parts item's OTHER part (e.g. Left
+    // while you're actively calibrating Right) — dimmed, no pointer
+    // events, appended BEFORE itemImg so the active/draggable part always
+    // paints on top if they overlap. Lets you see and judge both feet
+    // relative to each other while only ever dragging one at a time,
+    // instead of the other part vanishing the moment you switch to it.
+    itemImgGhost = document.createElement('img'); itemImgGhost.className = 'rig-item-layer-ghost'; stageEl.appendChild(itemImgGhost);
     itemImg = document.createElement('img'); itemImg.className = 'rig-item-layer'; stageEl.appendChild(itemImg);
     itemImg.addEventListener('pointerdown', onItemPointerDown);
     itemImg.addEventListener('pointermove', onItemPointerMove);
@@ -1013,8 +993,8 @@
       m.style.top = (renderedRect.top + (row.y_pct / 100) * renderedRect.height) + 'px';
     });
 
+    const item = itemId ? window.QZ_ITEM_CATALOG.find((i) => i.id === itemId) : null;
     if (mode === 'item') {
-      const item = itemId ? window.QZ_ITEM_CATALOG.find((i) => i.id === itemId) : null;
       // Split-parts item (item.views keyed by part, not direction) —
       // show whichever part is currently selected (see field-part-
       // picker); every other item's item.views is keyed by direction
@@ -1054,6 +1034,47 @@
       itemImg.style.display = 'none';
     }
 
+    // Ghost preview of the split-parts item's OTHER part (Right while
+    // you're actively positioning Left, etc.) — read-only, never mutated
+    // by dragging. Checks THIS SESSION's working-state cache first (so it
+    // reflects the other part's not-yet-saved position too, same as
+    // switching Part to it directly would show), and only falls back to
+    // the plain DB snapshot for a part neither you nor anyone else has
+    // touched since this page loaded. See itemImgGhost in buildStageDom().
+    if (mode === 'item' && item && Array.isArray(item.parts) && item.parts.length > 1 && part !== 'single') {
+      const otherPart = item.parts.find((p) => p !== part);
+      const otherViews = item.views && item.views[otherPart];
+      const otherSrc = otherViews && otherViews[direction] ? '../' + otherViews[direction] : null;
+      if (!otherSrc) { itemImgGhost.style.display = 'none'; }
+      else {
+        if (itemImgGhost.dataset.src !== otherSrc) { itemImgGhost.src = otherSrc; itemImgGhost.dataset.src = otherSrc; }
+        const otherNatImg = await preloadImage(otherSrc);
+        const otherKey = itemCalibKey(slot, itemId, otherPart);
+        const cached = itemCalibCache[otherKey] && itemCalibCache[otherKey][direction];
+        const itemRig = rigData && rigData.items[bodyType] && rigData.items[bodyType][slot] && rigData.items[bodyType][slot][itemId];
+        const savedRow = itemRig && itemRig[otherPart] && itemRig[otherPart][direction];
+        const otherCalib = cached
+          ? cached
+          : savedRow
+          ? { anchor_type: savedRow.anchor_type, offset_x: Number(savedRow.offset_x), offset_y: Number(savedRow.offset_y), scale: Number(savedRow.scale), rotation: Number(savedRow.rotation) }
+          : defaultCalibFor(slot, otherPart);
+        const otherAnchorRow = anchorRows[otherCalib.anchor_type];
+        if (otherNatImg && otherAnchorRow) {
+          const otherLayout = AV.computeItemLayout(renderedRect, dims.w, dims.h, otherAnchorRow, otherCalib, otherNatImg.naturalWidth, otherNatImg.naturalHeight);
+          itemImgGhost.style.left = otherLayout.left + 'px';
+          itemImgGhost.style.top = otherLayout.top + 'px';
+          itemImgGhost.style.width = otherLayout.width + 'px';
+          itemImgGhost.style.height = otherLayout.height + 'px';
+          itemImgGhost.style.transform = otherLayout.rotation ? 'rotate(' + otherLayout.rotation + 'deg)' : 'none';
+          itemImgGhost.style.display = '';
+        } else {
+          itemImgGhost.style.display = 'none';
+        }
+      }
+    } else {
+      itemImgGhost.style.display = 'none';
+    }
+
     renderDebugPanel();
   }
 
@@ -1062,7 +1083,6 @@
     const c = mode === 'anchor' ? (localAnchor[direction] || {}) : (localItemCalib[direction] || DEFAULT_ITEM_CALIB);
     el.innerHTML =
       '<b>BODY:</b> ' + bodyType + '<br>' +
-      '<b>DIRECTION:</b> ' + direction + '<br>' +
       '<b>MODE:</b> ' + mode.toUpperCase() + '<br>' +
       (mode === 'anchor'
         ? '<b>ANCHOR:</b> ' + pickedAnchorType + '<br><b>X%:</b> ' + (c.center_x_pct != null ? c.center_x_pct.toFixed(2) : '—') + '<br><b>Y%:</b> ' + (c.y_pct != null ? c.y_pct.toFixed(2) : '—') + '<br><b>W%:</b> ' + (c.width_pct != null ? c.width_pct.toFixed(2) : '—')
@@ -1107,6 +1127,12 @@
     });
     if (error) throw error;
     savedItemCalib[dir] = Object.assign({}, c);
+    // Without this, the NEXT loadItemCalibForCurrentItem() (switching Part
+    // or Item, or a factory reset) re-fetches from AV's cached rig data —
+    // which is stale the instant a save happens — and silently shows this
+    // save reverted to its default. See invalidateRigDataCache()'s comment
+    // in avatar-viewer.js.
+    AV.invalidateRigDataCache();
   }
   async function saveAnchorDirection(dir) {
     const a = localAnchor[dir];
@@ -1117,6 +1143,7 @@
     });
     if (error) throw error;
     savedAnchor[dir] = Object.assign({}, a);
+    AV.invalidateRigDataCache();
   }
 
   document.getElementById('btn-save-direction').addEventListener('click', async () => {
@@ -1124,19 +1151,7 @@
     try {
       if (mode === 'anchor') await saveAnchorDirection(direction);
       else await saveItemDirection(direction);
-      setSaveStatus('Saved ' + direction + '.', 'ok');
-      markDirtyUI();
-    } catch (err) { setSaveStatus('Save failed: ' + err.message, 'err'); }
-  });
-
-  document.getElementById('btn-save-all-directions').addEventListener('click', async () => {
-    setSaveStatus('Saving all directions…');
-    try {
-      for (const dir of POSES) {
-        if (mode === 'anchor') { if (localAnchor[dir]) await saveAnchorDirection(dir); }
-        else await saveItemDirection(dir);
-      }
-      setSaveStatus('Saved all 4 directions.', 'ok');
+      setSaveStatus('Saved.', 'ok');
       markDirtyUI();
     } catch (err) { setSaveStatus('Save failed: ' + err.message, 'err'); }
   });
@@ -1174,10 +1189,13 @@
     try {
       const { error } = await client.rpc('admin_reset_avatar_rig_item_to_factory', { p_body_type: bodyType, p_slot: slot, p_item_id: itemId, p_direction: direction, p_part: part });
       if (error) throw error;
+      AV.invalidateRigDataCache();
+      rigData = null; // force a real re-fetch below, not the (now stale) module cache
+      forgetItemCalibCache(slot, itemId, part); // and don't reuse this session's in-memory copy either
       await loadItemCalibForCurrentItem();
       history = []; historyIndex = -1; refreshUndoRedoButtons();
       syncControlsFromState(); renderStage();
-      setSaveStatus('Factory reset ' + direction + '.', 'ok');
+      setSaveStatus('Factory reset.', 'ok');
     } catch (err) { setSaveStatus('Reset failed: ' + err.message, 'err'); }
   });
 

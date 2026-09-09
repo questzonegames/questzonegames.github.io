@@ -194,13 +194,15 @@ too. This is still **one item** — one catalog entry, one `inventory_items`/
 `equipped_items` — the split is purely a *rendering* detail, layered on
 top of the ordinary equip system, never an ownership one.
 
-**Catalog shape** (`assets/js/inventory-data.js`):
+**Catalog shape** (`assets/js/inventory-data.js`) — `doggy-slippers` is a
+real, live example of this pattern, not hypothetical:
 
 ```js
 {
   id: 'santa-boots',
   name: 'Santa Boots',
   slot: 'boots',
+  iconImage: '...-icon.png',      // <- dedicated flat inventory icon (both pieces already composed side by side) — optional but preferred; see below
   parts: ['left', 'right'],       // <- presence of this array is what turns split-parts rendering on
   views: {
     left:  { front: '...-left-front.png',  right: '...', back: '...', left: '...' },
@@ -211,6 +213,19 @@ top of the ordinary equip system, never an ownership one.
   // normally need to set it explicitly.
 }
 ```
+
+Only `front` is required per side — Quest Zone is front-view-only live
+(see avatar-mode.js); a pose with no art for a given part just renders
+nothing for that pose instead of a broken image (add right/back/left
+later the same way if multi-angle ever returns).
+
+`iconImage`: a split-parts item's "icon" is genuinely two pieces of art,
+so without one, `thumbHtml()` (in `assets/js/inventory.js`, mirrored in
+`profile/admin-inventory.html`) auto-composites the two front views side
+by side as a stand-in. A dedicated, artist-composed `iconImage` — like
+Doggy Slippers' — always takes priority over that auto-composite, and is
+what shows in the Inventory grid, Worn Equipment, the examine popover,
+and the "you received an item" popup (`assets/js/item-notify.js`) alike.
 
 An item with no `parts` array is completely unaffected — this is 100%
 additive; Admin Crown and every other single-piece item render exactly as

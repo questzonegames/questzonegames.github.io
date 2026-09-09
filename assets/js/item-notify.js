@@ -117,19 +117,21 @@
     if (entry.gifterName) meta += '\nGifted by an admin: ' + entry.gifterName;
     metaEl.textContent = meta;
     metaEl.style.whiteSpace = 'pre-line';
-    // Three states, same fallback order as everywhere else an item
-    // renders (inventory.js, achievement-inspection.js): real on-body art
-    // (item.views) if it exists yet, else the item's own icon (an item
-    // like Doggy Slippers can be fully real — owned, equippable — before
-    // its art does), else (item not even in the catalog, shouldn't
-    // normally happen) a generic gift emoji. Both the <img> and the
-    // emoji <span> stay permanently in the DOM (see build()) with only
-    // their visibility toggled — swapping via innerHTML/textContent
+    // Same fallback order as everywhere else an item renders (inventory.js,
+    // achievement-inspection.js): a dedicated flat icon (item.iconImage —
+    // e.g. Doggy Slippers' combined left+right art) first, else real
+    // single-view on-body art (item.views.front — NOT set this way for a
+    // split-parts item, whose `views` is keyed by part, not direction),
+    // else the item's own emoji icon, else (item not even in the catalog,
+    // shouldn't normally happen) a generic gift emoji. Both the <img> and
+    // the emoji <span> stay permanently in the DOM (see build()) with
+    // only their visibility toggled — swapping via innerHTML/textContent
     // instead would delete whichever element isn't current, so the next
     // queued item (which might need the OTHER one) would find it gone.
     const emojiEl = backdropEl.querySelector('.qz-itemnotify-icon-emoji');
-    if (item && item.views) {
-      img.src = item.views.front;
+    const flatIcon = item && (item.iconImage || (item.views && item.views.front));
+    if (flatIcon) {
+      img.src = flatIcon;
       img.style.display = '';
       emojiEl.style.display = 'none';
     } else {

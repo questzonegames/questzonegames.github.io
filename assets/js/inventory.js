@@ -77,14 +77,19 @@
   }
 
   // One item's icon, wherever it needs to show as a single small thumb
-  // (a worn-equipment tile, the inventory grid, the examine popover) —
-  // real front-view art if the item has it, else its emoji icon. A
-  // split-parts item (item.parts, e.g. ['left','right'] — see docs/
-  // avatar-equipment.md) is still ONE item with one inventory slot, but
-  // its "icon" is genuinely two pieces of art, so this shows both side
-  // by side rather than picking one arbitrarily — the "both boots next
-  // to each other" thumbnail.
+  // (a worn-equipment tile, the inventory grid, the examine popover), in
+  // priority order:
+  //   1. item.iconImage — a dedicated, already-composed flat icon (e.g.
+  //      Doggy Slippers' combined left+right art) — always preferred
+  //      when present, since it's purpose-authored rather than derived.
+  //   2. a split-parts item (item.parts, e.g. ['left','right'] — see
+  //      docs/avatar-equipment.md) with no iconImage yet — auto-compose
+  //      its two on-body views side by side as a stand-in, so it's never
+  //      just blank while real icon art doesn't exist.
+  //   3. real single-view on-body art (item.views.front).
+  //   4. the item's own emoji icon.
   function thumbHtml(item) {
+    if (item.iconImage) return '<img src="' + item.iconImage + '" alt="">';
     if (item.parts && item.views) {
       return '<span class="inv-thumb-parts">' +
         item.parts.map((p) => '<img src="' + item.views[p].front + '" alt="">').join('') +

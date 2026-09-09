@@ -199,6 +199,19 @@
   // visitor, not just admins — read access isn't privileged, only writing
   // is (via the admin_* RPCs the Avatar Rig editor calls).
   let rigDataPromise = null;
+  // Call after any write to avatar_rig_anchors/avatar_rig_items (the Admin
+  // Avatar Rig editor's save/reset actions) so the NEXT loadRigData() call
+  // re-fetches instead of serving the page-load-old cached snapshot. The
+  // real profile page never writes, so it never needs this — but the
+  // editor writes constantly, and reused this same cache (via
+  // loadItemCalibForCurrentItem/the ghost-part preview) to decide what to
+  // show after every Part/item switch. Without invalidating here, a just-
+  // saved value silently reverted to its default in the editor's own UI
+  // the moment you switched away and back — looking exactly like a random
+  // reset, then getting overwritten for real by whatever got dragged from
+  // that wrong starting point. Confirmed as the cause of Doggy Slippers'
+  // Right-foot calibration getting corrupted this way.
+  function invalidateRigDataCache() { rigDataPromise = null; }
   function rigDataFallback() {
     // Used only if the DB fetch itself fails (offline, Supabase outage) —
     // an empty rig means every item falls back further, to its own
@@ -249,6 +262,17 @@
   // computed padding rather than assuming the 9%/11%/5% numbers, so this
   // stays correct even if that CSS ever changes.
   function computeContentBox(container, refImg) {
+    // IMPORTANT: every anchor row and every item's saved offset/scale in
+    // the database was measured/calibrated against THIS exact formula
+    // (full clientWidth/clientHeight, only offset by left/top padding) —
+    // it does not literally match the "box after all 4 padding sides"
+    // described above, but changing it to be more technically correct
+    // retroactively changes what every existing calibrated position means,
+    // breaking already-correct items (confirmed: broke Admin Crown's
+    // position and its hair mask across the site). Do not "fix" this
+    // without re-measuring and re-saving every anchor + every item's
+    // calibration to match — treat it as a versioned coordinate system,
+    // not a bug, however the comment above reads.
     const cs = getComputedStyle(refImg);
     return {
       left: parseFloat(cs.paddingLeft) || 0,
@@ -470,9 +494,27 @@
 
       // equipped-item art rides the exact same seg/opacity math as the
       // base avatar, so it turns in lock-step and is never one frame off
-      Object.keys(equipLayers).forEach((slotKey) => {
-        const limgs = equipLayers[slotKey];
+      // — but ONLY once layoutEquipLayer has actually sized/positioned it
+      // (img.dataset.itemNaturalW set) and it isn't dataset.broken (no
+      // matching anchor row). Without this guard, a live-positioned equip
+      // layer got forced to full opacity by THIS loop the instant it was
+      // created — still at its raw natural size and (0,0) position,
+      // since the load event + layoutEquipLayer hadn't run yet — a
+      // flash of the item at the wrong huge size/place before the real
+      // layout kicked in and corrected (or, if no anchor ever matched,
+      // hid) it. Same class of bug the base imgs/hairImgs loops above
+      // already guard against via dataset.broken; equip layers need the
+      // itemNaturalW check too since THEIRS is asynchronous (an image
+      // load), not already-decoded like the base sprite frames.
+      Object.keys(equipLayers).forEach((layerKey) => {
+        const limgs = equipLayers[layerKey];
+        // Only the LIVE path (equipLive[layerKey]) is asynchronous (an
+        // image load, then layoutEquipLayer) — the legacy `frames`
+        // fallback is a pre-baked, already-positioned full-canvas image
+        // needing no such gate, so it's untouched by this check.
+        const isLive = equipLive[layerKey];
         limgs.forEach((img, i) => {
+          if (isLive && (img.dataset.broken || !img.dataset.itemNaturalW)) { img.style.opacity = '0'; return; }
           if (i === seg) img.style.opacity = String(1 - bOpacity);
           else if (i === (seg + 1) % 4) img.style.opacity = String(bOpacity);
           else img.style.opacity = '0';
@@ -730,7 +772,7 @@
             img.className = 'avatar-sprite avatar-equip-frame ' + directionClass;
             img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
             img.src = prefix + item.frames[pose];
-          } else if (views) {
+          } else if (views && views[pose]) {
             img.className = 'avatar-equip-live ' + directionClass;
             img.style.position = 'absolute';
             img.style.filter = 'drop-shadow(0 2px 5px rgba(0,0,0,0.5)) drop-shadow(0 0 9px rgba(255,210,90,0.3))';
@@ -741,11 +783,28 @@
             img.addEventListener('load', () => {
               img.dataset.itemNaturalW = String(img.naturalWidth);
               img.dataset.itemNaturalH = String(img.naturalHeight);
-              loadRigData(client()).then((rd) => layoutEquipLayer(layerKey, rd));
+              // layoutEquipLayer only sets left/top/width/height — it never
+              // touches opacity, that's render()'s job (see its equip-layer
+              // loop below). On a multi-angle mount a running rAF tick loop
+              // calls render() a frame or two later anyway, which is what
+              // made this bug look like a harmless "flash" there. But the
+              // main profile avatar runs staticFront: true (no tick loop
+              // at all, see mount()'s staticFront branch) — render() is
+              // called exactly once at mount, before this image has even
+              // loaded, so without a follow-up call here every live equip
+              // layer (Admin Crown, Doggy Slippers, anything future) stayed
+              // at its initial opacity:0 forever. Confirmed live: item was
+              // correctly loaded and positioned in the DOM, just invisible.
+              loadRigData(client()).then((rd) => { layoutEquipLayer(layerKey, rd); render(); });
             });
           } else {
-            // no views art at all — nothing to place; the loadout chip
-            // (see setAvatarEquipment) is this item's only representation
+            // No views art for THIS pose specifically — e.g. Doggy
+            // Slippers only has front-view art today (Quest Zone is
+            // front-view-only live, see avatar-mode.js) — or no views
+            // art at all. Either way, nothing to place for this pose;
+            // the loadout chip (see setAvatarEquipment) is this item's
+            // fallback representation, and this layer just stays hidden
+            // rather than requesting a broken image.
             img.style.display = 'none';
           }
           img.alt = '';
@@ -943,7 +1002,7 @@
     // exported so the Admin Zone's Avatar Rig editor uses the EXACT same
     // math as the real renderer above — one source of truth, see the
     // file-level comment.
-    loadRigData, computeContentBox, computeRenderedImageRect, computeItemLayout, buildHairMaskDataUrl,
+    loadRigData, invalidateRigDataCache, computeContentBox, computeRenderedImageRect, computeItemLayout, buildHairMaskDataUrl,
     CANVAS_DIMS, POSES
   };
 })();

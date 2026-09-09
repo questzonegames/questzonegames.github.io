@@ -308,6 +308,7 @@
     // pair — see docs/avatar-equipment.md) shows both pieces side by
     // side rather than picking one arbitrarily.
     function thumbHtml(item) {
+      if (item.iconImage) return '<img src="' + item.iconImage + '" alt="">';
       if (item.parts && item.views) {
         return '<span class="inv-thumb-parts">' +
           item.parts.map((p) => '<img src="' + item.views[p].front + '" alt="">').join('') +
