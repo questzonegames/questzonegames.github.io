@@ -1075,6 +1075,15 @@
   <div class="aq-audio-popover-note" id="aq-audio-popover-note"></div>
 </div>
 
+<!-- Lobby/Difficulty-select background music (see AQMusic in
+     anagram-quest.js) — plays only on those two screens, 3s fade in/out,
+     volume driven by the Music slider above. Nowhere else in the game
+     has music, on purpose. -->
+<!-- deliberately no "loop" attribute — looping is handled manually in
+     anagram-quest.js (AQMusic) so each repeat fades out before the end
+     and fades back in from the start, instead of an abrupt hard cut. -->
+<audio id="aq-lobby-music" src="../../assets/audio/games/anagram-quest/music/lobby-loop.wav" preload="auto"></audio>
+
 <div class="wrap">
   <div class="logo"><img src="../../assets/img/anagram-quest/logo.png" alt="Anagram Quest"></div>
 

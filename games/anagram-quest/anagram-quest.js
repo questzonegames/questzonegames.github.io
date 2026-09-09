@@ -242,6 +242,222 @@
   function playSound(name) {
     AQSound.play(name);
   }
+
+  // ---- lobby/difficulty-select background music ----
+  // A real recorded track (assets/audio/games/anagram-quest/music/
+  // lobby-loop.wav, user-supplied), NOT synthesized like AQSound above —
+  // plays only on the Lobby and Choose Your Difficulty screens, 3s fade
+  // in whenever it starts and 3s fade out the moment either screen is
+  // left (see the showScreen() hook below). Nowhere else in the game has
+  // music, on purpose. Volume is driven live by the Music popover slider
+  // (see wireAudioControls()).
+  const AQMusic = (function () {
+    const el = document.getElementById('aq-lobby-music');
+    const NOOP = { ensurePlaying() {}, fadeOutAndStop() {}, setVolumePct() {} };
+    if (!el) return NOOP; // markup not present — never let a missing <audio> tag break the game
+    const FADE_MS = 5000; // 5s fade in/out, per explicit request — "so it feels nice", not a harsh jump straight to full volume
+
+    let targetVolume = (function () {
+      try {
+        const saved = localStorage.getItem('aq-music-volume');
+        if (saved !== null) return Math.max(0, Math.min(100, parseInt(saved, 10))) / 100;
+      } catch (e) {}
+      return 0.7;
+    })();
+    let fadeTimer = null;
+    let wantsPlaying = false; // true while the current screen is LOBBY/DIFFICULTY, independent of whether playback has actually managed to start yet (autoplay policy)
+    let unlockBound = false;
+
+    function clearFade() { if (fadeTimer) { clearInterval(fadeTimer); fadeTimer = null; } }
+
+    // setInterval, deliberately NOT requestAnimationFrame — rAF is fully
+    // suspended while its tab/window isn't the visible, focused one, which
+    // would silently freeze a fade mid-ramp (e.g. the player alt-tabs away
+    // right as it starts) and then jump straight to the target volume the
+    // instant they come back, which is exactly the "harsh, no fade" feeling
+    // this exists to avoid. setInterval keeps ticking (throttled, not
+    // stopped) in a backgrounded tab, so the ramp still completes close to
+    // on schedule either way.
+    function fadeTo(target, ms, onDone) {
+      clearFade();
+      const start = el.volume;
+      const startTime = performance.now();
+      if (ms <= 0 || start === target) {
+        el.volume = target;
+        if (onDone) onDone();
+        return;
+      }
+      fadeTimer = setInterval(() => {
+        const t = Math.min(1, (performance.now() - startTime) / ms);
+        el.volume = start + (target - start) * t;
+        if (t >= 1) { clearFade(); if (onDone) onDone(); }
+      }, 40);
+    }
+
+    function bindUnlockOnce() {
+      if (unlockBound) return;
+      unlockBound = true;
+      const retry = () => {
+        document.removeEventListener('pointerdown', retry);
+        document.removeEventListener('keydown', retry);
+        unlockBound = false;
+        if (wantsPlaying) ensurePlaying();
+      };
+      // Browsers block audio autoplay until the very first user gesture
+      // anywhere on the page — this fires that retry the instant one
+      // happens, so the very first click/keypress (even one unrelated to
+      // Anagram Quest, e.g. dismissing something else) starts the music
+      // rather than leaving it permanently silent for that visit.
+      document.addEventListener('pointerdown', retry, { once: true });
+      document.addEventListener('keydown', retry, { once: true });
+    }
+
+    function ensurePlaying() {
+      wantsPlaying = true;
+      if (!el.paused) { fadeTo(targetVolume, FADE_MS); return; }
+      loopFadeStarted = false;
+      el.volume = 0;
+      let playResult;
+      try { playResult = el.play(); } catch (e) { bindUnlockOnce(); return; }
+      if (playResult && playResult.then) {
+        playResult.then(() => fadeTo(targetVolume, FADE_MS)).catch(() => bindUnlockOnce());
+      } else {
+        fadeTo(targetVolume, FADE_MS);
+      }
+    }
+
+    function fadeOutAndStop() {
+      wantsPlaying = false;
+      if (el.paused) return;
+      fadeTo(0, FADE_MS, () => { if (!wantsPlaying) el.pause(); });
+    }
+
+    function setVolumePct(pct) {
+      targetVolume = Math.max(0, Math.min(100, pct)) / 100;
+      // A manual slider drag should feel immediate, not fade — fading is
+      // only for the screen-transition start/stop moments above.
+      if (!el.paused) { clearFade(); el.volume = targetVolume; }
+    }
+
+    // ---- looping, but breathing rather than a hard cut ----
+    // The <audio> tag deliberately has NO "loop" attribute (that would
+    // jump straight back to 0 with a click/discontinuity and never fire
+    // 'ended' at all). Instead: once within one fade-length of the
+    // track's own end, fade out to silence right as it finishes: then on
+    // 'ended', jump back to the start and fade back in — so every repeat
+    // feels like a deliberate stop/start, not a seam.
+    let loopFadeStarted = false;
+    el.addEventListener('timeupdate', () => {
+      if (!wantsPlaying || el.paused || !isFinite(el.duration) || loopFadeStarted) return;
+      const remainingMs = (el.duration - el.currentTime) * 1000;
+      if (remainingMs <= FADE_MS) {
+        loopFadeStarted = true;
+        fadeTo(0, Math.max(0, remainingMs));
+      }
+    });
+    el.addEventListener('ended', () => {
+      loopFadeStarted = false;
+      if (!wantsPlaying) return;
+      el.currentTime = 0;
+      el.volume = 0;
+      const p = el.play();
+      if (p && p.then) p.then(() => fadeTo(targetVolume, FADE_MS)).catch(() => bindUnlockOnce());
+      else fadeTo(targetVolume, FADE_MS);
+    });
+
+    return { ensurePlaying, fadeOutAndStop, setVolumePct };
+  })();
+
+  // ---- Music/Sound preference storage — localStorage (instant, works
+  // signed out) + Supabase account sync (signed in only) ----
+  // A guest's setting lives only in this browser's localStorage. A
+  // signed-in player's setting is ALSO synced to
+  // public.user_audio_settings (see supabase/migrations/
+  // 20260909010000_user_audio_settings.sql), keyed by (user, game) so it
+  // follows them to another device/browser and stays independent per
+  // game. localStorage is still written for a signed-in player too —
+  // it's what applies instantly on this page load, before the account
+  // fetch below has had time to resolve.
+  const AUDIO_GAME_SLUG = 'anagram-quest'; // this game's own slug — deliberately NOT GAME_KEY ('intelligence', a skill key), since a future game could share that skill but must never share its volume setting
+  const AQAudioPrefs = (function () {
+    function loadLocalPct(key, fallback) {
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) return Math.max(0, Math.min(100, parseInt(saved, 10)));
+      } catch (e) {}
+      return fallback;
+    }
+    function saveLocalPct(key, pct) {
+      try { localStorage.setItem(key, String(pct)); } catch (e) {}
+    }
+
+    let sfxPct = loadLocalPct('aq-sfx-volume', 60);
+    let musicPct = loadLocalPct('aq-music-volume', 70);
+    AQSound.setVolume(sfxPct / 100); // applied immediately so the very first sound respects it, same as before this refactor
+
+    let saveTimer = null;
+    function debouncedAccountSave() {
+      if (!window.QZAuth || !window.QZAuth.client || !state.profile) return;
+      clearTimeout(saveTimer);
+      // A slider fires many 'input' events per drag — debounce the network
+      // write so dragging doesn't spam upserts, without delaying the
+      // instant local apply/localStorage save above.
+      saveTimer = setTimeout(() => {
+        window.QZAuth.client
+          .from('user_audio_settings')
+          .upsert({ user_id: state.profile.id, game_key: AUDIO_GAME_SLUG, music_volume: musicPct, sfx_volume: sfxPct, updated_at: new Date().toISOString() }, { onConflict: 'user_id,game_key' })
+          .then(({ error }) => { if (error) console.warn('Anagram Quest: could not save audio settings', error); });
+      }, 500);
+    }
+
+    function setSfxPct(pct) {
+      sfxPct = Math.max(0, Math.min(100, pct));
+      AQSound.setVolume(sfxPct / 100);
+      saveLocalPct('aq-sfx-volume', sfxPct);
+      debouncedAccountSave();
+    }
+    function setMusicPct(pct) {
+      musicPct = Math.max(0, Math.min(100, pct));
+      AQMusic.setVolumePct(musicPct);
+      saveLocalPct('aq-music-volume', musicPct);
+      debouncedAccountSave();
+    }
+
+    // Called once from loadAccountData() as soon as a profile is known —
+    // pulls this player's saved row (if any) and lets it override
+    // whatever localStorage/defaults already applied on this page load.
+    // If the player has never saved a setting for this game before (a
+    // first-time sign-in, or a brand new game), their current local
+    // values are written up as that row's starting point instead of
+    // silently leaving the account with no row at all.
+    async function loadFromAccount(client, userId) {
+      if (!client || !userId) return;
+      try {
+        const { data, error } = await client
+          .from('user_audio_settings').select('music_volume,sfx_volume')
+          .eq('user_id', userId).eq('game_key', AUDIO_GAME_SLUG).maybeSingle();
+        if (error) { console.warn('Anagram Quest: could not load audio settings', error); return; }
+        if (data) {
+          if (typeof data.sfx_volume === 'number') { sfxPct = data.sfx_volume; AQSound.setVolume(sfxPct / 100); saveLocalPct('aq-sfx-volume', sfxPct); }
+          if (typeof data.music_volume === 'number') { musicPct = data.music_volume; AQMusic.setVolumePct(musicPct); saveLocalPct('aq-music-volume', musicPct); }
+        } else {
+          await client.from('user_audio_settings')
+            .upsert({ user_id: userId, game_key: AUDIO_GAME_SLUG, music_volume: musicPct, sfx_volume: sfxPct }, { onConflict: 'user_id,game_key' });
+        }
+      } catch (err) {
+        console.warn('Anagram Quest: could not load audio settings', err);
+      }
+    }
+
+    return {
+      getSfxPct: () => sfxPct,
+      getMusicPct: () => musicPct,
+      setSfxPct,
+      setMusicPct,
+      loadFromAccount
+    };
+  })();
+
   // ---- achievement/event hooks (no Anagram Quest achievements exist yet —
   // see achievements.html, which already queries for them; these calls are
   // where future server-side triggers hang once some do) ----
@@ -439,6 +655,13 @@
     // is showing (see body.lobby-active in the CSS), never removed from
     // the DOM, so every other screen's header is completely unaffected.
     document.body.classList.toggle('lobby-active', key === 'LOBBY');
+    // Lobby music: playing (fading in) on Lobby/Choose Your Difficulty
+    // only, faded out and stopped everywhere else — see AQMusic above.
+    // This one hook covers every path in/out of those two screens (Start
+    // Game, Back, and Game Over's Back to Lobby all just call
+    // showScreen() already), so nothing else needs to know about music.
+    if (key === 'LOBBY' || key === 'DIFFICULTY') AQMusic.ensurePlaying();
+    else AQMusic.fadeOutAndStop();
     requestAnimationFrame(() => window.scrollTo(0, prevScrollY));
   }
 
@@ -622,6 +845,7 @@
       if (!profile) { updateFooterStats(); return; }
 
       const client = window.QZAuth.client;
+      AQAudioPrefs.loadFromAccount(client, profile.id); // not awaited — applies live volume as soon as it resolves, doesn't block anything else here
       const { data: statsRow } = await client
         .from('game_stats').select('high_score,games_played')
         .eq('user_id', profile.id).eq('game_key', GAME_KEY).maybeSingle();
@@ -1513,11 +1737,13 @@
   // slider markup per screen; this just repositions/relabels it.
   //
   // Sound controls AQSound's real master volume (0-1) and takes effect
-  // immediately on every sound already wired in this file. Music has no
-  // actual background-music playback yet (see docs/AUDIO_PLAN.md) — its
-  // slider just persists a 0-100 preference now so it's ready the moment
-  // music is added later, with an explicit note in its popover saying so
-  // rather than silently doing nothing with no explanation.
+  // immediately on every sound already wired in this file. Music controls
+  // AQMusic's real master volume the same way (see AQMusic above — the
+  // Lobby/Choose Your Difficulty background track). Both settings are
+  // owned by AQAudioPrefs (also above), which mirrors them to
+  // localStorage instantly and, for a signed-in player, to
+  // public.user_audio_settings so they follow the account across
+  // devices/browsers, independently per game.
   function wireAudioControls() {
     const popover = document.getElementById('aq-audio-popover');
     if (!popover) return; // markup not present (shouldn't happen, but never throw over a UI nicety)
@@ -1526,25 +1752,6 @@
     const valueEl = document.getElementById('aq-audio-popover-value');
     const noteEl = document.getElementById('aq-audio-popover-note');
     const buttons = Array.from(document.querySelectorAll('[data-audio-popover]'));
-
-    function loadPct(key, fallback) {
-      try {
-        const saved = localStorage.getItem(key);
-        if (saved !== null) return Math.max(0, Math.min(100, parseInt(saved, 10)));
-      } catch (e) {}
-      return fallback;
-    }
-    function savePct(key, pct) {
-      try { localStorage.setItem(key, String(pct)); } catch (e) {}
-    }
-
-    // Apply the saved SFX volume immediately, before any sound ever
-    // plays — AQSound already reads this itself at construction time
-    // too, but doing it here as well keeps this function the single
-    // place that owns "what the sliders currently show".
-    const savedSfxPct = loadPct('aq-sfx-volume', 60);
-    AQSound.setVolume(savedSfxPct / 100);
-    let musicPct = loadPct('aq-music-volume', 70);
 
     let openKind = null; // 'music' | 'sound' | null
     let openBtn = null;
@@ -1560,14 +1767,11 @@
     function openPopover(kind, btn) {
       const isMusic = kind === 'music';
       titleEl.textContent = isMusic ? 'MUSIC' : 'SOUND';
-      // Sound reads AQSound's own live value (the source of truth once it
-      // exists) rather than a separate re-read of localStorage, so the
-      // slider always matches whatever actually last set the volume.
-      const pct = isMusic ? musicPct : Math.round(AQSound.getVolume() * 100);
+      const pct = isMusic ? AQAudioPrefs.getMusicPct() : AQAudioPrefs.getSfxPct();
       sliderEl.value = pct;
       valueEl.textContent = pct;
       noteEl.textContent = isMusic
-        ? 'No background music yet — this sets the volume for when it’s added.'
+        ? 'Lobby/difficulty-select background music.'
         : 'Controls letter clicks, buttons, and every other in-game sound effect.';
 
       const rect = btn.getBoundingClientRect();
@@ -1594,11 +1798,9 @@
       const pct = parseInt(sliderEl.value, 10) || 0;
       valueEl.textContent = pct;
       if (openKind === 'sound') {
-        AQSound.setVolume(pct / 100);
-        savePct('aq-sfx-volume', pct);
+        AQAudioPrefs.setSfxPct(pct);
       } else if (openKind === 'music') {
-        musicPct = pct;
-        savePct('aq-music-volume', pct);
+        AQAudioPrefs.setMusicPct(pct);
       }
     });
 
@@ -1618,4 +1820,9 @@
   loadDictionary();
   loadFirstNames();
   wireAudioControls();
+  // The lobby is the screen already visible in the raw HTML on page
+  // load (no showScreen('LOBBY') call happens this early) — so the
+  // showScreen() hook above never fires for this very first appearance.
+  // Kick the lobby music off explicitly here to cover that one case.
+  AQMusic.ensurePlaying();
 })();
