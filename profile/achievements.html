@@ -530,9 +530,16 @@
       btn.className = 'ach-filter tier-chip' + (activeTier === key ? ' active' : '');
       btn.style.setProperty('--tier-chip', info.color);
       btn.style.setProperty('--tier-chip-glow', info.glow);
+      // 'locked' is a STATUS filter (how many are currently locked, any
+      // tier) — but bronze/silver/.../mythic are TIER filters (how many
+      // achievements exist at that tier, locked or unlocked). Previously
+      // this counted only the UNLOCKED ones for every tier, so e.g.
+      // "Mythic" showed 0 (and clicking it showed "no achievements match
+      // your filters") the moment nobody had unlocked a Mythic
+      // achievement yet, even though several exist and are simply locked.
       const count = key === 'locked'
         ? allAchievements.filter((a) => !a.unlocked).length
-        : allAchievements.filter((a) => a.unlocked && String(a.tier || '').toLowerCase() === key).length;
+        : allAchievements.filter((a) => String(a.tier || '').toLowerCase() === key).length;
       btn.innerHTML = escapeHtml(info.label) + '<span class="count">' + count + '</span>';
       btn.addEventListener('click', () => {
         activeTier = activeTier === key ? null : key; // click again to clear
@@ -581,7 +588,11 @@
     if (activeTier === 'locked') {
       list = list.filter((a) => !a.unlocked);
     } else if (activeTier) {
-      list = list.filter((a) => a.unlocked && String(a.tier || '').toLowerCase() === activeTier);
+      // Tier filters show every achievement AT that tier regardless of
+      // unlock status (matching the count above) — a locked one still
+      // renders, just with its locked card styling, same as it does
+      // under "All" or a category filter.
+      list = list.filter((a) => String(a.tier || '').toLowerCase() === activeTier);
     }
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
