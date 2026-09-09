@@ -22,15 +22,21 @@
 // calling game code changing.
 (function () {
   // Central tier registry — order matters (index = rank, used for the
-  // "Tier" sort option). Add a tier here and it's immediately usable in
-  // achievement rows' `tier` column, filterable, and correctly coloured
-  // everywhere without touching any other file.
+  // "Tier" sort option AND the official Quest Zone tier order: Bronze ->
+  // Silver -> Gold -> Platinum -> Diamond -> Mythic). Add a tier here and
+  // it's immediately usable in achievement rows' `tier` column,
+  // filterable, and correctly coloured everywhere without touching any
+  // other file. `bg`/`glow` are legacy CSS-drawn-card values, kept only
+  // for any caller still using them (e.g. a fallback if a panel image
+  // fails to load) — the real per-tier VISUALS on the Achievements grid
+  // now come from assets/img/achievements/panel-<tier>.png, not these.
   const TIERS = {
     bronze:   { label: 'Bronze',   rank: 1, color: '#c98452', glow: 'rgba(201,132,82,0.45)',  bg: 'linear-gradient(165deg, rgba(90,55,30,0.55) 0%, rgba(20,12,8,0.7) 100%)' },
     silver:   { label: 'Silver',   rank: 2, color: '#c7d3e6', glow: 'rgba(199,211,230,0.5)',  bg: 'linear-gradient(165deg, rgba(70,80,95,0.55) 0%, rgba(14,16,20,0.7) 100%)' },
     gold:     { label: 'Gold',     rank: 3, color: '#ffcf4d', glow: 'rgba(255,207,77,0.55)',  bg: 'linear-gradient(165deg, rgba(100,75,10,0.55) 0%, rgba(20,14,4,0.7) 100%)' },
     platinum: { label: 'Platinum', rank: 4, color: '#8fe8e0', glow: 'rgba(143,232,224,0.55)', bg: 'linear-gradient(165deg, rgba(20,80,80,0.55) 0%, rgba(6,18,18,0.7) 100%)' },
-    diamond:  { label: 'Diamond',  rank: 5, color: '#9fc3ff', glow: 'rgba(159,195,255,0.65)', bg: 'linear-gradient(165deg, rgba(30,55,120,0.55) 0%, rgba(8,12,26,0.7) 100%)' }
+    diamond:  { label: 'Diamond',  rank: 5, color: '#9fc3ff', glow: 'rgba(159,195,255,0.65)', bg: 'linear-gradient(165deg, rgba(30,55,120,0.55) 0%, rgba(8,12,26,0.7) 100%)' },
+    mythic:   { label: 'Mythic',   rank: 6, color: '#ff8fd6', glow: 'rgba(255,143,214,0.6)',  bg: 'linear-gradient(165deg, rgba(90,20,80,0.55) 0%, rgba(20,6,18,0.7) 100%)' }
   };
   const DEFAULT_TIER = { label: 'Unranked', rank: 0, color: '#9fb3d6', glow: 'rgba(159,179,214,0.35)', bg: 'linear-gradient(165deg, rgba(40,48,64,0.5) 0%, rgba(10,12,18,0.7) 100%)' };
   function tierInfo(tierKey) {

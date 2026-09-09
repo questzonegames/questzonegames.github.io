@@ -1735,7 +1735,8 @@
         if (a) {
           list.appendChild(renderFilledSlot({
             id: a.achievement_id, name: a.name, tier: a.tier || '',
-            description: a.description || '', icon: a.icon || ''
+            description: a.description || '', icon: a.icon || '',
+            unlocked: true // a pinned achievement is always an unlocked one — see pinned_achievements' own constraints
           }));
         } else {
           list.appendChild(renderEmptySlot());

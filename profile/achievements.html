@@ -55,7 +55,7 @@
     letter-spacing: 0.03em; cursor: pointer;
   }
 
-  .ach-filters, .ach-game-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+  .ach-filters, .ach-game-filters, .ach-tier-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
   .ach-game-filters { padding-left: 4px; border-left: 2px solid rgba(120,160,220,0.25); margin-left: 2px; }
   .ach-filter {
     font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
@@ -70,6 +70,18 @@
   }
   .ach-filter .count { opacity: 0.7; margin-left: 5px; font-weight: 400; }
   .ach-game-filters.hidden { display: none; }
+  /* Second, independent filter row — status/tier (Locked, Bronze..Mythic),
+     ANDed with the category row above rather than replacing it. Same
+     .ach-filter chrome as the category row for visual consistency, but a
+     tier chip's active state is tinted with that tier's own colour
+     (set inline via --tier-chip) instead of the generic blue, so the row
+     reads at a glance the way the tier panels themselves do. */
+  .ach-tier-filters { padding-top: 6px; margin-top: 2px; border-top: 1px dashed rgba(120,160,220,0.18); }
+  .ach-filter.tier-chip.active {
+    background: linear-gradient(180deg, var(--tier-chip, #3b6fe0) 0%, rgba(0,0,0,0.35) 130%);
+    border-color: var(--tier-chip, rgba(150,200,255,0.8));
+    box-shadow: 0 0 12px var(--tier-chip-glow, rgba(70,140,255,0.5));
+  }
 
   .ach-grid {
     display: grid;
@@ -78,40 +90,54 @@
     min-height: 200px;
     margin-top: 6px;
   }
+  /* ---- panel artwork ----
+     Real image assets (assets/img/achievements/panel-<locked|tier>.png,
+     see PANEL_IMAGES below), NOT CSS-drawn — one asset per tier plus a
+     separate Locked asset, chosen per card by JS. Each source PNG was
+     pixel-cropped to its own tight opaque bounding box (removing the
+     transparent canvas margin it shipped with) so it fills this card's
+     EXISTING size/shape via background-size:100% 100% with no letterboxing
+     — the crop's own aspect ratio (~1.9-2:1) is already close enough to
+     this card's natural rendered ratio that the resulting stretch is
+     negligible; card dimensions themselves are completely unchanged from
+     before this asset swap, per explicit instruction to keep the current
+     size rather than resize the grid around the source art. */
   .ach-tile {
     position: relative; text-align: left; font-family: inherit;
     display: flex; flex-direction: column; gap: 6px;
-    padding: 14px 14px 12px; border-radius: 12px; cursor: pointer;
-    border: 1.5px solid var(--tier-border, rgba(120,160,220,0.25));
-    background: var(--tier-bg, linear-gradient(165deg, rgba(20,32,56,0.7) 0%, rgba(8,14,26,0.7) 100%));
-    box-shadow: var(--tier-shadow, none);
-    transition: transform 0.15s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    padding: 16px 16px 13px; border-radius: 12px; cursor: pointer;
+    border: none;
+    background-image: var(--panel-img);
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    transition: transform 0.15s ease, filter 0.18s ease;
   }
-  .ach-tile:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.45), var(--tier-shadow, 0 0 14px rgba(70,140,255,0.25)); }
-  .ach-tile.locked { filter: grayscale(0.85) brightness(0.55); border-color: rgba(120,140,180,0.18); box-shadow: none; }
-  .ach-tile.locked:hover { filter: grayscale(0.7) brightness(0.68); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.4); }
+  .ach-tile:hover { transform: translateY(-3px); filter: brightness(1.12); }
+  .ach-tile.locked:hover { filter: brightness(1.08); transform: translateY(-2px); }
   .ach-tile.pinned::before {
     content: '📌'; position: absolute; top: 8px; right: 9px; font-size: 12px; opacity: 0.9;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8));
   }
   .ach-tile-top { display: flex; align-items: center; gap: 10px; }
   .ach-tile-icon {
-    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center; font-size: 21px;
-    background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08);
+    width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.1);
   }
   .ach-tile.locked .ach-tile-icon { position: relative; }
   .ach-tile.locked .ach-tile-icon::after {
     content: '🔒'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 14px; background: rgba(0,0,0,0.45); border-radius: 10px;
+    font-size: 13px; background: rgba(0,0,0,0.5); border-radius: 9px;
   }
-  .ach-tile-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12.5px; line-height: 1.3; color: var(--text); }
-  .ach-tile-tier { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--tier-color, var(--text-dim)); }
-  .ach-tile-desc { font-size: 11px; color: var(--text-dim); line-height: 1.4; flex: 1; }
-  .ach-tile-meta { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; }
-  .ach-tile-progress-track { height: 4px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 2px; }
+  .ach-tile-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 12.5px; line-height: 1.3; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+  .ach-tile-tier { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--tier-color, #d8e0f0); text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+  .ach-tile-desc { font-size: 11px; color: #f0f2f8; opacity: 0.92; line-height: 1.4; flex: 1; text-shadow: 0 1px 3px rgba(0,0,0,0.75); }
+  .ach-tile-meta { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: #eef1f8; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.04em; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+  .ach-tile-progress-track { height: 4px; border-radius: 3px; background: rgba(0,0,0,0.35); overflow: hidden; margin-top: 2px; }
   .ach-tile-progress-fill { height: 100%; background: var(--tier-color, #3b82f6); border-radius: 3px; }
-  .ach-tile-empty { min-height: 92px; border-style: dashed; border-color: rgba(120,160,220,0.12); background: rgba(10,16,28,0.3); cursor: default; box-shadow: none; }
-  .ach-tile-empty:hover { transform: none; box-shadow: none; }
+  .ach-tile-empty { min-height: 92px; border: 1px dashed rgba(120,160,220,0.12); background: rgba(10,16,28,0.3); cursor: default; }
+  .ach-tile-empty:hover { transform: none; filter: none; }
 
   .ach-empty-msg { grid-column: 1 / -1; text-align: center; padding: 40px 10px; color: var(--text-dim); }
   .ach-empty-msg .big { font-size: 34px; margin-bottom: 8px; }
@@ -149,32 +175,8 @@
   }
   .ach-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ---- extra fields on the shared achievement-inspection.js card ---- */
-  .ach-tile-status-line { font-size: 11.5px; color: var(--text-dim); margin-top: 6px; }
-  .ach-tile-status-line.unlocked-line { color: #6be3a0; }
-  .ach-tile-requirement { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; }
-  .ach-tile-progress-wrap { margin-top: 10px; }
-  .ach-tile-progress-label { font-size: 10.5px; color: var(--text-dim); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
-  .ach-tile-progress-outer { height: 8px; border-radius: 5px; background: rgba(255,255,255,0.08); overflow: hidden; }
-  .ach-tile-progress-inner { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #3b82f6, #7fb3ff); transition: width 0.5s ease; }
-  .ach-tile-pin-actions { display: flex; gap: 8px; margin-top: 14px; }
-  .ach-tile-pin-actions button {
-    font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.05em; padding: 8px 14px;
-    border-radius: 7px; border: 1px solid rgba(150,200,255,0.5); cursor: pointer;
-    background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%); color: #fff;
-  }
-  .ach-tile-pin-actions button.unpin { background: rgba(255,255,255,0.06); border-color: rgba(120,160,220,0.3); color: var(--text-dim); }
-
-  /* Tier colour classes — mirrors QZ_ACHIEVEMENT_TIERS in
-     assets/js/qz-achievements.js exactly (kept in sync by hand; the JS
-     is the source of truth for card inline vars, this is only for the
-     .ach-tile-tier text on the inspection card, which doesn't get an
-     inline style from JS). */
-  .tier-bronze { color: #c98452; }
-  .tier-silver { color: #c7d3e6; }
-  .tier-gold { color: #ffcf4d; }
-  .tier-platinum { color: #8fe8e0; }
-  .tier-diamond { color: #9fc3ff; }
+  /* Note: .tier-bronze..mythic (used by the inspection card's tier
+     label) live centrally in site.css now, not duplicated per-page. */
 
   @media (max-width: 640px) {
     .ach-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -243,6 +245,10 @@
 
         <div class="ach-filters" id="ach-filters"><!-- rendered by JS --></div>
         <div class="ach-game-filters hidden" id="ach-game-filters"><!-- rendered by JS, only under "Games" --></div>
+        <!-- Second, independent filter row: status/tier. Combines (AND) with
+             the category row above — e.g. Games + Gold shows Gold-tier Games
+             achievements. Does not replace or interact with activeGame. -->
+        <div class="ach-tier-filters" id="ach-tier-filters"><!-- rendered by JS --></div>
 
         <div class="ach-grid" id="ach-grid"><div class="ach-empty-msg"><div class="big">🏅</div>Loading achievements…</div></div>
         <div class="ach-pagination" id="ach-pagination"></div>
@@ -289,11 +295,20 @@
   // automatically, no other file needs touching.
   const GAME_LABELS = { 'anagram-quest': 'Anagram Quest', 'space-snake': 'Space Snake' };
 
+  // Status/tier filter row — Locked plus the 6 real tiers, in official
+  // tier order (Bronze -> Silver -> Gold -> Platinum -> Diamond -> Mythic).
+  // Independent of, and ANDed with, activeCategory/activeGame — see
+  // filteredSorted(). 'locked' means "not yet unlocked, regardless of its
+  // underlying tier" (matches the panel-art rule: a locked achievement
+  // always shows the Locked panel no matter what tier it actually is).
+  const TIER_FILTERS = ['locked', 'bronze', 'silver', 'gold', 'platinum', 'diamond', 'mythic'];
+
   let client = null;
   let uid = null;
   let allAchievements = [];   // raw catalog rows, enriched with unlocked/pinned/progress
   let activeCategory = 'all';
   let activeGame = null;      // sub-filter under "games"
+  let activeTier = null;      // status/tier filter — null = no tier filter, 'locked', or a tier key
   let searchTerm = '';
   let sortMode = 'default';
   let currentPage = 1;
@@ -451,6 +466,33 @@
       root.appendChild(btn);
     });
     renderGameFilters();
+    renderTierFilters();
+  }
+
+  function renderTierFilters() {
+    const root = $('ach-tier-filters');
+    root.innerHTML = '';
+    TIER_FILTERS.forEach((key) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const info = key === 'locked'
+        ? { label: 'Locked', color: '#9fb3d6', glow: 'rgba(159,179,214,0.5)' }
+        : (window.QZAchievements ? window.QZAchievements.tierInfo(key) : { label: key, color: '#9fb3d6', glow: 'rgba(159,179,214,0.5)' });
+      btn.className = 'ach-filter tier-chip' + (activeTier === key ? ' active' : '');
+      btn.style.setProperty('--tier-chip', info.color);
+      btn.style.setProperty('--tier-chip-glow', info.glow);
+      const count = key === 'locked'
+        ? allAchievements.filter((a) => !a.unlocked).length
+        : allAchievements.filter((a) => a.unlocked && String(a.tier || '').toLowerCase() === key).length;
+      btn.innerHTML = escapeHtml(info.label) + '<span class="count">' + count + '</span>';
+      btn.addEventListener('click', () => {
+        activeTier = activeTier === key ? null : key; // click again to clear
+        currentPage = 1;
+        renderTierFilters();
+        renderAll();
+      });
+      root.appendChild(btn);
+    });
   }
 
   function renderGameFilters() {
@@ -484,6 +526,11 @@
     } else if (activeCategory !== 'all') {
       list = list.filter((a) => a.category === activeCategory);
       if (activeCategory === 'games' && activeGame) list = list.filter((a) => a.game_key === activeGame);
+    }
+    if (activeTier === 'locked') {
+      list = list.filter((a) => !a.unlocked);
+    } else if (activeTier) {
+      list = list.filter((a) => a.unlocked && String(a.tier || '').toLowerCase() === activeTier);
     }
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
@@ -529,10 +576,30 @@
   }
 
   // ---- grid ----
-  function tierVars(tierKey) {
-    if (!window.QZAchievements) return {};
-    const t = window.QZAchievements.tierInfo(tierKey);
-    return { '--tier-color': t.color, '--tier-border': t.color + '55', '--tier-bg': t.bg, '--tier-shadow': '0 0 16px ' + t.glow };
+  // Real panel artwork (see assets/img/achievements/panel-*.png) — chosen
+  // Locked-state-first, tier second, exactly per the requested logic:
+  //   if (!achievement.unlocked) panel = lockedPanel;
+  //   else panel = tierPanels[achievement.tier];
+  // A card's underlying tier is NEVER used to pick art while locked, only
+  // to decide the panel once it's actually unlocked (see cardVars below) —
+  // the tier itself still travels with the achievement data the whole
+  // time (sorting/filtering by tier works on locked cards too), only the
+  // ARTWORK is gated on unlocked state.
+  const PANEL_IMAGES = {
+    locked: '../assets/img/achievements/panel-locked.png',
+    bronze: '../assets/img/achievements/panel-bronze.png',
+    silver: '../assets/img/achievements/panel-silver.png',
+    gold: '../assets/img/achievements/panel-gold.png',
+    platinum: '../assets/img/achievements/panel-platinum.png',
+    diamond: '../assets/img/achievements/panel-diamond.png',
+    mythic: '../assets/img/achievements/panel-mythic.png'
+  };
+  function cardVars(a) {
+    const panelKey = a.unlocked ? String(a.tier || '').toLowerCase() : 'locked';
+    const panelUrl = PANEL_IMAGES[panelKey] || PANEL_IMAGES.locked;
+    const vars = { '--panel-img': 'url(' + panelUrl + ')' };
+    if (a.unlocked && window.QZAchievements) vars['--tier-color'] = window.QZAchievements.tierInfo(a.tier).color;
+    return vars;
   }
 
   function renderGrid(list) {
@@ -549,7 +616,7 @@
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'ach-tile' + (a.unlocked ? '' : ' locked') + (a.pinned ? ' pinned' : '');
-      const vars = a.unlocked ? tierVars(a.tier) : {};
+      const vars = cardVars(a);
       Object.keys(vars).forEach((k) => card.style.setProperty(k, vars[k]));
 
       const tierLabel = window.QZAchievements ? window.QZAchievements.tierInfo(a.tier).label : a.tier;

@@ -1,25 +1,55 @@
 // ===== Quest Zone — reusable Achievement Inspection system =====
 //
 // Any page that links assets/css/site.css and this script can pop an
-// achievement icon out into a cinematic inspection card:
+// achievement out into a cinematic inspection card:
 //
 //   window.QZAchievementInspection.open(achievement, sourceEl);
 //
-// achievement shape (only icon/name/tier/description are used today —
-// progress/unlocked/game/category are accepted and ignored so this can
-// grow into a richer inspection view later without a breaking change):
+// achievement shape (only icon/name/tier/description are required —
+// progress/unlocked/unlockedAt/game/category/onPin/onUnpin are accepted
+// and skipped gracefully when absent, so a caller passing the minimal
+// set still works):
 //   {
 //     id, name, tier, description, icon,
-//     progress, unlocked, game, category
+//     unlocked, unlockedAt, progress, game, category, onPin, onUnpin
 //   }
 //
-// sourceEl is the element the icon visually flew out of — its
+// sourceEl is the element the tile visually flew out of — its
 // getBoundingClientRect() is the animation's start point, and close()
-// re-measures it live so the icon flies back to wherever it actually is
+// re-measures it live so the tile flies back to wherever it actually is
 // (works even if the page scrolled/resized while the card was open).
+//
+// The popped-out card is a BIGGER rendering of the exact same tier
+// panel artwork the achievements grid uses (assets/img/achievements/
+// panel-<locked|tier>.png) — not a separate CSS-drawn dialog — picked
+// with the same Locked-first-tier-second rule as the grid (see
+// panelUrlFor below). The flying animation is a live clone of the
+// actual source tile (see setFlyerContent), so it shows the real panel
+// art and content in flight, never a placeholder/broken image.
 (function () {
-  let backdropEl, cardEl, flyerEl, flyerImg, closeBtn;
-  let cardIconImg, nameEl, tierEl, descEl, statusEl, requirementEl, progressWrap, progressLabel, progressInner, pinActionsEl;
+  // Mirrors PANEL_IMAGES in profile/achievements.html's cardVars() —
+  // kept here too (rather than imported) because this module has no
+  // dependency on that page's own script, only on assets/css/site.css
+  // and assets/js/qz-achievements.js being present. Both of this
+  // module's current callers (profile/achievements.html,
+  // profile/index.html) live at the same path depth, so the relative
+  // paths below resolve correctly from either.
+  const PANEL_IMAGES = {
+    locked: '../assets/img/achievements/panel-locked.png',
+    bronze: '../assets/img/achievements/panel-bronze.png',
+    silver: '../assets/img/achievements/panel-silver.png',
+    gold: '../assets/img/achievements/panel-gold.png',
+    platinum: '../assets/img/achievements/panel-platinum.png',
+    diamond: '../assets/img/achievements/panel-diamond.png',
+    mythic: '../assets/img/achievements/panel-mythic.png'
+  };
+  function panelUrlFor(tierKey, unlocked) {
+    const key = unlocked ? String(tierKey || '').toLowerCase() : 'locked';
+    return PANEL_IMAGES[key] || PANEL_IMAGES.locked;
+  }
+
+  let backdropEl, cardEl, flyerEl, closeBtn;
+  let cardIconBadge, nameEl, tierEl, descEl, statusEl, requirementEl, progressWrap, progressLabel, progressInner, pinActionsEl;
   let currentSource = null;
   let isOpen = false;
   let lastFocused = null;
@@ -35,14 +65,16 @@
     backdropEl.className = 'ach-backdrop';
     backdropEl.setAttribute('aria-hidden', 'true');
     backdropEl.innerHTML =
-      '<div class="ach-flyer"><img alt=""></div>' +
+      '<div class="ach-flyer"></div>' +
       '<div class="ach-card" role="dialog" aria-modal="true" aria-labelledby="ach-card-title" tabindex="-1">' +
-        '<span class="corner-brackets"><i></i><i></i><i></i><i></i></span>' +
-        '<span class="hud-edge-glow"></span>' +
         '<button type="button" class="ach-close" aria-label="Close achievement details">✕</button>' +
-        '<div class="ach-card-icon"><img alt=""></div>' +
-        '<h2 class="ach-card-name" id="ach-card-title"></h2>' +
-        '<div class="ach-card-tier"></div>' +
+        '<div class="ach-card-top">' +
+          '<span class="ach-card-icon-badge"></span>' +
+          '<div style="min-width:0;">' +
+            '<h2 class="ach-card-name" id="ach-card-title"></h2>' +
+            '<div class="ach-card-tier"></div>' +
+          '</div>' +
+        '</div>' +
         '<p class="ach-card-desc"></p>' +
         '<div class="ach-card-status-line"></div>' +
         '<div class="ach-card-requirement"></div>' +
@@ -55,10 +87,9 @@
     document.body.appendChild(backdropEl);
 
     flyerEl = backdropEl.querySelector('.ach-flyer');
-    flyerImg = flyerEl.querySelector('img');
     cardEl = backdropEl.querySelector('.ach-card');
     closeBtn = backdropEl.querySelector('.ach-close');
-    cardIconImg = cardEl.querySelector('.ach-card-icon img');
+    cardIconBadge = cardEl.querySelector('.ach-card-icon-badge');
     nameEl = cardEl.querySelector('.ach-card-name');
     tierEl = cardEl.querySelector('.ach-card-tier');
     descEl = cardEl.querySelector('.ach-card-desc');
@@ -92,6 +123,26 @@
     });
   }
 
+  // Clones the actual source tile into the flyer so what's flying is a
+  // pixel-real copy of the tile itself (real panel art, real icon/name)
+  // rather than a synthetic placeholder — nothing to glitch or show
+  // see-through, since there's no separate <img> with its own src to
+  // fail loading.
+  function setFlyerContent(sourceEl) {
+    flyerEl.innerHTML = '';
+    if (!sourceEl) return;
+    const clone = sourceEl.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.style.position = 'static';
+    clone.style.transform = 'none';
+    clone.style.transition = 'none';
+    clone.style.pointerEvents = 'none';
+    clone.style.cursor = 'default';
+    clone.style.visibility = 'visible'; // sourceEl itself is hidden while flying (see open()/close()) — the clone must not inherit that via cloneNode
+    clone.tabIndex = -1;
+    flyerEl.appendChild(clone);
+  }
+
   function open(achievement, sourceEl) {
     build();
     if (isOpen || !achievement) return;
@@ -99,28 +150,43 @@
     currentSource = sourceEl || null;
     lastFocused = document.activeElement;
 
-    cardIconImg.src = achievement.icon;
-    cardIconImg.alt = achievement.name + ' (' + achievement.tier + ')';
+    const unlocked = achievement.unlocked !== false; // callers that omit it (e.g. pinned badges, always unlocked) default true
+    // Set directly as background-image (not a --panel-img custom property
+    // read via var() in site.css) — a relative url() inside a custom
+    // property resolves against the STYLESHEET that consumes it, which
+    // for this external site.css would be assets/css/, not the page,
+    // silently breaking the path (assets/css/../assets/img/... ==
+    // assets/assets/img/...). Setting the property directly on the
+    // element's inline style resolves the url() against the page itself,
+    // matching where these ../assets/img/... paths actually point.
+    cardEl.style.backgroundImage = "url('" + panelUrlFor(achievement.tier, unlocked) + "')";
+    cardEl.classList.toggle('locked', !unlocked);
+
+    cardIconBadge.textContent = achievement.icon || '🏆';
     nameEl.textContent = achievement.name;
     tierEl.textContent = achievement.tier;
     tierEl.className = 'ach-card-tier tier-' + String(achievement.tier || '').toLowerCase();
     descEl.textContent = achievement.description || '';
 
-    // ---- optional richer fields — every caller so far (profile/index.html's
-    // pinned-badge slots) only ever passes icon/name/tier/description, so
-    // all of this is skipped/hidden gracefully when absent, exactly as
-    // this file's own header comment always promised it would be. ----
+    // ---- optional richer fields — skipped/hidden gracefully when
+    // absent, exactly as this file's header comment always promised. ----
     if (statusEl) {
-      if (achievement.unlocked === true) {
-        statusEl.textContent = 'Unlocked' + (achievement.unlockedAt ? ' — ' + new Date(achievement.unlockedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+      if (unlocked) {
+        let when = '';
+        if (achievement.unlockedAt) {
+          const d = new Date(achievement.unlockedAt);
+          if (!isNaN(d)) {
+            when = ' — ' + d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+              ' at ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+          }
+        }
+        statusEl.textContent = 'Unlocked' + when;
         statusEl.className = 'ach-card-status-line unlocked-line';
         statusEl.hidden = false;
-      } else if (achievement.unlocked === false) {
+      } else {
         statusEl.textContent = 'Locked';
         statusEl.className = 'ach-card-status-line';
         statusEl.hidden = false;
-      } else {
-        statusEl.hidden = true;
       }
     }
     if (requirementEl) {
@@ -170,7 +236,7 @@
     if (sourceEl) sourceEl.style.visibility = 'hidden';
 
     const sourceRect = sourceEl.getBoundingClientRect();
-    flyerImg.src = achievement.icon;
+    setFlyerContent(sourceEl);
     flyerEl.style.display = 'block';
     flyerEl.style.left = sourceRect.left + 'px';
     flyerEl.style.top = sourceRect.top + 'px';
@@ -180,9 +246,9 @@
     flyerEl.style.opacity = '1';
 
     // wait a frame so the (still-transparent) card is laid out and its
-    // icon slot can be measured as the real flight target
+    // final on-screen box can be measured as the real flight target
     requestAnimationFrame(() => {
-      const targetRect = cardEl.querySelector('.ach-card-icon').getBoundingClientRect();
+      const targetRect = cardEl.getBoundingClientRect();
       const scale = Math.min(targetRect.width / sourceRect.width, targetRect.height / sourceRect.height) || 1;
       const tx = (targetRect.left + targetRect.width / 2) - (sourceRect.left + sourceRect.width / 2);
       const ty = (targetRect.top + targetRect.height / 2) - (sourceRect.top + sourceRect.height / 2);
@@ -228,14 +294,17 @@
     }
 
     // re-measure the source's LIVE position — correct even if the page
-    // scrolled or resized while the card was open
+    // scrolled or resized while the card was open — and re-clone it so
+    // the flight-back shows the tile's current state (e.g. a pin toggle
+    // made from the card).
     const sourceRect = sourceEl.getBoundingClientRect();
-    const cardIconRect = cardEl.querySelector('.ach-card-icon').getBoundingClientRect();
-    const scale = Math.min(cardIconRect.width / sourceRect.width, cardIconRect.height / sourceRect.height) || 1;
-    const tx = (cardIconRect.left + cardIconRect.width / 2) - (sourceRect.left + sourceRect.width / 2);
-    const ty = (cardIconRect.top + cardIconRect.height / 2) - (sourceRect.top + sourceRect.height / 2);
+    const cardRect = cardEl.getBoundingClientRect();
+    const scale = Math.min(cardRect.width / sourceRect.width, cardRect.height / sourceRect.height) || 1;
+    const tx = (cardRect.left + cardRect.width / 2) - (sourceRect.left + sourceRect.width / 2);
+    const ty = (cardRect.top + cardRect.height / 2) - (sourceRect.top + sourceRect.height / 2);
     const midScale = 1 + (scale - 1) * 0.55;
 
+    setFlyerContent(sourceEl);
     flyerEl.style.left = sourceRect.left + 'px';
     flyerEl.style.top = sourceRect.top + 'px';
     flyerEl.style.width = sourceRect.width + 'px';

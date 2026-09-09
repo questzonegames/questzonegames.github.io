@@ -1090,9 +1090,24 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
    Reusable Achievement Inspection system (assets/js/achievement-
    inspection.js). Any page that links this stylesheet and that script
    can call window.QZAchievementInspection.open(achievement, sourceEl)
-   to pop an achievement out of its source icon into this card, using
-   the same chrome/gunmetal/seam frame language as the rest of Quest
-   Zone. See the JS file for the achievement data shape.
+   to pop an achievement out of its source tile into this card.
+
+   The card itself IS the real tier panel artwork (assets/img/achieve-
+   ments/panel-<locked|tier>.png — same image, same Locked-first-tier-
+   second selection logic as the achievements grid, see cardVars() in
+   profile/achievements.html and panelUrlFor() in the JS file below),
+   not a different, CSS-drawn dialog shape. No extra frame/border/
+   corner-bracket chrome is layered over it: the artwork already draws
+   its own frame, and doubling that up would be exactly the kind of
+   "recreate the panel in CSS" this asset is meant to replace.
+
+   Deliberately sized close to the grid tile's own size, not blown up —
+   popping a tiny tile up to a big centred card meant scaling the same
+   source pixels way up, which read as stretched/soft, and the flight
+   animation's zoom made the "pop" feel more like a slow enlarge than a
+   spin-and-land. Content uses roughly the tile's own type scale for
+   the same reason (see .ach-tile-* in profile/achievements.html) —
+   this is the same card shown up close, not a bigger one.
    ================================================================ */
 
 html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
@@ -1114,7 +1129,11 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
 }
 .ach-backdrop.show { opacity: 1; pointer-events: auto; }
 
-/* the flying clone that travels from the clicked icon to the card */
+/* The flying "clone" that travels from the clicked tile to the card is
+   a live DOM clone of the actual source tile (see setFlyerContent() in
+   the JS) — not a separate image — so mid-flight it shows the real
+   panel art and real card content the whole way, never a placeholder
+   or a broken/see-through image. */
 .ach-flyer {
   position: fixed;
   left: 0; top: 0;
@@ -1122,37 +1141,48 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
   pointer-events: none;
   opacity: 0;
   display: none;
+  border-radius: 12px;
+  overflow: hidden;
+  filter: drop-shadow(0 0 22px rgba(120,190,255,0.45)) drop-shadow(0 10px 24px rgba(0,0,0,0.5));
 }
-.ach-flyer img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  filter: drop-shadow(0 0 22px rgba(120,190,255,0.55)) drop-shadow(0 10px 24px rgba(0,0,0,0.5));
-}
+.ach-flyer > * { width: 100% !important; height: 100% !important; margin: 0 !important; }
 
 .ach-card {
   position: relative;
-  width: min(88vw, 380px);
+  /* Close to the grid tile's own rendered width (.ach-grid uses
+     minmax(190px, 1fr)) rather than a large fixed popup size — see the
+     header comment above. */
+  width: min(90vw, 260px);
+  /* A real aspect-ratio here would CLIP taller content (e.g. an
+     unlocked achievement with a date/time line + a requirement line +
+     a Pin/Unpin button) instead of growing to fit it, since aspect-
+     ratio fixes the box's height regardless of what's inside. min-
+     height instead only asks for "at least" a landscape shape close to
+     the tile's own — the box still grows taller via normal flow for
+     any achievement whose real content needs more room, so nothing is
+     ever cropped. background-size:100% 100% below stretches the panel
+     art to fill whatever height the box actually ends up at. */
+  min-height: 190px;
   max-height: 88vh;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none; /* Firefox — content still scrolls if it ever needs to, the track just isn't shown */
   -ms-overflow-style: none; /* legacy Edge */
-  border: 3px solid transparent;
-  border-radius: 18px;
-  padding: clamp(20px, 4vw, 34px) clamp(18px, 4vw, 30px) clamp(22px, 4vw, 32px);
-  background: var(--qp-fill) padding-box, var(--chrome-frame) border-box;
-  box-shadow:
-    inset 0 0 0 3px var(--gunmetal),
-    inset 0 0 0 6px var(--seam),
-    inset 0 0 0 8px rgba(6,10,20,0.9),
-    inset 0 0 24px 8px rgba(90,180,255,0.3),
-    inset 0 1px 0 rgba(255,255,255,0.12),
-    0 0 0 1px rgba(0,0,0,0.6),
-    0 20px 60px rgba(0,0,0,0.6),
-    0 0 70px rgba(40,110,230,0.25);
-  text-align: center;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 16px 13px;
+  /* background-image itself is set inline via JS (cardEl.style.background
+     Image), NOT through this custom property — a url() inside a custom
+     property is resolved relative to the STYLESHEET that consumes it
+     via var(), which for this external site.css file is assets/css/,
+     not the page. Setting it inline on the element resolves against the
+     page's own URL instead, which is what the relative panel paths
+     assume (see panelUrlFor() in achievement-inspection.js). */
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 70px rgba(40,110,230,0.2);
+  text-align: left;
   opacity: 0;
   transform: scale(0.92);
   transition: opacity 0.22s ease, transform 0.22s ease;
@@ -1162,12 +1192,12 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
 
 .ach-close {
   position: absolute;
-  top: 12px; right: 12px;
-  width: 30px; height: 30px;
+  top: 8px; right: 8px;
+  width: 26px; height: 26px;
   border-radius: 50%;
   border: 1px solid rgba(150,180,220,0.3);
-  background: rgba(10,14,24,0.6);
-  color: var(--text-dim);
+  background: rgba(10,14,24,0.65);
+  color: #fff;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -1176,50 +1206,47 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
   justify-content: center;
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
-.ach-close:hover { background: rgba(59,130,246,0.28); color: #fff; transform: scale(1.08); }
+.ach-close:hover { background: rgba(59,130,246,0.32); color: #fff; transform: scale(1.08); }
 
-.ach-card-icon {
-  width: clamp(140px, 40vw, 200px);
-  aspect-ratio: 1 / 1;
-  margin: 0 auto clamp(14px, 2.4vw, 20px);
+.ach-card-top { display: flex; align-items: center; gap: 10px; }
+.ach-card-icon-badge {
+  width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.1);
+  position: relative;
 }
-.ach-card-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  filter: drop-shadow(0 0 20px rgba(120,190,255,0.4));
+.ach-card.locked .ach-card-icon-badge::after {
+  content: '🔒'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; background: rgba(0,0,0,0.55); border-radius: 9px;
 }
 
 .ach-card-name {
   font-family: 'Orbitron', sans-serif;
-  font-weight: 900;
-  font-style: italic;
-  font-size: clamp(17px, 3vw, 21px);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin: 0 0 6px;
-  background: linear-gradient(180deg, #ffffff 0%, #cfd9ee 45%, #93a3c4 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 14px rgba(120,170,255,0.45);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  margin: 0 0 2px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
 
 .ach-card-tier {
   font-family: 'Orbitron', sans-serif;
-  font-weight: 800;
-  font-size: clamp(13px, 2vw, 15px);
-  letter-spacing: 0.22em;
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin: 0 0 clamp(14px, 2.4vw, 20px);
+  margin: 0;
 }
-.tier-locked   { color: #7c869e; }
-.tier-bronze   { background: linear-gradient(180deg,#f0b878,#a85a2a); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 12px rgba(200,120,50,0.4); }
-.tier-silver   { background: linear-gradient(180deg,#ffffff,#9aa8c0); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 12px rgba(200,210,230,0.4); }
-.tier-gold     { background: linear-gradient(180deg,#fff3c4,#d9a521); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 14px rgba(230,180,60,0.5); }
-.tier-platinum { background: linear-gradient(180deg,#f4f8ff,#b9c8e0); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 14px rgba(200,220,255,0.5); }
-.tier-diamond  { background: linear-gradient(180deg,#c9f3ff,#4fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 16px rgba(90,200,255,0.55); }
+.tier-locked   { color: #b7c2da; }
+.tier-bronze   { color: #f0b878; text-shadow: 0 0 10px rgba(200,120,50,0.5); }
+.tier-silver   { color: #eef2fa; text-shadow: 0 0 10px rgba(200,210,230,0.5); }
+.tier-gold     { color: #ffdd7a; text-shadow: 0 0 12px rgba(230,180,60,0.6); }
+.tier-platinum { color: #dff3ff; text-shadow: 0 0 12px rgba(200,220,255,0.6); }
+.tier-diamond  { color: #a8dcff; text-shadow: 0 0 14px rgba(90,200,255,0.65); }
 .tier-mythic   {
   background: linear-gradient(90deg,#ff5fa2,#ffcf5c,#63ffb0,#5fc9ff,#b672ff,#ff5fa2);
   background-size: 220% auto;
@@ -1234,13 +1261,27 @@ html.ach-scroll-lock, html.ach-scroll-lock body { overflow: hidden; }
 
 .ach-card-desc {
   font-family: 'Exo 2', sans-serif;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--text-dim);
-  margin: 0;
-  padding-top: clamp(12px, 2vw, 16px);
-  border-top: 1px solid var(--qp-border-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f0f2f8;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.75);
+  margin: 6px 0 0;
 }
+
+.ach-card-status-line { font-size: 10px; color: #eef1f8; text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-top: 8px; }
+.ach-card-status-line.unlocked-line { color: #79f0ac; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+.ach-card-requirement { font-size: 10px; color: #dfe4f0; text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-top: 3px; }
+.ach-card-progress-wrap { margin-top: 8px; }
+.ach-card-progress-label { font-size: 9.5px; color: #dfe4f0; text-shadow: 0 1px 2px rgba(0,0,0,0.7); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+.ach-card-progress-outer { height: 5px; border-radius: 4px; background: rgba(0,0,0,0.4); overflow: hidden; }
+.ach-card-progress-inner { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3b82f6, #7fb3ff); transition: width 0.5s ease; }
+.ach-card-pin-actions { display: flex; gap: 6px; margin-top: 10px; }
+.ach-card-pin-actions button {
+  font-family: 'Orbitron', sans-serif; font-size: 9.5px; letter-spacing: 0.04em; padding: 6px 11px;
+  border-radius: 6px; border: 1px solid rgba(150,200,255,0.5); cursor: pointer;
+  background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%); color: #fff;
+}
+.ach-card-pin-actions button.unpin { background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.25); color: #eef1f8; }
 
 /* ============================================================================
    Premium metallic "shine name" — ANY place a username is displayed as a
