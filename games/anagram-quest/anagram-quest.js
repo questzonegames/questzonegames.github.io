@@ -97,10 +97,150 @@
     HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard', unlockLevel: 40 }
   };
 
-  // ---- sound hooks (no audio assets shipped yet — safe no-ops until a
-  // project-wide sound system exists; call sites are already in place) ----
+  // ---- sound engine (Anagram-Quest-only — NOT a site-wide QZSound
+  // module; see docs/AUDIO_PLAN.md) ----
+  // Every sound below is synthesized live with the Web Audio API — no
+  // audio files, nothing third-party, nothing to license. Scoped to this
+  // game only, on purpose (per the balancing spec: "only the Anagram
+  // Quest ones, not the global/site-wide ones, no background music").
+  // Design notes carried over from the auditioning tool:
+  //  - Only 'sine'/'triangle' oscillators anywhere — no square/sawtooth,
+  //    which read as harsh/buzzy.
+  //  - Every letter/tile/button sound is built from aqClick() — a very
+  //    short filtered-noise "tick" layered with a soft round tone
+  //    underneath, for a tactile, physical feel rather than an
+  //    electronic blip.
+  //  - Melodic hits use happy major/pentatonic intervals, even for
+  //    "invalid" moments (a gentle soft dip, never a dissonant buzzer).
+  const AQSound = (function () {
+    let ctx = null, master = null;
+    // Persisted 0-1 SFX volume, set by the Sound popover (see
+    // wireAudioControls()) — read up front so the very first sound ever
+    // played already respects whatever the player set last time, not a
+    // hardcoded default that then jumps.
+    let currentVolume = (function () {
+      try {
+        const saved = localStorage.getItem('aq-sfx-volume');
+        if (saved !== null) return Math.max(0, Math.min(100, parseInt(saved, 10))) / 100;
+      } catch (e) {}
+      return 0.6;
+    })();
+    function getCtx() {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = currentVolume;
+        master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+    function setVolume(v) {
+      currentVolume = Math.max(0, Math.min(1, v));
+      if (master) master.gain.value = currentVolume;
+    }
+    function envelope(g, t0, { attack = 0.006, decay = 0.08, sustain = 0.4, release = 0.09, duration = 0.2, peak = 1 }) {
+      g.gain.cancelScheduledValues(t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), t0 + attack);
+      const sustainLevel = Math.max(peak * sustain, 0.0001);
+      g.gain.exponentialRampToValueAtTime(sustainLevel, t0 + attack + decay);
+      const relStart = Math.max(t0 + attack + decay, t0 + duration - release);
+      g.gain.setValueAtTime(sustainLevel, relStart);
+      g.gain.exponentialRampToValueAtTime(0.0001, relStart + release);
+    }
+    function tone(opts) {
+      const c = getCtx(); if (!c) return;
+      const { freq = 440, freqEnd = null, type = 'sine', duration = 0.16, volume = 0.24, delay = 0, filterFreq = 3800, filterQ = 0.6, attack = 0.008 } = opts;
+      const t0 = c.currentTime + delay;
+      const osc = c.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      if (freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd, 1), t0 + duration);
+      const f = c.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = filterFreq; f.Q.value = filterQ;
+      const g = c.createGain();
+      envelope(g, t0, { duration, peak: volume, attack, decay: duration * 0.3, sustain: 0.45, release: duration * 0.4 });
+      osc.connect(f).connect(g).connect(master);
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.08);
+    }
+    function noiseBurst(opts) {
+      const c = getCtx(); if (!c) return;
+      const { duration = 0.05, volume = 0.2, filterFreq = 1800, filterQ = 1.3, delay = 0 } = opts;
+      const t0 = c.currentTime + delay;
+      const size = Math.max(1, Math.floor(c.sampleRate * duration));
+      const buffer = c.createBuffer(1, size, c.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = filterFreq; f.Q.value = filterQ;
+      const g = c.createGain();
+      envelope(g, t0, { duration, peak: volume, attack: 0.002, decay: duration * 0.4, sustain: 0.2, release: duration * 0.4 });
+      src.connect(f).connect(g).connect(master);
+      src.start(t0);
+      src.stop(t0 + duration + 0.03);
+    }
+    // The tactile building block: a soft physical "click" (filtered-noise
+    // transient) plus a short, quiet round tone underneath (the "body").
+    function aqClick(opts) {
+      const { clickFreq = 1900, bodyFreq = 550, clickDuration = 0.028, bodyDuration = null, volume = 0.2, delay = 0 } = opts || {};
+      noiseBurst({ duration: clickDuration, volume: volume * 0.85, filterFreq: clickFreq, filterQ: 1.5, delay });
+      tone({ freq: bodyFreq, type: 'sine', duration: bodyDuration || clickDuration * 2.6, volume: volume * 0.55, delay, filterFreq: 3200, attack: 0.003 });
+    }
+    function arpeggio(freqs, opts) {
+      const { type = 'triangle', noteDur = 0.14, gap = 0.1, volume = 0.24, delay = 0, filterFreq = 3800 } = opts || {};
+      freqs.forEach((f, i) => tone({ freq: f, type, duration: noteDur, volume, delay: delay + i * gap, filterFreq }));
+    }
+    const N = { C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88,
+                C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0, C6: 1046.5, D6: 1174.66, E6: 1318.51 };
+
+    const RECIPES = {
+      'start-game': () => { aqClick({ clickFreq: 2000, bodyFreq: 500, clickDuration: 0.02, volume: 0.16 }); arpeggio([N.C5, N.E5, N.G5], { noteDur: 0.13, gap: 0.09, volume: 0.22, delay: 0.02 }); },
+      'back': () => { aqClick({ clickFreq: 1800, bodyFreq: 480, clickDuration: 0.02, volume: 0.15 }); tone({ freq: N.E5, freqEnd: N.C5, duration: 0.14, volume: 0.14, delay: 0.01 }); },
+      'difficulty-easy': () => { aqClick({ clickFreq: 2100, bodyFreq: 520, clickDuration: 0.02, volume: 0.15 }); arpeggio([N.C5, N.E5], { noteDur: 0.15, gap: 0.1, volume: 0.22, delay: 0.02 }); },
+      'difficulty-medium': () => { aqClick({ clickFreq: 2000, bodyFreq: 460, clickDuration: 0.022, volume: 0.16 }); arpeggio([N.A4, N.C5, N.E5], { noteDur: 0.13, gap: 0.09, volume: 0.22, delay: 0.02 }); },
+      'difficulty-hard': () => { aqClick({ clickFreq: 1700, bodyFreq: 300, clickDuration: 0.026, volume: 0.2 }); tone({ freq: 165, duration: 0.32, volume: 0.16, delay: 0.01, filterFreq: 900 }); arpeggio([N.E4, N.G4, N.C5], { noteDur: 0.13, gap: 0.09, volume: 0.22, delay: 0.06 }); },
+      'difficulty-locked': () => { aqClick({ clickFreq: 1200, bodyFreq: 340, clickDuration: 0.022, volume: 0.16 }); aqClick({ clickFreq: 1000, bodyFreq: 260, clickDuration: 0.022, volume: 0.14, delay: 0.1 }); },
+      'letter-pick': () => aqClick({ clickFreq: 2600, bodyFreq: 1000, clickDuration: 0.016, bodyDuration: 0.05, volume: 0.17 }),
+      'tile-click': () => aqClick({ clickFreq: 2200, bodyFreq: 820, clickDuration: 0.018, bodyDuration: 0.06, volume: 0.18 }),
+      'backspace': () => aqClick({ clickFreq: 1700, bodyFreq: 420, clickDuration: 0.024, bodyDuration: 0.08, volume: 0.17 }),
+      'countdown-tick': () => aqClick({ clickFreq: 2400, bodyFreq: 780, clickDuration: 0.014, bodyDuration: 0.04, volume: 0.16 }),
+      'countdown-go': () => { aqClick({ clickFreq: 2000, bodyFreq: 500, clickDuration: 0.02, volume: 0.17 }); arpeggio([N.G4, N.C5], { noteDur: 0.15, gap: 0.1, volume: 0.24, delay: 0.02 }); },
+      'round-start': () => tone({ freq: N.A4, freqEnd: N.E5, duration: 0.28, volume: 0.2 }),
+      'final-round-start': () => { tone({ freq: 175, duration: 0.5, volume: 0.16, filterFreq: 900 }); arpeggio([N.C4, N.E4, N.G4, N.C5, N.E5], { noteDur: 0.11, gap: 0.075, volume: 0.24, delay: 0.05 }); },
+      'word-submit': () => aqClick({ clickFreq: 1600, bodyFreq: 440, clickDuration: 0.026, bodyDuration: 0.13, volume: 0.2 }),
+      'word-valid': () => arpeggio([N.C5, N.E5, N.G5], { noteDur: 0.16, gap: 0.11, volume: 0.24 }),
+      'word-invalid': () => { tone({ freq: N.A4, duration: 0.18, volume: 0.16 }); tone({ freq: N.F4, duration: 0.24, volume: 0.16, delay: 0.14 }); },
+      'final-round-fail': () => { tone({ freq: N.G4, duration: 0.2, volume: 0.17 }); tone({ freq: N.D4, duration: 0.32, volume: 0.16, delay: 0.16 }); },
+      'game-over': () => arpeggio([N.G4, N.E4, N.C4], { noteDur: 0.2, gap: 0.14, volume: 0.22 }),
+      'timer-tick': () => aqClick({ clickFreq: 2000, bodyFreq: 900, clickDuration: 0.012, bodyDuration: 0.02, volume: 0.11 }),
+      'timer-warning': () => { tone({ freq: N.E5, type: 'triangle', duration: 0.12, volume: 0.2 }); tone({ freq: N.E5, type: 'triangle', duration: 0.12, volume: 0.2, delay: 0.17 }); },
+      'xp-gain': () => { arpeggio([N.C5, N.D5, N.E5, N.G5, N.A5, N.C6], { noteDur: 0.075, gap: 0.052, volume: 0.19 }); tone({ freq: N.C6, duration: 0.3, volume: 0.1, delay: 0.26 }); },
+      'xp-bar-fill': () => { tone({ freq: N.A4, freqEnd: N.A5, duration: 0.3, volume: 0.18 }); tone({ freq: N.C6, type: 'triangle', duration: 0.3, volume: 0.16, delay: 0.26 }); },
+      'nine-letter-success': () => { arpeggio([N.C5, N.E5, N.G5, N.C6], { noteDur: 0.12, gap: 0.085, volume: 0.24 }); arpeggio([N.E6, N.C6, N.G5], { type: 'sine', noteDur: 0.09, gap: 0.06, volume: 0.13, delay: 0.42 }); },
+    };
+
+    return {
+      play(name) {
+        const recipe = RECIPES[name];
+        if (recipe) recipe();
+      },
+      setVolume,
+      getVolume() { return currentVolume; }
+    };
+  })();
+
+  // ---- sound hooks — Anagram Quest's own synthesized sounds only (see
+  // AQSound above); NOT the site-wide QZSound module referenced by
+  // docs/AUDIO_PLAN.md's global/ sounds, which stays unimplemented on
+  // purpose until other games need it too. ----
   function playSound(name) {
-    if (window.QZSound && window.QZSound.play) window.QZSound.play(name);
+    AQSound.play(name);
   }
   // ---- achievement/event hooks (no Anagram Quest achievements exist yet —
   // see achievements.html, which already queries for them; these calls are
@@ -827,6 +967,7 @@
     state.roundDeadline = Date.now() + seconds * 1000;
     state.timeRemaining = seconds;
     state.warnedThisRound = false;
+    state.lastTickSecond = null; // last second a 'timer-tick' played for — only ticks once per second, and only after the warning fires
     updateTimerUi();
     clearInterval(state.timerId);
     state.timerId = setInterval(() => {
@@ -834,6 +975,10 @@
       updateTimerUi();
       const warnAt = Math.min(10, state.roundSecondsTotal);
       if (state.timeRemaining <= warnAt && state.timeRemaining > 0 && !state.warnedThisRound) { state.warnedThisRound = true; playSound('timer-warning'); }
+      if (state.warnedThisRound && state.timeRemaining > 0 && state.timeRemaining !== state.lastTickSecond) {
+        state.lastTickSecond = state.timeRemaining;
+        playSound('timer-tick');
+      }
       if (state.timeRemaining <= 0) { clearInterval(state.timerId); judgeAndEndRound(); }
     }, 250);
   }
@@ -856,10 +1001,12 @@
       activeRoundLabel.textContent = 'Round 5 of 5';
       activeRoundSub.textContent = 'FIND THE NINE LETTER WORD — no early finish, the clock must run out.';
       activeLockInBtn.classList.add('hidden'); // NEVER available in Round 5 — see lockInRound()
+      playSound('final-round-start');
     } else {
       activeRoundLabel.textContent = 'Round ' + state.currentRound + ' of 5';
       activeRoundSub.textContent = 'Build the longest word you can — English words + real cities/countries.';
       activeLockInBtn.classList.remove('hidden');
+      playSound('round-start');
     }
     updateFooterStats();
     showScreen('ACTIVE');
@@ -960,6 +1107,15 @@
     // round (same "award once" rule as XP).
     if (valid && word.length === 9) state.nineLetterCount += 1;
 
+    // ---- outcome sound: a 9-letter solve always gets the bigger
+    // celebration regardless of round, otherwise a plain valid/invalid
+    // cue — except Round 5's own "ran out of time with nothing correct"
+    // case, which gets its own gentler failure sound instead of the
+    // ordinary invalid-word one. ----
+    if (valid && word.length === 9) playSound('nine-letter-success');
+    else if (bonus && !valid) playSound('final-round-fail');
+    else playSound(valid ? 'word-valid' : 'word-invalid');
+
     // ---- word line + exactly one success/failure icon ----
     if (word) {
       resultLabel.textContent = 'Your answer (' + word.length + ' letter' + (word.length === 1 ? '' : 's') + '):';
@@ -1005,6 +1161,7 @@
   // backstop in case anything else ever calls it while Round 5 is active.
   function lockInRound() {
     if (isBonusRound()) return;
+    playSound('word-submit');
     judgeAndEndRound();
   }
   activeLockInBtn.addEventListener('click', lockInRound);
@@ -1111,6 +1268,7 @@
     label.style.left = startX + 'px';
     label.style.top = startY + 'px';
     document.body.appendChild(label);
+    playSound('xp-gain');
 
     requestAnimationFrame(() => label.classList.add('sliding'));
 
@@ -1135,6 +1293,7 @@
           ? base + ' <span class="qz-skillcard-full-of99">(Virtual ' + newLvl.virtual + ')</span>'
           : base + '<span class="qz-skillcard-full-of99">/99</span>';
 
+        playSound('xp-bar-fill');
         fillEl.style.transition = 'width 1.1s cubic-bezier(.2,.8,.2,1)';
         fillEl.style.width = pct + '%';
         levelEl.innerHTML = 'LEVEL ' + levelLabel;
@@ -1203,13 +1362,15 @@
   }
 
   document.getElementById('btn-back-lobby').addEventListener('click', () => {
+    playSound('back');
     showScreen('LOBBY');
     updateFooterStats();
   });
 
   // ================= difficulty select + intro/countdown =================
   function selectDifficulty(key) {
-    if (state.intelligenceLevel < DIFFICULTIES[key].unlockLevel) return; // belt-and-suspenders — the button is already disabled/greyed for this
+    if (state.intelligenceLevel < DIFFICULTIES[key].unlockLevel) { playSound('difficulty-locked'); return; } // belt-and-suspenders — the button is already disabled/greyed for this
+    playSound('difficulty-' + key.toLowerCase());
     state.difficulty = key;
     state.difficultyConfig = DIFFICULTIES[key];
     state.totalScore = 0;
@@ -1221,7 +1382,7 @@
   document.getElementById('btn-diff-easy').addEventListener('click', () => selectDifficulty('EASY'));
   document.getElementById('btn-diff-medium').addEventListener('click', () => selectDifficulty('MEDIUM'));
   document.getElementById('btn-diff-hard').addEventListener('click', () => selectDifficulty('HARD'));
-  document.getElementById('btn-diff-back').addEventListener('click', () => showScreen('LOBBY'));
+  document.getElementById('btn-diff-back').addEventListener('click', () => { playSound('back'); showScreen('LOBBY'); });
 
   const introDiffLabel = document.getElementById('intro-diff-label');
   const introStatus = document.getElementById('intro-status');
@@ -1244,12 +1405,15 @@
       introStatus.textContent = '';
       let n = 3;
       introCountdown.textContent = n;
+      playSound('countdown-tick');
       state.introIntervalId = setInterval(() => {
         n -= 1;
         if (n > 0) {
           introCountdown.textContent = n;
+          playSound('countdown-tick');
         } else if (n === 0) {
           introCountdown.textContent = 'GO!';
+          playSound('countdown-go');
         } else {
           clearInterval(state.introIntervalId);
           startLetterSelection(1);
@@ -1260,6 +1424,7 @@
 
   // ================= lobby wiring =================
   document.getElementById('btn-start-game').addEventListener('click', async () => {
+    playSound('start-game');
     await Promise.all([loadDictionary(), loadFirstNames()]);
     showScreen('DIFFICULTY');
   });
@@ -1338,8 +1503,119 @@
     }
   });
 
+  // ================= Music / Sound volume controls =================
+  // Two icon buttons — Music and Sound — that live in TWO places in the
+  // markup: the lobby's own icon row (.lobby-hero-right, alongside
+  // Settings/Achievements) and .aq-global-audio-controls (a fixed
+  // top-right pair shown on every OTHER screen, hidden on the lobby
+  // since it has its own copy — see the CSS). Both sets of buttons share
+  // ONE popover element (#aq-audio-popover) rather than duplicating
+  // slider markup per screen; this just repositions/relabels it.
+  //
+  // Sound controls AQSound's real master volume (0-1) and takes effect
+  // immediately on every sound already wired in this file. Music has no
+  // actual background-music playback yet (see docs/AUDIO_PLAN.md) — its
+  // slider just persists a 0-100 preference now so it's ready the moment
+  // music is added later, with an explicit note in its popover saying so
+  // rather than silently doing nothing with no explanation.
+  function wireAudioControls() {
+    const popover = document.getElementById('aq-audio-popover');
+    if (!popover) return; // markup not present (shouldn't happen, but never throw over a UI nicety)
+    const titleEl = document.getElementById('aq-audio-popover-title');
+    const sliderEl = document.getElementById('aq-audio-popover-slider');
+    const valueEl = document.getElementById('aq-audio-popover-value');
+    const noteEl = document.getElementById('aq-audio-popover-note');
+    const buttons = Array.from(document.querySelectorAll('[data-audio-popover]'));
+
+    function loadPct(key, fallback) {
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) return Math.max(0, Math.min(100, parseInt(saved, 10)));
+      } catch (e) {}
+      return fallback;
+    }
+    function savePct(key, pct) {
+      try { localStorage.setItem(key, String(pct)); } catch (e) {}
+    }
+
+    // Apply the saved SFX volume immediately, before any sound ever
+    // plays — AQSound already reads this itself at construction time
+    // too, but doing it here as well keeps this function the single
+    // place that owns "what the sliders currently show".
+    const savedSfxPct = loadPct('aq-sfx-volume', 60);
+    AQSound.setVolume(savedSfxPct / 100);
+    let musicPct = loadPct('aq-music-volume', 70);
+
+    let openKind = null; // 'music' | 'sound' | null
+    let openBtn = null;
+
+    function closePopover() {
+      popover.classList.remove('show');
+      popover.setAttribute('aria-hidden', 'true');
+      buttons.forEach((b) => b.setAttribute('aria-expanded', 'false'));
+      openKind = null;
+      openBtn = null;
+    }
+
+    function openPopover(kind, btn) {
+      const isMusic = kind === 'music';
+      titleEl.textContent = isMusic ? 'MUSIC' : 'SOUND';
+      // Sound reads AQSound's own live value (the source of truth once it
+      // exists) rather than a separate re-read of localStorage, so the
+      // slider always matches whatever actually last set the volume.
+      const pct = isMusic ? musicPct : Math.round(AQSound.getVolume() * 100);
+      sliderEl.value = pct;
+      valueEl.textContent = pct;
+      noteEl.textContent = isMusic
+        ? 'No background music yet — this sets the volume for when it’s added.'
+        : 'Controls letter clicks, buttons, and every other in-game sound effect.';
+
+      const rect = btn.getBoundingClientRect();
+      popover.style.top = (rect.bottom + 8) + 'px';
+      popover.style.right = (window.innerWidth - rect.right) + 'px';
+      popover.style.left = 'auto';
+
+      popover.classList.add('show');
+      popover.setAttribute('aria-hidden', 'false');
+      buttons.forEach((b) => b.setAttribute('aria-expanded', String(b === btn)));
+      openKind = kind;
+      openBtn = btn;
+    }
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const kind = btn.getAttribute('data-audio-popover');
+        if (openKind === kind && openBtn === btn) { closePopover(); return; }
+        openPopover(kind, btn);
+      });
+    });
+
+    sliderEl.addEventListener('input', () => {
+      const pct = parseInt(sliderEl.value, 10) || 0;
+      valueEl.textContent = pct;
+      if (openKind === 'sound') {
+        AQSound.setVolume(pct / 100);
+        savePct('aq-sfx-volume', pct);
+      } else if (openKind === 'music') {
+        musicPct = pct;
+        savePct('aq-music-volume', pct);
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!openKind) return;
+      if (popover.contains(e.target)) return;
+      if (buttons.some((b) => b.contains(e.target))) return;
+      closePopover();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && openKind) closePopover();
+    });
+  }
+
   // ================= init =================
   loadAccountData();
   loadDictionary();
   loadFirstNames();
+  wireAudioControls();
 })();
