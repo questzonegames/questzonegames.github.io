@@ -121,6 +121,7 @@
     width: 100%;
     background: none;
     border-style: solid;
+    border-color: transparent; /* fallback ONLY — used for the brief moment (or on a failed load) before border-image-source has decoded; without this it defaults to currentColor (the page's near-white text colour), which renders as a solid pale box instead of the intended hollow frame */
     border-width: 58px 32px 34px 32px;
     border-image-source: url('../../assets/img/anagram-quest/panel-frame.png');
     border-image-slice: 155 85 90 85 fill;
@@ -1202,10 +1203,10 @@
               </button>
               <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
                 <ul>
-                  <li>Pick 9 letters — press V for a vowel or C for a consonant each round.</li>
-                  <li>Build the longest real word you can from your letters.</li>
-                  <li>Lock in early once you're happy, or let the clock run out.</li>
-                  <li>5 rounds per game, then one big final round.</li>
+                  <li>Pick 9 letters each round — press V for a vowel or C for a consonant.</li>
+                  <li>Build the longest valid word you can from your letters.</li>
+                  <li>Lock in your word early when you're happy, or let the timer run out.</li>
+                  <li>There are 4 normal rounds, followed by 1 Final Round.</li>
                 </ul>
               </div></div></div>
             </div>
@@ -1217,10 +1218,12 @@
               </button>
               <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
                 <ul>
-                  <li>4-6 letter words score points equal to their length.</li>
-                  <li>7-letter words score 10, 8-letter score 12, 9-letter score 18.</li>
-                  <li>Invalid words or fewer than 4 letters score 0.</li>
-                  <li>Your total score converts to Intelligence XP based on difficulty.</li>
+                  <li>4–6 letter words: score points equal to the word length.</li>
+                  <li>7-letter word: 10 points</li>
+                  <li>8-letter word: 12 points</li>
+                  <li>9-letter word: 18 points</li>
+                  <li>Invalid words or words shorter than 4 letters score 0 points.</li>
+                  <li>Your total score is converted into Intelligence XP, with the XP rate depending on difficulty.</li>
                 </ul>
               </div></div></div>
             </div>
@@ -1232,9 +1235,10 @@
               </button>
               <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
                 <ul>
-                  <li>Rounds 1-4: pick letters, then build a word before time runs out.</li>
-                  <li>Timer length depends on difficulty (Easy / Medium / Hard).</li>
-                  <li>No hints on validity — whatever's in the boxes when time hits 0 is what counts.</li>
+                  <li>Rounds 1–4: choose your 9 letters, then build a word before the timer expires.</li>
+                  <li>The word timer depends on difficulty — Easy: 40 seconds, Medium: 25 seconds, Hard: 10 seconds.</li>
+                  <li>There are no hints or word-validity indicators while building your word.</li>
+                  <li>Whatever word is in the boxes when time reaches zero is automatically submitted.</li>
                 </ul>
               </div></div></div>
             </div>
@@ -1246,10 +1250,11 @@
               </button>
               <div class="rule-acc-body-wrap"><div class="rule-acc-body"><div class="rule-acc-body-inner">
                 <ul>
-                  <li>Round 5 is a single scrambled 9-letter word — no letter selection.</li>
-                  <li>Solve it for a flat 30 points — more than a 9-letter word anywhere else.</li>
-                  <li>The clock cannot be skipped or ended early on this round.</li>
-                  <li>Every valid solution is revealed afterwards, win or lose.</li>
+                  <li>Round 5 gives you a scrambled 9-letter word.</li>
+                  <li>There is no letter selection in this round.</li>
+                  <li>Unscramble the word correctly to earn a flat 30 points.</li>
+                  <li>The Final Round timer cannot be skipped or ended early.</li>
+                  <li>After the round, the valid 9-letter solution is revealed whether you win or lose.</li>
                 </ul>
               </div></div></div>
             </div>

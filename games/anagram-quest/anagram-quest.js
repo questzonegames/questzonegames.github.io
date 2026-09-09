@@ -15,8 +15,9 @@
 // higher difficulties are a genuine, deliberate risk/reward step up
 // rather than a bigger dictionary or a different scoring table.
 //
-// LETTER_SELECTION: 10s to pick V/C (VC_SELECT_TIME_SECONDS — fixed for
-// every difficulty, not part of the difficulty config); generatedRack
+// LETTER_SELECTION: difficulty-specific seconds to pick V/C
+// (state.difficultyConfig.selectSeconds — Easy 15s, Medium 15s, Hard 10s);
+// generatedRack
 // (state.rack) is immutable the instant a letter lands in it — no
 // Backspace exists on that screen. Reaching 9 letters manually stops the
 // countdown immediately; letting it expire auto-fills the rest (see
@@ -56,7 +57,6 @@
 (function () {
   const GAME_KEY = 'intelligence';
   const TOTAL_ROUNDS = 5;
-  const VC_SELECT_TIME_SECONDS = 10; // separate, shorter countdown for letter selection — fixed across every difficulty, not part of DIFFICULTIES
   const MIN_WORD_LEN = 4;
   const MAX_WORD_LEN = 9;
   const RACK_SIZE = 9;
@@ -91,10 +91,14 @@
   // unlockLevel: the Intelligence level required to play this difficulty
   // (see applyDifficultyLocks()) -- Easy is available from level 1 (i.e.
   // to everyone, including a guest with no tracked level at all).
+  // selectSeconds: the V/C letter-selection countdown (Rounds 1-4 only —
+  // Round 5's rack is dealt directly, no selection phase). Matches the
+  // Rules panel's own "Rounds" text exactly (see index.html) — normalRoundSeconds
+  // is the separate word-BUILDING timer that starts once selection ends.
   const DIFFICULTIES = {
-    EASY: { key: 'EASY', label: 'EASY', normalRoundSeconds: 30, round5Seconds: 30, xpPerPoint: 20, cssClass: 'easy', unlockLevel: 1 },
-    MEDIUM: { key: 'MEDIUM', label: 'MEDIUM', normalRoundSeconds: 20, round5Seconds: 30, xpPerPoint: 60, cssClass: 'medium', unlockLevel: 5 },
-    HARD: { key: 'HARD', label: 'HARD', normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard', unlockLevel: 40 }
+    EASY: { key: 'EASY', label: 'EASY', selectSeconds: 15, normalRoundSeconds: 40, round5Seconds: 30, xpPerPoint: 20, cssClass: 'easy', unlockLevel: 1 },
+    MEDIUM: { key: 'MEDIUM', label: 'MEDIUM', selectSeconds: 15, normalRoundSeconds: 25, round5Seconds: 30, xpPerPoint: 60, cssClass: 'medium', unlockLevel: 5 },
+    HARD: { key: 'HARD', label: 'HARD', selectSeconds: 10, normalRoundSeconds: 10, round5Seconds: 20, xpPerPoint: 180, cssClass: 'hard', unlockLevel: 40 }
   };
 
   // ---- sound engine (Anagram-Quest-only — NOT a site-wide QZSound
@@ -1015,8 +1019,10 @@
   // instantly if the tab was throttled/backgrounded instead of leaving
   // the countdown frozen.
   function startSelTimer() {
-    state.selDeadline = Date.now() + VC_SELECT_TIME_SECONDS * 1000;
-    updateSelTimerUi(VC_SELECT_TIME_SECONDS);
+    const seconds = state.difficultyConfig.selectSeconds;
+    state.selSecondsTotal = seconds;
+    state.selDeadline = Date.now() + seconds * 1000;
+    updateSelTimerUi(seconds);
     clearInterval(state.selTimerId);
     state.selTimerId = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((state.selDeadline - Date.now()) / 1000));
@@ -1025,7 +1031,8 @@
     }, 250);
   }
   function updateSelTimerUi(remaining) {
-    const pct = Math.max(0, (remaining / VC_SELECT_TIME_SECONDS) * 100);
+    const total = state.selSecondsTotal || 1;
+    const pct = Math.max(0, (remaining / total) * 100);
     if (selTimerRing) selTimerRing.style.setProperty('--pct', pct);
     if (selTimerRing) selTimerRing.classList.toggle('warn', remaining <= 4);
     if (selTimerNum) selTimerNum.textContent = remaining;
@@ -1433,11 +1440,17 @@
     goSkillcardSlot.appendChild(goSkillBox);
   }
 
-  // One spark-burst + banner per level gained THIS game, never per level —
-  // called at most once from animateXpGain regardless of how many levels
-  // the award crossed.
+  // One spark-burst + banner per level actually crossed (see
+  // runLevelProgression() below, which can call this several times in a
+  // row for a multi-level game) — any still-showing instance is removed
+  // first rather than skipping the call, so back-to-back level-ups each
+  // get their own clean flash instead of the 2nd/3rd+ silently vanishing.
   function playLevelUpBurst(newLevel) {
-    if (!goSkillBox || goSkillBox.querySelector('.qz-levelup-burst')) return; // never stack
+    if (!goSkillBox) return;
+    const oldBurst = goSkillBox.querySelector('.qz-levelup-burst');
+    const oldBanner = goSkillBox.querySelector('.qz-levelup-banner');
+    if (oldBurst) oldBurst.remove();
+    if (oldBanner) oldBanner.remove();
     const burst = document.createElement('div');
     burst.className = 'qz-levelup-burst';
     const SPARK_COUNT = 14;
@@ -1499,33 +1512,95 @@
     setTimeout(() => {
       label.remove();
 
-      // gold pulse, then the bar fills across to the new value
+      // gold pulse, then the bar begins its progression animation — see
+      // runLevelProgression() for what happens next; this is the ONLY
+      // place XP_SLIDE_MS's "wait for the drop to finish" rule is enforced.
       barEl.classList.add('qz-bar-pulse');
       setTimeout(() => barEl.classList.remove('qz-bar-pulse'), 520);
 
       setTimeout(() => {
-        const newLvl = window.QZXp.displayLevel(newSkill.xp);
-        const base = newLvl.base;
-        let pct = 100;
-        if (base < 99) {
-          const curFloor = window.QZXp.xpForLevel(base);
-          const nextFloor = window.QZXp.xpForLevel(base + 1);
-          const span = nextFloor - curFloor;
-          pct = span > 0 ? Math.max(0, Math.min(100, ((newSkill.xp - curFloor) / span) * 100)) : 100;
-        }
-        const levelLabel = newLvl.isVirtual
-          ? base + ' <span class="qz-skillcard-full-of99">(Virtual ' + newLvl.virtual + ')</span>'
-          : base + '<span class="qz-skillcard-full-of99">/99</span>';
-
         playSound('xp-bar-fill');
-        fillEl.style.transition = 'width 1.1s cubic-bezier(.2,.8,.2,1)';
-        fillEl.style.width = pct + '%';
-        levelEl.innerHTML = 'LEVEL ' + levelLabel;
-
-        const oldBase = window.QZXp.displayLevel(goSkillPre.xp).base;
-        if (base > oldBase) playLevelUpBurst(base);
+        runLevelProgression(goSkillPre.xp, newSkill.xp, fillEl, levelEl);
       }, 450); // let the pulse read on its own before the bar starts moving
     }, XP_SLIDE_MS);
+  }
+
+  // pct (0-100) of the way through `level`'s own span that `xp` sits at —
+  // the ONE formula every segment below uses, so a level's span is always
+  // computed the exact same way regardless of which segment it's for.
+  function pctWithinLevel(xp, level) {
+    const curFloor = window.QZXp.xpForLevel(level);
+    const nextFloor = window.QZXp.xpForLevel(level + 1);
+    const span = nextFloor - curFloor;
+    return span > 0 ? Math.max(0, Math.min(100, ((xp - curFloor) / span) * 100)) : 100;
+  }
+  function setLevelLabel(levelEl, virtualLevel) {
+    const base = Math.min(99, virtualLevel);
+    const levelLabel = virtualLevel > 99
+      ? base + ' <span class="qz-skillcard-full-of99">(Virtual ' + virtualLevel + ')</span>'
+      : base + '<span class="qz-skillcard-full-of99">/99</span>';
+    levelEl.innerHTML = 'LEVEL ' + levelLabel;
+  }
+  // Sets the fill bar's width, transitioning over `ms` (0 = instant, no
+  // transition at all — used for the post-level-up reset, which must
+  // never itself look like an animated backward move). Forces a reflow
+  // before applying a new width so an instant reset immediately followed
+  // by another animated fill (the very next segment) doesn't get
+  // coalesced into one janky transition by the browser.
+  function setBarWidth(fillEl, pct, ms, onDone) {
+    fillEl.style.transition = ms > 0 ? ('width ' + (ms / 1000) + 's cubic-bezier(.2,.8,.2,1)') : 'none';
+    void fillEl.offsetWidth; // force reflow — see comment above
+    fillEl.style.width = pct + '%';
+    if (onDone) { if (ms > 0) setTimeout(onDone, ms + 30); else onDone(); }
+  }
+
+  // The actual fix for "the bar looks like it's losing XP on a level-up":
+  // uses the player's REAL start/end XP and QZXp's own level-threshold
+  // formula (never a fabricated/percentage-only level-up) to work out
+  // exactly which level boundaries this reward crosses, then animates
+  // each one in turn — fill to 100%, pause, level-up feedback, instant
+  // reset to 0%, repeat — ending on the exact final percentage. No level
+  // boundary crossed at all just animates smoothly from the old
+  // percentage to the new one, same as before this existed. Only ever
+  // touches the bar's WIDTH/the level LABEL's text — never re-derives or
+  // rewrites the underlying XP/level values themselves, which came
+  // straight from award_xp()'s own server response before this ever runs.
+  function runLevelProgression(startXp, endXp, fillEl, levelEl) {
+    const startLevel = window.QZXp.levelForXp(startXp);
+    const endLevel = window.QZXp.levelForXp(endXp);
+    const startPct = pctWithinLevel(startXp, startLevel);
+    const endPct = pctWithinLevel(endXp, endLevel);
+
+    if (endLevel <= startLevel) {
+      // no level crossed — the original single smooth-fill behaviour
+      setBarWidth(fillEl, endPct, 1100);
+      return;
+    }
+
+    const FILL_MS = 700;    // per-segment fill — quicker than the old single 1.1s animation since a multi-level game plays several of these back to back
+    const PAUSE_MS = 220;   // brief pause once a segment hits 100%, before the level-up feedback plays
+    const FEEDBACK_MS = 900; // matches the spark-burst/banner's own CSS animation length (see playLevelUpBurst) — removed exactly as they finish, not cut off mid-fade
+
+    let level = startLevel;
+    function nextSegment(isFirst) {
+      const isLast = level === endLevel;
+      const toPct = isLast ? endPct : 100;
+      const ms = isFirst ? (startPct === toPct ? 0 : FILL_MS) : (isLast && toPct === 0 ? 0 : FILL_MS);
+      setBarWidth(fillEl, toPct, ms, () => {
+        if (isLast) return; // reached the true final percentage — stop, no further reset/bump
+        setTimeout(() => {
+          level += 1;
+          playSound('level-up'); // no-op if that sound doesn't exist yet — see docs/AUDIO_PLAN.md
+          playLevelUpBurst(Math.min(99, level));
+          setLevelLabel(levelEl, level);
+          setTimeout(() => {
+            setBarWidth(fillEl, 0, 0); // instant — a reset is not a "move", so it must never be animated
+            nextSegment(false);
+          }, FEEDBACK_MS);
+        }, PAUSE_MS);
+      });
+    }
+    nextSegment(true);
   }
 
   // Called once per completed game, alongside saveGameResult/
