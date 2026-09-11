@@ -176,6 +176,11 @@
     animation: aqAchieveIn 0.4s ease forwards;
   }
   .aq-achieve-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+  /* Real badge art (e.g. the Anagram Quest games-played bronze/silver/
+     gold/platinum family) instead of an emoji glyph — sized to match the
+     emoji's visual footprint rather than rendering at its natural pixel
+     size. See showUnlockedAchievementsOnGameOver()'s isImageIcon() check. */
+  .aq-achieve-icon img { width: 32px; height: 32px; object-fit: contain; display: block; }
   .aq-achieve-text { display: flex; flex-direction: column; text-align: left; min-width: 0; }
   .aq-achieve-label { font-family: 'Saira', sans-serif; font-weight: 900; font-size: 10.5px; letter-spacing: 0.1em; color: var(--gold); text-transform: uppercase; }
   .aq-achieve-name { font-weight: 700; font-size: 14px; color: var(--text-main); }

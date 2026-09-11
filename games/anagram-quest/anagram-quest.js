@@ -1754,8 +1754,27 @@
         const el = document.createElement('div');
         el.className = 'aq-achieve-banner';
         el.style.animationDelay = (i * 0.15) + 's';
+        // a.icon can be a real badge image path (e.g. the Anagram Quest
+        // games-played family's bronze/silver/gold/platinum art) rather
+        // than an emoji — inserting that path as plain text is exactly
+        // the bug reported (the raw ".../platinum.png" string showing up
+        // instead of the image). Same isImageIcon()/pickIcon() check
+        // every other achievement display on the site already uses (see
+        // qz-achievements.js) — never re-derive this decision locally.
+        const icon = window.QZAchievements ? window.QZAchievements.pickIcon(a) : a.icon;
+        const isImg = window.QZAchievements && window.QZAchievements.isImageIcon(icon);
+        // Icon paths are stored as '../assets/img/...' — written for a
+        // ONE-level-deep caller like profile/achievements.html, where
+        // '../' correctly reaches the site root. This page lives at
+        // games/anagram-quest/index.html, two levels deep, so that same
+        // string needs one more '../' prepended to actually resolve
+        // (the browser harmlessly collapses the extra '../' against the
+        // already-relative path, same trick used elsewhere on this site
+        // for exactly this depth mismatch) — without it the image 404s
+        // and silently renders as nothing/a broken icon.
+        const iconSrc = isImg ? '../' + icon : icon;
         el.innerHTML =
-          '<span class="aq-achieve-icon">' + (a.icon || '🏆') + '</span>' +
+          '<span class="aq-achieve-icon">' + (isImg ? '<img src="' + iconSrc + '" alt="">' : escapeAqText(icon || '🏆')) + '</span>' +
           '<div class="aq-achieve-text">' +
             '<span class="aq-achieve-label">Achievement Unlocked</span>' +
             '<span class="aq-achieve-name">' + escapeAqText(a.name) + '</span>' +
