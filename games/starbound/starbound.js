@@ -16,10 +16,13 @@
 //     CONFIG.obstacles.zones), and adding a new hand-drawn hazard later
 //     only means adding a zone/type entry plus one entry in
 //     OBSTACLE_DRAWERS below — no other code needs to change. The two
-//     bird types (sparrow, pigeon) are the exception: real animated
-//     sprites rather than hand-drawn canvas shapes, handled by their own
-//     updateBirdObstacle()/drawBirdObstacle() pair — see CONFIG.obstacles
-//     .birds for their config.
+//     bird types (sparrow, pigeon, eagle) and the stormcloud type are
+//     the exceptions: real animated sprites rather than hand-drawn
+//     canvas shapes, each spawned through their own trio of functions
+//     (trySpawnBirdObstacle()/updateBirdObstacle()/drawBirdObstacle();
+//     spawnStormCloud()/updateStormCloud()/drawStormCloud()) instead of
+//     the zone-timer path other types use — see CONFIG.obstacles.birds
+//     and CONFIG.obstacles.stormCloud.
 //   - No XP/achievements/shop/save-progress wiring yet, per spec. The
 //     one future hook point is marked with a TODO near GAME_KEY below.
 (function () {
@@ -80,21 +83,29 @@
   // — all six are preloaded up front alongside the backgrounds so the
   // first on-screen bird never causes a decode-flash mid-run.
   let BIRD_IMAGES = {};
+  // STORM_IMAGES.normal / .charged (the cloud body) and .lightning[i]
+  // (the 4 bolt sprite variants) — see CONFIG.obstacles.stormCloud.
+  let STORM_IMAGES = { normal: null, charged: null, lightning: [] };
   async function preloadAssets() {
     const stages = CONFIG.background.stages;
     const birdCfg = CONFIG.obstacles.birds;
     const birdTypes = Object.keys(birdCfg).filter((k) => birdCfg[k] && birdCfg[k].images);
-    const [loadedStages, ...loadedBirdSets] = await Promise.all([
+    const stormCfg = CONFIG.obstacles.stormCloud;
+    const [loadedStages, loadedBirdSets, stormNormal, stormCharged, stormLightning] = await Promise.all([
       Promise.all(stages.map((s) => loadImage(s.image))),
-      ...birdTypes.map((type) => {
+      Promise.all(birdTypes.map((type) => {
         const images = birdCfg[type].images;
         const poses = Object.keys(images);
         return Promise.all(poses.map((pose) => loadImage(images[pose])))
           .then((imgs) => poses.reduce((acc, pose, i) => { acc[pose] = imgs[i]; return acc; }, {}));
-      })
+      })),
+      loadImage(stormCfg.images.normal),
+      loadImage(stormCfg.images.charged),
+      Promise.all(stormCfg.lightningImages.map((src) => loadImage(src)))
     ]);
     BACKGROUND_SCENES = buildBackgroundScenes(stages, loadedStages);
     BIRD_IMAGES = birdTypes.reduce((acc, type, i) => { acc[type] = loadedBirdSets[i]; return acc; }, {});
+    STORM_IMAGES = { normal: stormNormal, charged: stormCharged, lightning: stormLightning };
     assetsReady = true;
   }
 
@@ -572,25 +583,6 @@
   // receives (ctx, obstacle, nowMs) and draws centred on (0,0) at its own
   // configured width/height (already translated by the caller).
   const OBSTACLE_DRAWERS = {
-    plane(c) {
-      c.fillStyle = '#d8dde6';
-      c.beginPath();
-      c.moveTo(0, -26); c.lineTo(8, 10); c.lineTo(0, 4); c.lineTo(-8, 10);
-      c.closePath(); c.fill();
-      c.beginPath();
-      c.moveTo(-28, 6); c.lineTo(0, -4); c.lineTo(28, 6); c.lineTo(0, 12);
-      c.closePath(); c.fill();
-    },
-    stormcloud(c, o, now) {
-      c.fillStyle = 'rgba(70,72,92,0.92)';
-      [[-16, 0, 16], [0, -8, 20], [16, 0, 15], [-4, 6, 14]].forEach(([dx, dy, r]) => {
-        c.beginPath(); c.arc(dx, dy, r, 0, Math.PI * 2); c.fill();
-      });
-      if (Math.sin(now / 140 + o.seed) > 0.92) {
-        c.strokeStyle = '#ffe98a'; c.lineWidth = 3;
-        c.beginPath(); c.moveTo(-2, 8); c.lineTo(4, 18); c.lineTo(-2, 20); c.lineTo(6, 32); c.stroke();
-      }
-    },
     satellite(c) {
       c.fillStyle = '#b9c2cf'; c.fillRect(-9, -9, 18, 18);
       c.fillStyle = '#3d6f8a';
@@ -622,11 +614,13 @@
     }
   };
 
-  // ---- bird obstacles (sparrow, pigeon): real animated sprites ----
+  // ---- bird obstacles (sparrow, pigeon, eagle): real animated sprites ----
   // See CONFIG.obstacles.birds for the shared tuning (flap timing,
-  // nosedive odds/duration/speed, per-type scale). Everything here is
-  // driven entirely by that config — the two types differ only in which
-  // sprite set + scale they use, never in behaviour code.
+  // dive-chance/windup, per-type scale+speeds) and birds.difficultyBands
+  // for the altitude-dependent type mix. Unlike a plain shared state
+  // machine, the three types have genuinely different movement
+  // identities — see updateBirdObstacle() for sparrow/eagle's flap ->
+  // PERMANENT-dive shape vs. the pigeon's continuous strafe+track.
   function isBirdType(type) {
     return !!(CONFIG.obstacles.birds[type] && CONFIG.obstacles.birds[type].images);
   }
@@ -636,62 +630,227 @@
     return birds.baseSize * birds[type].scale;
   }
 
-  // Called once per bird obstacle at spawn — sets up the flap/nosedive
-  // state machine fields alongside the plain x/y/speed every obstacle
-  // already has.
-  function initBirdState(o) {
+  // Total spawn-pressure currently on screen (sum of every active bird's
+  // own `cost`) — see maxActiveObstaclePressure in config.
+  function activeBirdPressure() {
+    let sum = 0;
+    for (const o of state.obstacles) if (isBirdType(o.type)) sum += o.pressureCost || 0;
+    return sum;
+  }
+
+  // Which difficulty band applies at a given altitude fraction — same
+  // "last band whose start <= frac" convention as currentObstacleZone().
+  function currentBirdBand(frac) {
+    const bands = CONFIG.obstacles.birds.difficultyBands;
+    let band = bands[0];
+    for (let i = 0; i < bands.length; i++) { if (frac >= bands[i].start) band = bands[i]; }
+    return band;
+  }
+
+  // 0->1 progress through the WHOLE bird section specifically (altitude
+  // 0 up to the `storm` zone's own start), independent of the global
+  // difficultyT() ramp (which spans the entire climb to the Moon and so
+  // barely moves within this much narrower range). Used to make
+  // nosedives gradually more frequent as the player climbs through the
+  // bird section itself — see SPARROW_DIVE_CHANCE/EAGLE_DIVE_CHANCE.
+  function birdSectionProgress(frac) {
+    const stormStart = CONFIG.obstacles.zones.find((z) => z.name === 'storm').start;
+    return Math.max(0, Math.min(1, frac / stormStart));
+  }
+
+  // Weighted random pick among a band's { sparrow, pigeon, eagle }
+  // weights (need not sum to 1; a zero-weight type simply can't be
+  // picked in that band).
+  function pickWeightedBirdType(band) {
+    const entries = Object.entries(band.weights).filter(([, w]) => w > 0);
+    const total = entries.reduce((sum, [, w]) => sum + w, 0);
+    let r = Math.random() * total;
+    for (const [type, w] of entries) {
+      if (r < w) return type;
+      r -= w;
+    }
+    return entries[entries.length - 1][0];
+  }
+
+  // Picks a spawn X that keeps at least minSpawnGapPx away from every
+  // obstacle still near the top of the screen (see spawnGapZoneHeightPx)
+  // — this, not the pressure budget, is what actually guarantees a
+  // dodgeable route. Returns null (meaning "skip this spawn") if no
+  // clear enough gap turns up in a handful of tries, rather than forcing
+  // an unfair overlapping spawn.
+  function findBirdSpawnX(drawSize) {
+    const birds = CONFIG.obstacles.birds;
+    const half = drawSize / 2;
+    const minX = half, maxX = DESIGN_W - half;
+    const nearTopX = state.obstacles
+      .filter((o) => o.y < birds.spawnGapZoneHeightPx)
+      .map((o) => o.x);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const x = randRange(minX, maxX);
+      if (nearTopX.every((ox) => Math.abs(ox - x) >= birds.minSpawnGapPx)) return x;
+    }
+    return null;
+  }
+
+  // The bird zone's spawn ATTEMPT (see update()'s spawn-timer block) —
+  // every attempt can still end up spawning nothing at all, either
+  // because the pressure budget is already full or because there's no
+  // safely-spaced gap to spawn into right now. That's deliberate: it's
+  // what keeps the screen from ever becoming an unavoidable wall.
+  function trySpawnBirdObstacle() {
+    const birds = CONFIG.obstacles.birds;
+    const frac = altitudeFraction();
+    const band = currentBirdBand(frac);
+    const maxPressure = band.maxPressure != null ? band.maxPressure : birds.maxActiveObstaclePressure;
+    const type = pickWeightedBirdType(band);
+    const cfg = birds[type];
+    if (activeBirdPressure() + cfg.cost > maxPressure) return; // budget already spent — skip, try again next interval
+    const drawSize = birdDrawSize(type);
+    const x = findBirdSpawnX(drawSize);
+    if (x === null) return; // no safely-spaced gap right now — skip rather than force an unfair spawn
+
+    const t = difficultyT();
+    const speedMul = 1 + t * (CONFIG.difficulty.maxSpeedMultiplier - 1); // same global "faster with altitude" ramp every other obstacle uses
+    const o = {
+      type,
+      x,
+      y: -drawSize,
+      drawSize,
+      pressureCost: cfg.cost,
+      fallSpeed: (cfg.fallSpeed + randRange(-cfg.fallSpeedVariance, cfg.fallSpeedVariance)) * speedMul,
+      seed: Math.random() * 1000
+    };
+    // Only sparrow/eagle ever dive — pigeons have no diveSpeed at all,
+    // their identity is the continuous strafe in updateBirdObstacle().
+    if (type !== 'pigeon') {
+      o.diveSpeed = (cfg.diveSpeed + randRange(-cfg.diveSpeedVariance, cfg.diveSpeedVariance)) * speedMul;
+    }
+    initBirdState(o, type);
+    state.obstacles.push(o);
+  }
+
+  // Called once per bird obstacle at spawn — sets up whichever state
+  // machine fields its type actually uses (sparrow/eagle: flap+dive
+  // timers; pigeon: strafe phase).
+  function initBirdState(o, type) {
     const birds = CONFIG.obstacles.birds;
     o.anim = 'wingsUp';
     o.animElapsedMs = Math.random() * birds.flapFrameTimeMs; // desync flock members
-    o.diving = false;
-    o.diveElapsedMs = 0;
-    o.nextDiveCheckInMs = randRange(birds.nosediveCheckIntervalMs * 0.5, birds.nosediveCheckIntervalMs);
-    o.driftSpeed = randRange(-birds.driftSpeedMaxPxPerSec, birds.driftSpeedMaxPxPerSec);
+    o.vx = 0;
+    if (type === 'pigeon') {
+      o.strafePhase = Math.random() * Math.PI * 2; // desync the sine wave between pigeons too
+    } else {
+      o.diving = false;
+      o.diveElapsedMs = 0;
+      o.nextDiveCheckInMs = randRange(birds.nosediveCheckIntervalMs * 0.5, birds.nosediveCheckIntervalMs);
+      if (type === 'sparrow') {
+        o.driftSpeed = randRange(-birds.sparrow.driftSpeedMaxPxPerSec, birds.sparrow.driftSpeedMaxPxPerSec);
+      }
+    }
   }
 
-  // Advances one bird's flap/nosedive timers and horizontal drift.
-  // Called every frame from the main obstacle-advance loop in update(),
-  // BEFORE the shared o.y += o.speed*dt movement step (which applies the
-  // nosedive speed multiplier this computes).
+  // Advances one bird's full behaviour for one frame — fully
+  // self-contained (owns its own vertical AND horizontal movement),
+  // unlike the other obstacle types whose plain o.y += o.speed*dt still
+  // lives in the shared loop in update(). The three types are genuinely
+  // different state machines, not variations on one shared shape:
+  //   - pigeon: no diving at all — continuous sine-wave strafe blended
+  //     with a weak pull toward the player, clamped, for its entire
+  //     lifetime. The dive SPRITE is shown purely cosmetically whenever
+  //     its own horizontal speed is momentarily small.
+  //   - sparrow: flaps normally, occasionally rolls into a nosedive that
+  //     — once started — is PERMANENT (never returns to flapping) and
+  //     keeps its small constant wobble the whole time.
+  //   - eagle: same flap -> PERMANENT-dive shape as the sparrow, but
+  //     actively tracks the player horizontally both before AND during
+  //     the dive (a sparrow's dive only ever wobbles).
   function updateBirdObstacle(o, dt) {
     const birds = CONFIG.obstacles.birds;
+    const cfg = birds[o.type];
     const dtMs = dt * 1000;
+    const half = o.drawSize / 2;
 
-    if (o.diving) {
-      o.diveElapsedMs += dtMs;
-      if (o.diveElapsedMs >= birds.nosediveDurationMs) {
-        o.diving = false;
-        o.diveElapsedMs = 0;
-        o.anim = 'wingsDown';
-        o.animElapsedMs = 0;
+    if (o.type === 'pigeon') {
+      o.strafePhase += dt;
+      o.vx += Math.sin(o.strafePhase * cfg.strafeFrequency) * cfg.strafeSpeed * dt;
+      o.vx += (state.rocketX - o.x) * cfg.trackingStrength * dt; // deliberately weak — a loose follow, not a lock-on
+      o.vx = Math.max(-cfg.maxHorizontalSpeed, Math.min(cfg.maxHorizontalSpeed, o.vx));
+      o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.vx * dt));
+      o.y += o.fallSpeed * dt;
+      // Cosmetic only: looks like it's briefly dropping straight
+      // whenever its own horizontal speed is near zero, never actually
+      // changing its fall speed or behaviour.
+      if (Math.abs(o.vx) < cfg.maxHorizontalSpeed * 0.15) {
+        o.anim = 'dive';
+      } else {
+        if (o.anim === 'dive') { o.anim = 'wingsUp'; o.animElapsedMs = 0; }
+        o.animElapsedMs += dtMs;
+        if (o.animElapsedMs >= birds.flapFrameTimeMs) {
+          o.animElapsedMs -= birds.flapFrameTimeMs;
+          o.anim = o.anim === 'wingsUp' ? 'wingsDown' : 'wingsUp';
+        }
       }
-    } else {
-      // Flap frame timer — a plain wingsUp <-> wingsDown loop.
+      return;
+    }
+
+    // sparrow + eagle: flap <-> flap until a nosedive starts, then
+    // PERMANENTLY diving (never reset back to flapping — see the
+    // deliberate absence of any "return to flapping" branch below).
+    if (!o.diving) {
       o.animElapsedMs += dtMs;
       if (o.animElapsedMs >= birds.flapFrameTimeMs) {
         o.animElapsedMs -= birds.flapFrameTimeMs;
         o.anim = o.anim === 'wingsUp' ? 'wingsDown' : 'wingsUp';
       }
-      // Nosedive roll — checked on its own cooldown timer, never every
-      // frame, so the behaviour reads as an occasional deliberate event
-      // rather than something that can retrigger many times a second.
+      // Dive roll — checked on its own cooldown timer, never every
+      // frame. Base chance (SPARROW_DIVE_CHANCE / EAGLE_DIVE_CHANCE)
+      // ramps up to 1.8x by the top of the bird section specifically,
+      // so dives get noticeably more frequent as the player climbs.
       o.nextDiveCheckInMs -= dtMs;
       if (o.nextDiveCheckInMs <= 0) {
         o.nextDiveCheckInMs = birds.nosediveCheckIntervalMs;
-        if (Math.random() < birds.nosediveChance) {
+        const diveChance = cfg.diveChance * (1 + birdSectionProgress(altitudeFraction()) * 0.8);
+        if (Math.random() < diveChance) {
           o.diving = true;
           o.diveElapsedMs = 0;
           o.anim = 'dive';
         }
       }
+      if (o.type === 'eagle') {
+        // Accelerate toward the player's CURRENT x, clamped — an
+        // intercept attempt, not an instant homing lock.
+        o.vx += (state.rocketX - o.x) * cfg.trackingStrength * dt;
+        o.vx = Math.max(-cfg.maxHorizontalSpeed, Math.min(cfg.maxHorizontalSpeed, o.vx));
+        o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.vx * dt));
+      } else {
+        o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.driftSpeed * dt));
+      }
+    } else {
+      o.diveElapsedMs += dtMs;
+      if (o.type === 'eagle') {
+        // Unlike a sparrow, an eagle keeps actively strafing WHILE
+        // diving — its "capable of horizontal correction" identity.
+        // Uses its own strafeSpeed clamp (distinct from the gentler
+        // pre-dive maxHorizontalSpeed) since a diving eagle's whole
+        // threat is that last-second course correction.
+        o.vx += (state.rocketX - o.x) * cfg.trackingStrength * dt;
+        o.vx = Math.max(-cfg.strafeSpeed, Math.min(cfg.strafeSpeed, o.vx));
+        o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.vx * dt));
+      } else {
+        // Sparrow: keeps only its small constant wobble during the dive.
+        o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.driftSpeed * dt));
+      }
     }
 
-    // Small horizontal wobble — kept during a dive too ("keep its
-    // horizontal position mostly stable" means unaffected by the dive
-    // itself, not frozen outright).
-    o.x += o.driftSpeed * dt;
-    const half = o.drawSize / 2;
-    o.x = Math.max(half, Math.min(DESIGN_W - half, o.x));
+    // Vertical movement: the dive SPRITE switches the instant a dive
+    // starts (the visual warning), but the fast diveSpeed only applies
+    // after nosediveWindupMs — the bird still falls at its ordinary
+    // fallSpeed for that first stretch, giving the player a genuine
+    // reaction window before things get "noticeably fast". There is no
+    // matching "revert" — once past the windup, a diving sparrow/eagle
+    // stays at diveSpeed for the rest of its time on screen.
+    const verticalSpeed = (o.diving && o.diveElapsedMs >= birds.nosediveWindupMs) ? o.diveSpeed : o.fallSpeed;
+    o.y += verticalSpeed * dt;
   }
 
   function drawBirdObstacle(ctx2, o) {
@@ -703,6 +862,182 @@
     ctx2.restore();
   }
 
+  // ---- storm cloud obstacles: real animated sprites + lightning ----
+  // See CONFIG.obstacles.stormCloud for the shared tuning. Each cloud
+  // runs its own independent charge/strike state machine (see
+  // updateStormCloud()) — waiting -> charging (flashing, speeding up) ->
+  // a strike (or a quiet fizzle) -> waiting again — with a fired bolt
+  // living as a short-lived property on the cloud itself (o.lightning)
+  // rather than a separate global entity list, since it's always
+  // anchored to and moves with its parent cloud.
+  function isStormCloudType(type) { return type === 'stormcloud'; }
+
+  // The bolt art's own natural tip direction leans noticeably left of
+  // straight-down (measured from the source image: roughly -32° off
+  // vertical) — this constant corrects for that so a 0°-bias strike
+  // reads as "straight down", with LIGHTNING_ANGLE bias layered on top
+  // for the down-left/down-right variants. A pure rotation (no redraw,
+  // no distortion of the art itself), same non-destructive technique as
+  // every other sprite transform in this file.
+  const LIGHTNING_ART_CORRECTION_DEG = 32;
+
+  // A spawn ATTEMPT (see update()'s spawn-timer block) — skipped
+  // outright once maxActiveClouds is already reached, same "skip rather
+  // than force it" policy the bird spawner's pressure budget uses. A
+  // cloud can take several seconds to fall off-screen, so the spawn
+  // timer alone would otherwise let them quietly stack up well past a
+  // dodgeable amount.
+  function trySpawnStormCloud() {
+    const cfg = CONFIG.obstacles.stormCloud;
+    const activeClouds = state.obstacles.reduce((n, o) => n + (isStormCloudType(o.type) ? 1 : 0), 0);
+    if (activeClouds >= cfg.maxActiveClouds) return;
+    const scale = randRange(cfg.minScale, cfg.maxScale);
+    const drawSize = cfg.baseSize * scale;
+    const t = difficultyT();
+    const speedMul = 1 + t * (CONFIG.difficulty.maxSpeedMultiplier - 1); // same global "faster with altitude" ramp every other obstacle uses
+    const o = {
+      type: 'stormcloud',
+      x: randRange(drawSize / 2, DESIGN_W - drawSize / 2),
+      y: -drawSize,
+      drawSize,
+      scale,
+      fallSpeed: (cfg.fallSpeed + randRange(-cfg.fallSpeedVariance, cfg.fallSpeedVariance)) * speedMul,
+      seed: Math.random() * 1000,
+      anim: 'normal',
+      phase: 'waiting',
+      phaseElapsedMs: 0,
+      // Randomised so a screen full of clouds doesn't all charge/strike
+      // in lockstep — reused both for the pre-first-charge wait and
+      // every subsequent post-strike cooldown (see updateStormCloud()).
+      waitDurationMs: randRange(cfg.strikeCooldownMs * 0.4, cfg.strikeCooldownMs * 0.9),
+      flashTimer: 0,
+      lightning: null
+    };
+    state.obstacles.push(o);
+  }
+
+  // Picks where along the cloud's lower perimeter a bolt originates, and
+  // which of the three angle buckets ("mostly downward" / down-left /
+  // down-right) it fires in — see LIGHTNING_ART_CORRECTION_DEG above for
+  // why a bucket's own bias range is added on top of that correction.
+  function fireLightning(o) {
+    const cfg = CONFIG.obstacles.stormCloud;
+    const bucket = Math.random();
+    const biasDeg = bucket < 0.5 ? randRange(-10, 10) // mostly downward — the common case
+      : bucket < 0.75 ? randRange(-40, -16) // down-left
+        : randRange(16, 40); // down-right
+    const range = o.drawSize * cfg.lightningRange;
+    o.lightning = {
+      originDx: randRange(-o.drawSize * 0.28, o.drawSize * 0.28), // along the cloud's lower body, not always dead-centre
+      originDy: o.drawSize * 0.22,
+      angleDeg: LIGHTNING_ART_CORRECTION_DEG + biasDeg,
+      length: range * randRange(0.85, 1.15),
+      width: range * 0.32,
+      spriteIndex: Math.floor(Math.random() * cfg.lightningImages.length),
+      remainingMs: cfg.lightningActiveMs,
+      hitApplied: false
+    };
+  }
+
+  // Both the collision test and the drawing code call this so the
+  // hitbox and the visible bolt can never drift apart — returns the
+  // bolt's origin and tip in WORLD (canvas) coordinates plus the angle
+  // used to draw it.
+  function lightningWorldGeometry(o) {
+    const L = o.lightning;
+    const angleRad = L.angleDeg * Math.PI / 180;
+    const dirX = Math.sin(angleRad), dirY = Math.cos(angleRad); // 0deg = straight down (0,1)
+    const originX = o.x + L.originDx, originY = o.y + L.originDy;
+    return {
+      angleRad,
+      originX, originY,
+      tipX: originX + dirX * L.length,
+      tipY: originY + dirY * L.length
+    };
+  }
+
+  function updateStormCloud(o, dt) {
+    const cfg = CONFIG.obstacles.stormCloud;
+    const dtMs = dt * 1000;
+    o.phaseElapsedMs += dtMs;
+
+    if (o.phase === 'waiting') {
+      o.anim = 'normal';
+      if (o.phaseElapsedMs >= o.waitDurationMs) {
+        o.phase = 'charging';
+        o.phaseElapsedMs = 0;
+        o.flashTimer = 0;
+      }
+    } else if (o.phase === 'charging') {
+      const chargeT = Math.min(1, o.phaseElapsedMs / cfg.chargeTimeMs);
+      // Flash interval shrinks (flashes get quicker) as the charge
+      // nears completion — the ramping urgency IS the warning.
+      const flashInterval = cfg.flashRateMaxMs + (cfg.flashRateMinMs - cfg.flashRateMaxMs) * chargeT;
+      o.flashTimer -= dtMs;
+      if (o.flashTimer <= 0) {
+        o.flashTimer = flashInterval;
+        o.anim = o.anim === 'charged' ? 'normal' : 'charged';
+      }
+      if (o.phaseElapsedMs >= cfg.chargeTimeMs) {
+        if (Math.random() < cfg.strikeChance) fireLightning(o);
+        o.phase = 'waiting';
+        o.phaseElapsedMs = 0;
+        o.anim = 'normal';
+        o.waitDurationMs = randRange(cfg.strikeCooldownMs * 0.8, cfg.strikeCooldownMs * 1.3);
+      }
+    }
+
+    if (o.lightning) {
+      o.lightning.remainingMs -= dtMs;
+      if (o.lightning.remainingMs <= 0) o.lightning = null;
+    }
+  }
+
+  // Distance from the rocket to the bolt's actual drawn line segment
+  // (not its full square sprite bounds) — see CONFIG.obstacles.
+  // stormCloud.lightningHitRadius for the fairness margin around that line.
+  function lightningHitTest(o) {
+    if (!o.lightning) return false;
+    const g = lightningWorldGeometry(o);
+    const dx = g.tipX - g.originX, dy = g.tipY - g.originY;
+    const lenSq = dx * dx + dy * dy || 1;
+    let t = ((state.rocketX - g.originX) * dx + (state.rocketY - g.originY) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const nearX = g.originX + dx * t, nearY = g.originY + dy * t;
+    const ddx = state.rocketX - nearX, ddy = state.rocketY - nearY;
+    const hitRadius = CONFIG.collision.rocketRadius + CONFIG.obstacles.stormCloud.lightningHitRadius;
+    return (ddx * ddx + ddy * ddy) <= hitRadius * hitRadius;
+  }
+
+  function drawStormCloud(ctx2, o) {
+    const img = STORM_IMAGES[o.anim];
+    if (img) {
+      ctx2.save();
+      ctx2.translate(o.x, o.y);
+      ctx2.drawImage(img, -o.drawSize / 2, -o.drawSize / 2, o.drawSize, o.drawSize);
+      ctx2.restore();
+    }
+    if (o.lightning) {
+      const boltImg = STORM_IMAGES.lightning[o.lightning.spriteIndex];
+      if (boltImg) {
+        const g = lightningWorldGeometry(o);
+        // Fade the bolt out over its last third of life instead of a
+        // hard cut, so it doesn't just blink out of existence.
+        const lifeFrac = o.lightning.remainingMs / CONFIG.obstacles.stormCloud.lightningActiveMs;
+        ctx2.save();
+        ctx2.globalAlpha = Math.min(1, lifeFrac * 2.2);
+        ctx2.translate(g.originX, g.originY);
+        ctx2.rotate(g.angleRad);
+        // The source art's own bolt runs corner-to-corner of its square
+        // canvas; drawn at (width x length) starting from the origin
+        // (its wide/top end) down to the tip, matching lightningWorldGeometry()'s
+        // length exactly so the visible art and the hitbox line agree.
+        ctx2.drawImage(boltImg, -o.lightning.width / 2, 0, o.lightning.width, o.lightning.length);
+        ctx2.restore();
+      }
+    }
+  }
+
   function currentObstacleZone() {
     const frac = altitudeFraction();
     const zones = CONFIG.obstacles.zones;
@@ -711,26 +1046,22 @@
     return zone;
   }
 
+  // Non-bird obstacle types only (storm/satellites/space) — birds spawn
+  // exclusively through trySpawnBirdObstacle() instead, see update()'s
+  // spawn-timer block.
   function spawnObstacle(zone) {
     const cfg = CONFIG.obstacles;
     const type = zone.types[Math.floor(Math.random() * zone.types.length)];
     const t = difficultyT();
     const speed = zone.speedPerSec * (1 + t * (CONFIG.difficulty.maxSpeedMultiplier - 1));
-    // drawSize is per-instance (not just read from config at draw time)
-    // because a bird's size depends on its own type (sparrow vs pigeon
-    // scale) — every other obstacle type still just gets the generic
-    // square obstacles.width/height, unchanged from before.
-    const drawSize = isBirdType(type) ? birdDrawSize(type) : cfg.width;
-    const o = {
+    state.obstacles.push({
       type,
-      x: randRange(drawSize / 2, DESIGN_W - drawSize / 2),
-      y: -drawSize,
+      x: randRange(cfg.width, DESIGN_W - cfg.width),
+      y: -cfg.height,
       speed,
       seed: Math.random() * 1000,
-      drawSize
-    };
-    if (isBirdType(type)) initBirdState(o);
-    state.obstacles.push(o);
+      drawSize: cfg.width
+    });
   }
 
   function spawnPickup() {
@@ -794,12 +1125,23 @@
     const genericRadius = CONFIG.obstacles.width * col.obstacleRadiusFactor;
     for (let i = 0; i < state.obstacles.length; i++) {
       const o = state.obstacles[i];
-      // Birds get their own tighter, body-only hitbox (see
-      // CONFIG.obstacles.birds.hitboxFactor) — their wingspan takes up
-      // far more of the drawn box than the other obstacle art does, so
-      // reusing the generic radius would make near-misses on a wingtip
-      // register as unfair hits.
-      const or_ = isBirdType(o.type) ? o.drawSize * CONFIG.obstacles.birds.hitboxFactor : genericRadius;
+      // A storm cloud's lightning bolt is a completely separate,
+      // fair, line-shaped hitbox — checked BEFORE the cloud's own
+      // (tighter) body radius, using the dedicated LIGHTNING_DAMAGE
+      // amount rather than the generic per-obstacle penalty.
+      if (isStormCloudType(o.type) && lightningHitTest(o)) {
+        onObstacleHit(CONFIG.obstacles.stormCloud.lightningDamage);
+        break;
+      }
+      // Birds and storm clouds each get their own tighter, body-only
+      // hitbox (see CONFIG.obstacles.birds.hitboxFactor / stormCloud.
+      // hitboxFactor) — their sprite's transparent margins take up far
+      // more of the drawn box than the other obstacle art does, so
+      // reusing the generic radius would make near-misses register as
+      // unfair hits.
+      const or_ = isBirdType(o.type) ? o.drawSize * CONFIG.obstacles.birds.hitboxFactor
+        : isStormCloudType(o.type) ? o.drawSize * CONFIG.obstacles.stormCloud.hitboxFactor
+          : genericRadius;
       if (circleHit(state.rocketX, state.rocketY, rocketR, o.x, o.y, or_)) {
         onObstacleHit();
         break;
@@ -807,7 +1149,10 @@
     }
   }
 
-  function onObstacleHit() {
+  // penalty defaults to the generic OBSTACLE_DAMAGE — pass an override
+  // (e.g. stormCloud.lightningDamage) for a hazard with its own named
+  // damage amount.
+  function onObstacleHit(penalty) {
     state.hitFlashUntil = performance.now() + 220;
     if (CONFIG.obstacles.collisionEndsRun) {
       // Not the default — kept as an easy on/off switch for a future
@@ -815,14 +1160,14 @@
       finishRun('crash');
       return;
     }
-    // Default path: a hit costs fuel (OBSTACLE_DAMAGE) rather than
-    // ending the run outright. If this drains the tank to 0, update()'s
-    // `if (state.fuel <= 0) finishRun('fuel')` check (which runs right
+    // Default path: a hit costs fuel rather than ending the run
+    // outright. If this drains the tank to 0, update()'s `if
+    // (state.fuel <= 0) finishRun('fuel')` check (which runs right
     // after checkCollisions() every frame) catches it the same frame —
     // the run still ends, just correctly attributed to running out of
     // fuel rather than a generic "crash".
     state.invulnerableUntil = performance.now() + CONFIG.obstacles.collisionInvulnerabilityMs;
-    state.fuel = Math.max(0, state.fuel - CONFIG.obstacles.collisionFuelPenalty);
+    state.fuel = Math.max(0, state.fuel - (penalty != null ? penalty : CONFIG.obstacles.collisionFuelPenalty));
   }
 
   // ================= run end =================
@@ -900,10 +1245,16 @@
       const zone = currentObstacleZone();
       state.zoneSpawnTimers[zone.name] -= dt * 1000;
       if (state.zoneSpawnTimers[zone.name] <= 0) {
-        spawnObstacle(zone);
+        if (zone.name === 'birds') trySpawnBirdObstacle();
+        else if (zone.name === 'storm') trySpawnStormCloud();
+        else spawnObstacle(zone);
         const t = difficultyT();
         const mul = 1 - t * (1 - CONFIG.difficulty.minSpawnIntervalMultiplier);
-        state.zoneSpawnTimers[zone.name] = randRange(zone.spawnIntervalMinMs, zone.spawnIntervalMaxMs) * mul * CONFIG.obstacles.spawnRateMultiplier;
+        // STORM_CLOUD_SPAWN_RATE (stormCloud.spawnRateMultiplier) is an
+        // extra knob on top of the global obstacles.spawnRateMultiplier
+        // every zone already gets, specific to this hazard.
+        const stormMul = zone.name === 'storm' ? CONFIG.obstacles.stormCloud.spawnRateMultiplier : 1;
+        state.zoneSpawnTimers[zone.name] = randRange(zone.spawnIntervalMinMs, zone.spawnIntervalMaxMs) * mul * CONFIG.obstacles.spawnRateMultiplier * stormMul;
       }
 
       // fuel pickup spawning
@@ -917,9 +1268,10 @@
       for (let i = state.obstacles.length - 1; i >= 0; i--) {
         const o = state.obstacles[i];
         if (isBirdType(o.type)) {
-          updateBirdObstacle(o, dt);
-          const speedMul = o.diving ? CONFIG.obstacles.birds.nosediveSpeedMultiplier : 1;
-          o.y += o.speed * speedMul * dt;
+          updateBirdObstacle(o, dt); // self-contained: owns its own vertical + horizontal movement
+        } else if (isStormCloudType(o.type)) {
+          updateStormCloud(o, dt);
+          o.y += o.fallSpeed * dt;
         } else {
           o.y += o.speed * dt;
         }
@@ -955,6 +1307,7 @@
       const obstacleArtScale = CONFIG.obstacles.width / CONFIG.obstacles.referenceSize;
       state.obstacles.forEach((o) => {
         if (isBirdType(o.type)) { drawBirdObstacle(ctx, o); return; } // real sprite, own sizing — no canvas-shape scale trick
+        if (isStormCloudType(o.type)) { drawStormCloud(ctx, o); return; }
         ctx.save();
         ctx.translate(o.x, o.y);
         ctx.scale(obstacleArtScale, obstacleArtScale);
