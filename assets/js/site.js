@@ -99,10 +99,10 @@
       category: 'total-level'
     }));
 
-    // Slots 01-02 are real, live games — only their homepage placement is
-    // swapped here (Anagram Quest first, Space Snake second); the games
-    // themselves, their routes, and their own pages are untouched. Slots
-    // 03-24 stay untouched placeholders.
+    // Slots 01-03 are real, live games — only their homepage placement is
+    // swapped here (Anagram Quest first, Space Snake second, Starbound
+    // third); the games themselves, their routes, and their own pages
+    // are untouched. Slots 04-24 stay untouched placeholders.
     TOTAL_LEVEL_GAMES[0] = {
       id: 'anagram-quest',
       number: '01',
@@ -123,6 +123,18 @@
       title: 'Space Snake',
       image: 'assets/img/space-snake-thumb.png',
       route: 'games/space-snake/',
+      status: 'active',
+      category: 'total-level'
+    };
+    TOTAL_LEVEL_GAMES[2] = {
+      id: 'starbound',
+      number: '03',
+      title: 'Starbound',
+      // the real Starbound logo, shown whole and centered — same
+      // thumbContain treatment as Anagram Quest's card above.
+      image: 'assets/img/starbound/logo.png',
+      thumbContain: true,
+      route: 'games/starbound/',
       status: 'active',
       category: 'total-level'
     };

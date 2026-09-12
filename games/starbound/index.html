@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Starbound — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../../assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Saira:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #ffcf4d;
+    --gold-dark: #a87a00;
+    --text-main: #eef2fb;
+    --text-dim: #97a3bd;
+    --panel-bg: rgba(8,12,22,0.88);
+    --panel-border: rgba(120,160,220,0.35);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: #05070d;
+    color: var(--text-main);
+    font-family: 'Saira', sans-serif;
+    overflow-x: hidden;
+  }
+  canvas#site-starfield { position: fixed; inset: 0; z-index: 0; }
+
+  .topbar {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; padding: 14px 18px;
+  }
+  .topbar .back img { height: 30px; display: block; }
+
+  .sb-page {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 4px 14px 30px;
+  }
+
+  .sb-title {
+    font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(22px, 4vw, 34px);
+    letter-spacing: 0.08em;
+    background: linear-gradient(180deg, #fff 0%, #9fc3ff 60%, #4d7fd6 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 24px rgba(90,150,255,0.35);
+    margin: 4px 0 14px;
+  }
+
+  /* ---- stage: fixed 1672x941 design ratio, scaled responsively ---- */
+  #sb-stage-wrap {
+    position: relative;
+    width: min(94vw, calc((100vh - 170px) * (1672 / 941)));
+    aspect-ratio: 1672 / 941;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1.5px solid var(--panel-border);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 18px 50px rgba(0,0,0,0.55), 0 0 40px rgba(60,120,255,0.12);
+    background: #04060c;
+  }
+  canvas#sb-canvas {
+    display: block; width: 100%; height: 100%;
+  }
+
+  /* ---- HUD overlay ---- */
+  #sb-hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 14px 16px; pointer-events: none;
+  }
+  #sb-hud.hidden { display: none; }
+  .sb-hud-block {
+    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    border-radius: 10px; padding: 8px 12px;
+    font-family: 'Orbitron', sans-serif;
+  }
+  .sb-hud-label { font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 3px; }
+  #sb-altitude-value { font-size: 16px; font-weight: 700; color: var(--gold); }
+  .sb-fuel-block { min-width: 150px; }
+  .sb-fuel-track { position: relative; height: 12px; border-radius: 6px; background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 2px; }
+  .sb-fuel-fill { height: 100%; width: 100%; border-radius: 6px; background: linear-gradient(90deg, #4dd06a, #b9e34d); transition: width 0.15s linear; }
+  .sb-fuel-fill.low { background: linear-gradient(90deg, #e2504a, #ff8a4d); animation: sbFuelPulse 0.6s ease-in-out infinite; }
+  @keyframes sbFuelPulse { 50% { opacity: 0.55; } }
+  #sb-fuel-pct { position: absolute; right: 4px; top: -1px; font-size: 9px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+
+  /* ---- overlay screens (menu / game over / level complete) ---- */
+  .sb-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; text-align: center; padding: 20px;
+    background: radial-gradient(ellipse at center, rgba(8,14,28,0.55) 0%, rgba(4,6,12,0.86) 75%);
+  }
+  .sb-overlay.hidden { display: none; }
+  .sb-logo { max-width: min(72%, 420px); width: 100%; height: auto; filter: drop-shadow(0 0 24px rgba(90,150,255,0.4)); }
+  .sb-overlay-heading {
+    font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(20px, 3.4vw, 30px);
+    letter-spacing: 0.06em; color: var(--gold); text-shadow: 0 0 18px rgba(255,207,77,0.4);
+  }
+  .sb-overlay-sub { color: var(--text-dim); font-size: 13px; max-width: 420px; }
+  .sb-stat-line { font-family: 'Orbitron', sans-serif; font-size: 15px; color: var(--text-main); }
+  .sb-stat-line b { color: var(--gold); }
+
+  .sb-btn {
+    font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0.08em;
+    border: none; cursor: pointer; border-radius: 999px;
+    padding: 15px 34px; font-size: 15px;
+    background: linear-gradient(180deg, #ffe38a 0%, #ffc233 45%, #e08e00 100%);
+    color: #3a2200;
+    box-shadow: 0 8px 0 #8a5c00, 0 14px 24px rgba(0,0,0,0.4);
+    transition: transform 0.08s ease;
+  }
+  .sb-btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #8a5c00, 0 8px 16px rgba(0,0,0,0.4); }
+  .sb-btn:disabled { opacity: 0.55; cursor: not-allowed; filter: grayscale(0.4); }
+  .sb-btn:disabled:active { transform: none; box-shadow: 0 8px 0 #8a5c00, 0 14px 24px rgba(0,0,0,0.4); }
+  .sb-btn.secondary {
+    background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%);
+    color: #fff; box-shadow: 0 8px 0 #10225c, 0 14px 24px rgba(0,0,0,0.4);
+  }
+  .sb-btn.secondary:active { box-shadow: 0 4px 0 #10225c, 0 8px 16px rgba(0,0,0,0.4); }
+  .sb-overlay-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---- mobile d-pad ---- */
+  .sb-dpad { position: absolute; bottom: 16px; left: 0; right: 0; display: none; justify-content: space-between; padding: 0 20px; z-index: 4; }
+  .sb-dpad-btn {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(20,28,46,0.75); border: 1.5px solid rgba(140,195,255,0.4);
+    color: #cfe0ff; font-size: 26px; display: flex; align-items: center; justify-content: center;
+    user-select: none; touch-action: none;
+  }
+  @media (max-width: 720px), (pointer: coarse) {
+    .sb-dpad { display: flex; }
+    .sb-dpad.hidden { display: none; }
+  }
+
+  .sb-hint { margin-top: 12px; font-size: 12px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<canvas id="site-starfield"></canvas>
+
+<div class="topbar">
+  <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
+</div>
+
+<div class="sb-page">
+  <div class="sb-title">STARBOUND</div>
+
+  <div id="sb-stage-wrap">
+    <canvas id="sb-canvas" width="1672" height="941"></canvas>
+
+    <div id="sb-hud" class="hidden">
+      <div class="sb-hud-block">
+        <div class="sb-hud-label">Altitude</div>
+        <div id="sb-altitude-value">0 m</div>
+      </div>
+      <div class="sb-hud-block sb-fuel-block">
+        <div class="sb-hud-label">Fuel</div>
+        <div class="sb-fuel-track">
+          <div id="sb-fuel-fill" class="sb-fuel-fill"></div>
+          <span id="sb-fuel-pct">100%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== MENU ============== -->
+    <div id="sb-screen-menu" class="sb-overlay">
+      <img class="sb-logo" src="../../assets/img/starbound/logo.png" alt="Starbound">
+      <div class="sb-overlay-sub">Launch from Earth and climb as high as you can. Dodge what the sky throws at you, collect fuel to keep climbing, and reach the Moon.</div>
+      <div class="sb-overlay-btns">
+        <button type="button" class="sb-btn" id="sb-btn-start-launch">START LAUNCH</button>
+      </div>
+      <div class="sb-hint">← → or A / D to steer · on-screen arrows on touch devices</div>
+    </div>
+
+    <!-- ============== GAME OVER ============== -->
+    <div id="sb-screen-gameover" class="sb-overlay hidden">
+      <div class="sb-overlay-heading" id="sb-gameover-heading">OUT OF FUEL</div>
+      <div class="sb-stat-line">Maximum altitude reached: <b id="sb-gameover-altitude">0 m</b></div>
+      <div class="sb-overlay-btns">
+        <button type="button" class="sb-btn" id="sb-btn-retry">LAUNCH AGAIN</button>
+        <button type="button" class="sb-btn secondary" id="sb-btn-back-menu-gameover">BACK TO MENU</button>
+      </div>
+    </div>
+
+    <!-- ============== LEVEL 1 COMPLETE ============== -->
+    <div id="sb-screen-complete" class="sb-overlay hidden">
+      <div class="sb-overlay-heading">LEVEL 1 COMPLETE</div>
+      <div class="sb-overlay-sub">You made it to the Moon.</div>
+      <div class="sb-stat-line">Altitude reached: <b id="sb-complete-altitude">0 m</b></div>
+      <div class="sb-overlay-btns">
+        <button type="button" class="sb-btn secondary" id="sb-btn-back-menu-complete">BACK TO MENU</button>
+      </div>
+    </div>
+
+    <div class="sb-dpad hidden" id="sb-dpad">
+      <div class="sb-dpad-btn" id="sb-btn-left">◀</div>
+      <div class="sb-dpad-btn" id="sb-btn-right">▶</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../../assets/js/qz-config.js"></script>
+<script src="../../assets/js/qz-auth.js"></script>
+<script src="../../assets/js/qz-xp.js"></script>
+<script src="../../assets/js/stars-plain.js"></script>
+<script src="starbound-config.js"></script>
+<script src="starbound.js"></script>
+</body>
+</html>
