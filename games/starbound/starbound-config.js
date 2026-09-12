@@ -166,6 +166,55 @@
       // the way an overlap nudge was in the previous (stage-index-
       // lookup) architecture.
       safetyOverlapPx: 30,
+      // Per-transition overrides — everywhere else keeps the default
+      // overlapPx above untouched. Keyed by the index of the EARLIER
+      // scene in the pair (this entry describes the transition BETWEEN
+      // stages[i] and stages[i+1]).
+      //
+      // Deep space (bg-09) -> Moon approach (bg-10) still showed a
+      // visible horizontal line at the default 300px overlap — confirmed
+      // by sampling actual rendered pixel brightness across the zone (a
+      // real, if gradual, ~40 -> ~22 brightness drop over ~250px, not a
+      // single hard cut, but still perceptible given how different the
+      // two starfields' base tones and star patterns are). Fixed with
+      // BOTH a larger overlap AND a colour/tint bridge: tintColor
+      // (matching bg-09's own dominant tone) is layered across the SAME
+      // overlap zone with an alpha that rises then falls (peaking at
+      // tintPeakAlpha in the middle), easing the exposure jump between
+      // the two source images rather than relying on straight
+      // alpha-crossfading two images of noticeably different brightness
+      // — see drawTransitionTintBridges() in starbound.js.
+      //
+      // bg-05 (above cloud layer) -> bg-06 (darkening upper atmosphere)
+      // has a different problem: BOTH images independently run dark-at-
+      // their-own-top to light-at-their-own-bottom, so the plain alpha
+      // crossfade blends bg-06's bright BOTTOM into bg-05's dark TOP,
+      // producing a brightness spike right at the seam that then dips
+      // back down once bg-06 fades out and bg-05's own (still-dark, just
+      // past its top) colour takes back over — measured on real rendered
+      // pixels as ~59 -> ~140 -> ~59 lum over ~350px, not a hard line but
+      // a real "bright -> dark band -> bright again" wobble. colorBridge
+      // pulls BOTH the spike and the dip toward one shared intermediate
+      // tone (see drawColorMatchBridges() in starbound.js) so the
+      // brightness swing is roughly halved instead of removed by
+      // repositioning anything.
+      //
+      // bg-06 (stars already visible at its own top) -> bg-07 (Earth's
+      // curved globe visible at its own bottom, stars above that) has a
+      // content clash rather than a colour one: the plain crossfade
+      // reveals bg-06's stars starting at the very top of the overlap
+      // zone, which is exactly where bg-07's globe is still mostly
+      // opaque — so stars appear to hang over the visible Earth surface.
+      // topFadeDelayFraction holds bg-06 at alpha 0 for the first ~55%
+      // of its own top-fade zone (while the globe is still prominent)
+      // and only ramps its stars in over the remaining ~45%, by which
+      // point bg-07's globe has almost entirely faded — see
+      // buildFeatheredCanvas()'s topDelayFraction parameter.
+      transitionOverrides: {
+        4: { colorBridge: { preExpandPx: 46, postExpandPx: 140, rampPx: 70, color: '#2f6ab5', peakAlpha: 0.6 } },
+        5: { topFadeDelayFraction: 0.55 },
+        8: { overlapPx: 400, tintColor: '#050f22', tintPeakAlpha: 0.45 }
+      },
       // Ordered ground -> Moon. No `start` fractions anymore — a
       // scene's position in this array IS its permanent position in the
       // world (see buildBackgroundScenes()), nothing about ordering is
@@ -280,15 +329,22 @@
   STARBOUND_CONFIG.obstacles.height = STARBOUND_CONFIG.obstacles.width;
 
   // background.scrollSpeedPerSec is DERIVED so the background finishes
-  // its climb in EXACTLY level1.targetDurationSeconds. Spacing between
-  // consecutive scenes' worldY is (one screen-height - overlapPx) — see
+  // its climb in EXACTLY level1.targetDurationSeconds. Spacing for
+  // transition i (between stages[i] and stages[i+1]) is one screen-
+  // height minus THAT transition's own overlap (the default, unless
+  // transitionOverrides[i] specifies a different one) — see
   // buildBackgroundScenes() in starbound.js for the actual worldY
   // assignment this mirrors — so the total distance to travel before the
-  // LAST scene settles at screenY=0 is spacing * (stageCount - 1).
+  // LAST scene settles at screenY=0 is the SUM of every transition's
+  // spacing, not a flat multiplication, since one transition (8) now
+  // uses a larger-than-default overlap.
   (function deriveBackgroundScrollSpeed() {
     const bg = STARBOUND_CONFIG.background;
-    const spacing = STARBOUND_CONFIG.design.height - bg.overlapPx;
-    const totalTravelPx = spacing * (bg.stages.length - 1);
+    let totalTravelPx = 0;
+    for (let i = 0; i < bg.stages.length - 1; i++) {
+      const overlap = (bg.transitionOverrides[i] && bg.transitionOverrides[i].overlapPx) || bg.overlapPx;
+      totalTravelPx += STARBOUND_CONFIG.design.height - overlap;
+    }
     bg.totalTravelPx = totalTravelPx; // exposed for starbound.js to clamp worldOffsetY against
     bg.scrollSpeedPerSec = totalTravelPx / STARBOUND_CONFIG.level1.targetDurationSeconds;
   })();

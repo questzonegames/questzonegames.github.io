@@ -228,60 +228,198 @@
   // "active" right now, so there is no index-advance moment for
   // anything to snap around.
   //
-  // scene[i].worldY = -(DESIGN_H - overlapPx) * i — each successive
-  // scene sits exactly `spacing` px above the previous one (spacing <
-  // DESIGN_H, so consecutive scenes overlap by `overlapPx`). Scene 0
-  // (ground) starts at worldY=0, i.e. already in place when
-  // worldOffsetY=0 (the moment liftoff begins).
+  // scene[i].worldY — cumulative sum of each transition's own spacing
+  // (one screen-height minus THAT transition's overlap), rather than a
+  // flat `-spacing*i` multiplication, since one transition can now use a
+  // larger-than-default overlap (see CONFIG.background.transitionOverrides
+  // — currently just the deep-space -> Moon-approach seam) without
+  // affecting any other scene's position. Scene 0 (ground) starts at
+  // worldY=0, i.e. already in place when worldOffsetY=0 (the moment
+  // liftoff begins).
+  function overlapForTransition(i) {
+    const override = CONFIG.background.transitionOverrides[i];
+    return (override && override.overlapPx) || CONFIG.background.overlapPx;
+  }
+
   function buildBackgroundScenes(stages, images) {
-    const bg = CONFIG.background;
-    const spacing = DESIGN_H - bg.overlapPx;
-    return stages.map((stage, i) => ({
-      image: stage.image,
-      fallbackColor: stage.fallbackColor,
-      worldY: -spacing * i,
-      img: images[i],
-      // Pre-baked once per scene (never per frame): top edge feathered
-      // in (smoothstep 0->1) unless this is the very first scene (its
-      // top borders nothing), bottom edge feathered out (1->0) unless
-      // this is the very last scene (its bottom borders nothing). The
-      // fade span exactly matches overlapPx, so it lines up pixel-for-
-      // pixel with the actual physical overlap between neighbours —
-      // drawn in ascending world order (see drawBackground()), a scene's
-      // fade-in top always lands exactly across the previous scene's
-      // fade-out bottom, nothing more, nothing less.
-      feathered: buildFeatheredCanvas(images[i], bg.overlapPx, i > 0, i < stages.length - 1)
-    }));
+    const scenes = [];
+    let y = 0;
+    for (let i = 0; i < stages.length; i++) {
+      scenes.push({ image: stages[i].image, fallbackColor: stages[i].fallbackColor, worldY: y, img: images[i] });
+      if (i < stages.length - 1) y -= DESIGN_H - overlapForTransition(i);
+    }
+    // Feathering is a second pass (after every worldY is known). Later
+    // scenes have more negative worldY, so at any given scroll offset a
+    // higher-index scene sits ABOVE a lower-index one on screen — the
+    // shared overlap between scene i and scene i+1 physically lands at
+    // scene i's TOP edge and scene (i+1)'s BOTTOM edge. So a scene's TOP
+    // fade width comes from the transition BELOW its own index
+    // (overlapForTransition(i), connecting it to the scene above it) and
+    // its BOTTOM fade width comes from the transition ABOVE its own index
+    // (overlapForTransition(i-1), connecting it to the scene below it).
+    // The two can differ (only true today for scenes 8 and 9, either side
+    // of the widened deep-space seam). Pre-baked once per scene here,
+    // never per frame. The fade span always exactly matches the REAL
+    // physical overlap for that specific pair, so it lines up
+    // pixel-for-pixel with the actual overlap between neighbours
+    // regardless of which transition uses the default width or an
+    // override.
+    scenes.forEach((scene, i) => {
+      const topFade = i < scenes.length - 1 ? overlapForTransition(i) : 0;
+      const bottomFade = i > 0 ? overlapForTransition(i - 1) : 0;
+      // topFadeDelayFraction (see CONFIG.background.transitionOverrides,
+      // today only the bg-06 -> bg-07 "stars over the globe" seam) holds
+      // this scene's OWN top edge at alpha 0 for the first fraction of
+      // its top-fade zone instead of ramping in immediately — used only
+      // where the incoming scene's content (stars) would otherwise
+      // appear layered over the outgoing scene's still-mostly-opaque
+      // content (the globe) rather than genuinely "above" it.
+      const topOverride = CONFIG.background.transitionOverrides[i];
+      const topDelayFraction = (topOverride && topOverride.topFadeDelayFraction) || 0;
+      scene.feathered = buildFeatheredCanvas(scene.img, topFade, bottomFade, topDelayFraction);
+    });
+    return scenes;
   }
 
   function smoothstep(t) { return t * t * (3 - 2 * t); }
 
-  function buildFeatheredCanvas(img, fade, fadeTop, fadeBottom) {
+  function buildFeatheredCanvas(img, topFade, bottomFade, topDelayFraction) {
     if (!img) return null;
     const off = document.createElement('canvas');
     off.width = DESIGN_W;
     off.height = DESIGN_H;
     const octx = off.getContext('2d');
     octx.drawImage(img, 0, 0, DESIGN_W, DESIGN_H);
-    if (!fadeTop && !fadeBottom) return off; // scene 0's top / last scene's bottom: nothing to blend into, stays fully opaque
+    if (!topFade && !bottomFade) return off; // scene 0's top / last scene's bottom: nothing to blend into, stays fully opaque
     // Built pixel-row-by-gradient-stop rather than a single 3-stop
-    // gradient so the alpha curve can use smoothstep easing (spec:
-    // "use smoothstep/easing instead of a perfectly linear fade if that
-    // looks better") rather than a flat linear ramp.
+    // gradient so the alpha curve can use smoothstep easing rather than
+    // a flat linear ramp, and so top/bottom can use different widths.
     const grad = octx.createLinearGradient(0, 0, 0, DESIGN_H);
-    const steps = 24;
+    const steps = 32;
     for (let s = 0; s <= steps; s++) {
       const yFrac = s / steps;
       const y = yFrac * DESIGN_H;
       let a = 1;
-      if (fadeTop && y < fade) a = Math.min(a, smoothstep(y / fade));
-      if (fadeBottom && y > DESIGN_H - fade) a = Math.min(a, smoothstep((DESIGN_H - y) / fade));
+      if (topFade && y < topFade) {
+        const t = y / topFade;
+        // Delayed ramp: stay at 0 through the first topDelayFraction of
+        // the zone, then smoothstep over the remainder — see
+        // topFadeDelayFraction above for why (this scene's content
+        // shouldn't start appearing until the scene it's fading in over
+        // has mostly faded out, not at the very first pixel of overlap).
+        const adjustedT = topDelayFraction ? Math.max(0, (t - topDelayFraction) / (1 - topDelayFraction)) : t;
+        a = Math.min(a, smoothstep(adjustedT));
+      }
+      if (bottomFade && y > DESIGN_H - bottomFade) a = Math.min(a, smoothstep((DESIGN_H - y) / bottomFade));
       grad.addColorStop(yFrac, 'rgba(0,0,0,' + a + ')');
     }
     octx.globalCompositeOperation = 'destination-in';
     octx.fillStyle = grad;
     octx.fillRect(0, 0, DESIGN_W, DESIGN_H);
     return off;
+  }
+
+  // A targeted fix for ONE transition (see CONFIG.background.
+  // transitionOverrides): even with a wider alpha crossfade, two
+  // starfields with noticeably different base brightness/exposure can
+  // still read as "a line" where one ends and the other begins, because
+  // straight alpha-blending two differently-exposed images doesn't
+  // actually make the darker one's true colour appear gradually — it
+  // just mixes two fixed colours. Layering an extra flat tint (matching
+  // the darker scene's own dominant tone) across the SAME overlap zone,
+  // eased in then back out (smoothstep hump, peaking at tintPeakAlpha in
+  // the middle), gives the brightness an actual intermediate step to
+  // pass through — bright -> tinted-toward-dark -> dark — instead of
+  // jumping straight from one exposure to the other.
+  function drawTransitionTintBridges(offsetY) {
+    const overrides = CONFIG.background.transitionOverrides;
+    Object.keys(overrides).forEach((key) => {
+      const i = Number(key);
+      const cfg = overrides[key];
+      if (!cfg.tintColor) return;
+      const lower = BACKGROUND_SCENES[i], upper = BACKGROUND_SCENES[i + 1];
+      if (!lower || !upper) return;
+      const overlap = cfg.overlapPx || CONFIG.background.overlapPx;
+      // The overlap zone sits at the bottom `overlap` px of the upper
+      // (incoming) scene's box, which is also the top `overlap` px of
+      // the lower (outgoing) scene's box — both describe the same
+      // screen-space band.
+      const zoneTop = upper.worldY + offsetY + DESIGN_H - overlap;
+      if (zoneTop > DESIGN_H || zoneTop + overlap < 0) return; // this zone isn't anywhere near the visible canvas right now
+      const peak = cfg.tintPeakAlpha != null ? cfg.tintPeakAlpha : 0.4;
+      const grad = ctx.createLinearGradient(0, zoneTop, 0, zoneTop + overlap);
+      const steps = 24;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        // Smoothstep hump: 0 at both edges of the zone, `peak` in the
+        // middle — the bridge is only present WITHIN the overlap,
+        // never bleeding into either scene's fully-own territory.
+        const hump = 1 - Math.abs(t - 0.5) * 2;
+        const a = peak * smoothstep(Math.max(0, hump));
+        grad.addColorStop(t, cfg.tintColor.length === 7
+          ? hexToRgba(cfg.tintColor, a)
+          : cfg.tintColor);
+      }
+      ctx.save();
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, zoneTop, DESIGN_W, overlap);
+      ctx.restore();
+    });
+  }
+
+  function hexToRgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+
+  // A second, differently-shaped targeted fix (see CONFIG.background.
+  // transitionOverrides[4].colorBridge — today only the bg-05 -> bg-06
+  // seam): unlike the deep-space seam above, this one isn't a hard line,
+  // it's a brightness SPIKE-THEN-DIP either side of the physical overlap
+  // (bg-06's bright bottom crossfades into bg-05's dark top, then bg-05's
+  // own dark-near-its-top colour reappears once bg-06 fades out) — a
+  // single hump tint centered on the physical overlap wouldn't reach far
+  // enough past it to catch the dip. This one is defined independently
+  // of overlapPx/worldY entirely (pre/post-expand past the physical
+  // zone, plus its own ramp width) — purely a render-time overlay, never
+  // touching scene position — with a flat alpha PLATEAU (not a triangular
+  // hump) spanning both the spike and the dip so each gets pulled toward
+  // the same intermediate tone by roughly the same amount, rather than
+  // the plateau's edges under-correcting whichever one sits off-centre.
+  function drawColorMatchBridges(offsetY) {
+    const overrides = CONFIG.background.transitionOverrides;
+    Object.keys(overrides).forEach((key) => {
+      const i = Number(key);
+      const cfg = overrides[key].colorBridge;
+      if (!cfg) return;
+      const lower = BACKGROUND_SCENES[i], upper = BACKGROUND_SCENES[i + 1];
+      if (!lower || !upper) return;
+      const overlap = overlapForTransition(i);
+      const zoneTop = upper.worldY + offsetY + DESIGN_H - overlap; // same physical overlap zone as the tint bridge
+      const bandTop = zoneTop - cfg.preExpandPx;
+      const bandBottom = zoneTop + overlap + cfg.postExpandPx;
+      const bandHeight = bandBottom - bandTop;
+      if (bandTop > DESIGN_H || bandBottom < 0) return; // nowhere near the visible canvas right now
+      const ramp = cfg.rampPx;
+      const grad = ctx.createLinearGradient(0, bandTop, 0, bandBottom);
+      const steps = 24;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const y = t * bandHeight;
+        // Ramp up over the first `ramp` px, flat at peakAlpha across the
+        // middle plateau, ramp down over the last `ramp` px — the spike
+        // and the dip both sit inside the plateau, at the SAME alpha.
+        let a;
+        if (y < ramp) a = smoothstep(y / ramp);
+        else if (y > bandHeight - ramp) a = smoothstep((bandHeight - y) / ramp);
+        else a = 1;
+        grad.addColorStop(t, hexToRgba(cfg.color, cfg.peakAlpha * a));
+      }
+      ctx.save();
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, bandTop, DESIGN_W, bandHeight);
+      ctx.restore();
+    });
   }
 
   // worldOffsetY, clamped so the LAST scene settles at screenY=0 and
@@ -325,6 +463,8 @@
       if (source) ctx.drawImage(source, 0, y, DESIGN_W, drawH);
     }
     if (!anyDrawn) { ctx.fillStyle = '#04070f'; ctx.fillRect(0, 0, DESIGN_W, DESIGN_H); }
+    drawTransitionTintBridges(offsetY);
+    drawColorMatchBridges(offsetY);
   }
 
   // ================= rocket + flame =================
