@@ -13,9 +13,13 @@
 //     handler is the ONLY place that deals with real screen pixels.
 //   - Obstacles and fuel pickups are plain data objects updated by one
 //     shared loop; which TYPES can spawn is entirely config-driven (see
-//     CONFIG.obstacles.zones), and adding a new hazard later only means
-//     adding a zone/type entry plus one entry in OBSTACLE_DRAWERS below
-//     — no other code needs to change.
+//     CONFIG.obstacles.zones), and adding a new hand-drawn hazard later
+//     only means adding a zone/type entry plus one entry in
+//     OBSTACLE_DRAWERS below — no other code needs to change. The two
+//     bird types (sparrow, pigeon) are the exception: real animated
+//     sprites rather than hand-drawn canvas shapes, handled by their own
+//     updateBirdObstacle()/drawBirdObstacle() pair — see CONFIG.obstacles
+//     .birds for their config.
 //   - No XP/achievements/shop/save-progress wiring yet, per spec. The
 //     one future hook point is marked with a TODO near GAME_KEY below.
 (function () {
@@ -71,10 +75,26 @@
   // becomes true, so nothing in the render path ever needs to check
   // "has this scene's position been assigned yet".
   let BACKGROUND_SCENES = [];
+  // Loaded bird sprites, keyed the same way as CONFIG.obstacles.birds:
+  // BIRD_IMAGES.sparrow.wingsUp / .wingsDown / .dive, BIRD_IMAGES.pigeon.*
+  // — all six are preloaded up front alongside the backgrounds so the
+  // first on-screen bird never causes a decode-flash mid-run.
+  let BIRD_IMAGES = {};
   async function preloadAssets() {
     const stages = CONFIG.background.stages;
-    const loaded = await Promise.all(stages.map((s) => loadImage(s.image)));
-    BACKGROUND_SCENES = buildBackgroundScenes(stages, loaded);
+    const birdCfg = CONFIG.obstacles.birds;
+    const birdTypes = Object.keys(birdCfg).filter((k) => birdCfg[k] && birdCfg[k].images);
+    const [loadedStages, ...loadedBirdSets] = await Promise.all([
+      Promise.all(stages.map((s) => loadImage(s.image))),
+      ...birdTypes.map((type) => {
+        const images = birdCfg[type].images;
+        const poses = Object.keys(images);
+        return Promise.all(poses.map((pose) => loadImage(images[pose])))
+          .then((imgs) => poses.reduce((acc, pose, i) => { acc[pose] = imgs[i]; return acc; }, {}));
+      })
+    ]);
+    BACKGROUND_SCENES = buildBackgroundScenes(stages, loadedStages);
+    BIRD_IMAGES = birdTypes.reduce((acc, type, i) => { acc[type] = loadedBirdSets[i]; return acc; }, {});
     assetsReady = true;
   }
 
@@ -552,25 +572,6 @@
   // receives (ctx, obstacle, nowMs) and draws centred on (0,0) at its own
   // configured width/height (already translated by the caller).
   const OBSTACLE_DRAWERS = {
-    bird(c, o, now) {
-      const flap = Math.sin(now / 90 + o.seed) * 0.5;
-      c.strokeStyle = '#2b2b2b'; c.lineWidth = 4; c.lineCap = 'round';
-      c.beginPath();
-      c.moveTo(-18, 0); c.quadraticCurveTo(-6, -10 - flap * 14, 0, 0);
-      c.quadraticCurveTo(6, -10 + flap * 14, 18, 0);
-      c.stroke();
-    },
-    helicopter(c) {
-      c.fillStyle = '#4a5568';
-      c.beginPath(); c.ellipse(0, 4, 22, 12, 0, 0, Math.PI * 2); c.fill();
-      c.fillRect(-2, -2, 34, 5); // tail boom
-      c.fillStyle = '#7fd8ff'; c.beginPath(); c.arc(-8, 2, 7, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = '#1c222c'; c.lineWidth = 2;
-      const spin = (performance.now() / 30) % Math.PI;
-      c.save(); c.translate(0, -12); c.rotate(spin);
-      c.beginPath(); c.moveTo(-30, 0); c.lineTo(30, 0); c.stroke();
-      c.restore();
-    },
     plane(c) {
       c.fillStyle = '#d8dde6';
       c.beginPath();
@@ -621,6 +622,87 @@
     }
   };
 
+  // ---- bird obstacles (sparrow, pigeon): real animated sprites ----
+  // See CONFIG.obstacles.birds for the shared tuning (flap timing,
+  // nosedive odds/duration/speed, per-type scale). Everything here is
+  // driven entirely by that config — the two types differ only in which
+  // sprite set + scale they use, never in behaviour code.
+  function isBirdType(type) {
+    return !!(CONFIG.obstacles.birds[type] && CONFIG.obstacles.birds[type].images);
+  }
+
+  function birdDrawSize(type) {
+    const birds = CONFIG.obstacles.birds;
+    return birds.baseSize * birds[type].scale;
+  }
+
+  // Called once per bird obstacle at spawn — sets up the flap/nosedive
+  // state machine fields alongside the plain x/y/speed every obstacle
+  // already has.
+  function initBirdState(o) {
+    const birds = CONFIG.obstacles.birds;
+    o.anim = 'wingsUp';
+    o.animElapsedMs = Math.random() * birds.flapFrameTimeMs; // desync flock members
+    o.diving = false;
+    o.diveElapsedMs = 0;
+    o.nextDiveCheckInMs = randRange(birds.nosediveCheckIntervalMs * 0.5, birds.nosediveCheckIntervalMs);
+    o.driftSpeed = randRange(-birds.driftSpeedMaxPxPerSec, birds.driftSpeedMaxPxPerSec);
+  }
+
+  // Advances one bird's flap/nosedive timers and horizontal drift.
+  // Called every frame from the main obstacle-advance loop in update(),
+  // BEFORE the shared o.y += o.speed*dt movement step (which applies the
+  // nosedive speed multiplier this computes).
+  function updateBirdObstacle(o, dt) {
+    const birds = CONFIG.obstacles.birds;
+    const dtMs = dt * 1000;
+
+    if (o.diving) {
+      o.diveElapsedMs += dtMs;
+      if (o.diveElapsedMs >= birds.nosediveDurationMs) {
+        o.diving = false;
+        o.diveElapsedMs = 0;
+        o.anim = 'wingsDown';
+        o.animElapsedMs = 0;
+      }
+    } else {
+      // Flap frame timer — a plain wingsUp <-> wingsDown loop.
+      o.animElapsedMs += dtMs;
+      if (o.animElapsedMs >= birds.flapFrameTimeMs) {
+        o.animElapsedMs -= birds.flapFrameTimeMs;
+        o.anim = o.anim === 'wingsUp' ? 'wingsDown' : 'wingsUp';
+      }
+      // Nosedive roll — checked on its own cooldown timer, never every
+      // frame, so the behaviour reads as an occasional deliberate event
+      // rather than something that can retrigger many times a second.
+      o.nextDiveCheckInMs -= dtMs;
+      if (o.nextDiveCheckInMs <= 0) {
+        o.nextDiveCheckInMs = birds.nosediveCheckIntervalMs;
+        if (Math.random() < birds.nosediveChance) {
+          o.diving = true;
+          o.diveElapsedMs = 0;
+          o.anim = 'dive';
+        }
+      }
+    }
+
+    // Small horizontal wobble — kept during a dive too ("keep its
+    // horizontal position mostly stable" means unaffected by the dive
+    // itself, not frozen outright).
+    o.x += o.driftSpeed * dt;
+    const half = o.drawSize / 2;
+    o.x = Math.max(half, Math.min(DESIGN_W - half, o.x));
+  }
+
+  function drawBirdObstacle(ctx2, o) {
+    const img = BIRD_IMAGES[o.type] && BIRD_IMAGES[o.type][o.anim];
+    if (!img) return; // a still-loading/broken sprite degrades to "just don't draw it", same policy as loadImage()
+    ctx2.save();
+    ctx2.translate(o.x, o.y);
+    ctx2.drawImage(img, -o.drawSize / 2, -o.drawSize / 2, o.drawSize, o.drawSize);
+    ctx2.restore();
+  }
+
   function currentObstacleZone() {
     const frac = altitudeFraction();
     const zones = CONFIG.obstacles.zones;
@@ -634,13 +716,21 @@
     const type = zone.types[Math.floor(Math.random() * zone.types.length)];
     const t = difficultyT();
     const speed = zone.speedPerSec * (1 + t * (CONFIG.difficulty.maxSpeedMultiplier - 1));
-    state.obstacles.push({
+    // drawSize is per-instance (not just read from config at draw time)
+    // because a bird's size depends on its own type (sparrow vs pigeon
+    // scale) — every other obstacle type still just gets the generic
+    // square obstacles.width/height, unchanged from before.
+    const drawSize = isBirdType(type) ? birdDrawSize(type) : cfg.width;
+    const o = {
       type,
-      x: randRange(cfg.width, DESIGN_W - cfg.width),
-      y: -cfg.height,
+      x: randRange(drawSize / 2, DESIGN_W - drawSize / 2),
+      y: -drawSize,
       speed,
-      seed: Math.random() * 1000
-    });
+      seed: Math.random() * 1000,
+      drawSize
+    };
+    if (isBirdType(type)) initBirdState(o);
+    state.obstacles.push(o);
   }
 
   function spawnPickup() {
@@ -701,9 +791,15 @@
 
     // obstacles
     if (performance.now() < state.invulnerableUntil) return;
-    const or_ = CONFIG.obstacles.width * col.obstacleRadiusFactor;
+    const genericRadius = CONFIG.obstacles.width * col.obstacleRadiusFactor;
     for (let i = 0; i < state.obstacles.length; i++) {
       const o = state.obstacles[i];
+      // Birds get their own tighter, body-only hitbox (see
+      // CONFIG.obstacles.birds.hitboxFactor) — their wingspan takes up
+      // far more of the drawn box than the other obstacle art does, so
+      // reusing the generic radius would make near-misses on a wingtip
+      // register as unfair hits.
+      const or_ = isBirdType(o.type) ? o.drawSize * CONFIG.obstacles.birds.hitboxFactor : genericRadius;
       if (circleHit(state.rocketX, state.rocketY, rocketR, o.x, o.y, or_)) {
         onObstacleHit();
         break;
@@ -820,8 +916,14 @@
       // advance + cull obstacles/pickups
       for (let i = state.obstacles.length - 1; i >= 0; i--) {
         const o = state.obstacles[i];
-        o.y += o.speed * dt;
-        if (o.y > DESIGN_H + CONFIG.obstacles.height) state.obstacles.splice(i, 1);
+        if (isBirdType(o.type)) {
+          updateBirdObstacle(o, dt);
+          const speedMul = o.diving ? CONFIG.obstacles.birds.nosediveSpeedMultiplier : 1;
+          o.y += o.speed * speedMul * dt;
+        } else {
+          o.y += o.speed * dt;
+        }
+        if (o.y > DESIGN_H + o.drawSize) state.obstacles.splice(i, 1);
       }
       for (let i = state.pickups.length - 1; i >= 0; i--) {
         const p = state.pickups[i];
@@ -852,6 +954,7 @@
       // edits needed.
       const obstacleArtScale = CONFIG.obstacles.width / CONFIG.obstacles.referenceSize;
       state.obstacles.forEach((o) => {
+        if (isBirdType(o.type)) { drawBirdObstacle(ctx, o); return; } // real sprite, own sizing — no canvas-shape scale trick
         ctx.save();
         ctx.translate(o.x, o.y);
         ctx.scale(obstacleArtScale, obstacleArtScale);

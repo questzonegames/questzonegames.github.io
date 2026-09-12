@@ -274,16 +274,85 @@
       // future "make it harder/easier again" pass is a single-number
       // change instead of re-editing six zone rows.
       spawnRateMultiplier: 0.55,
+      // sparrow/pigeon are real animated sprites (not OBSTACLE_DRAWERS
+      // canvas shapes) — see the `birds` config block below and
+      // drawBirdObstacle()/updateBirdObstacle() in starbound.js. Pigeons
+      // replace the old helicopter type as the second bird tier: same
+      // animation system, just bigger/slower and appearing later (start:
+      // 0.14, same as helicopters used).
       zones: [
         // speedPerSec bumped to stay readable/dodgeable at the now much
         // larger size + tighter spawn rate.
-        { name: 'birds',       start: 0.00, types: ['bird'],       speedPerSec: 420, spawnIntervalMinMs: 550,  spawnIntervalMaxMs: 1000 },
-        { name: 'helicopters', start: 0.14, types: ['helicopter'], speedPerSec: 440, spawnIntervalMinMs: 700,  spawnIntervalMaxMs: 1300 },
-        { name: 'planes',      start: 0.30, types: ['plane'],      speedPerSec: 480, spawnIntervalMinMs: 800,  spawnIntervalMaxMs: 1450 },
-        { name: 'storm',       start: 0.48, types: ['stormcloud'], speedPerSec: 420, spawnIntervalMinMs: 650,  spawnIntervalMaxMs: 1200 },
-        { name: 'satellites',  start: 0.66, types: ['satellite'],  speedPerSec: 360, spawnIntervalMinMs: 900,  spawnIntervalMaxMs: 1500 },
+        { name: 'birds',       start: 0.00, types: ['sparrow'],     speedPerSec: 420, spawnIntervalMinMs: 550,  spawnIntervalMaxMs: 1000 },
+        { name: 'pigeons',     start: 0.14, types: ['pigeon'],      speedPerSec: 380, spawnIntervalMinMs: 700,  spawnIntervalMaxMs: 1300 },
+        { name: 'planes',      start: 0.30, types: ['plane'],       speedPerSec: 480, spawnIntervalMinMs: 800,  spawnIntervalMaxMs: 1450 },
+        { name: 'storm',       start: 0.48, types: ['stormcloud'],  speedPerSec: 420, spawnIntervalMinMs: 650,  spawnIntervalMaxMs: 1200 },
+        { name: 'satellites',  start: 0.66, types: ['satellite'],   speedPerSec: 360, spawnIntervalMinMs: 900,  spawnIntervalMaxMs: 1500 },
         { name: 'space',       start: 0.80, types: ['debris', 'meteor', 'rock'], speedPerSec: 480, spawnIntervalMinMs: 500, spawnIntervalMaxMs: 950 }
-      ]
+      ],
+
+      // ---- bird obstacles: sparrow + pigeon, real animated sprites ----
+      // Both types share one animation system (see updateBirdObstacle() /
+      // drawBirdObstacle() in starbound.js): a wingsUp <-> wingsDown flap
+      // loop, interrupted occasionally by a timed "nosedive" behavioural
+      // state (not just a visual swap — see nosediveSpeedMultiplier). All
+      // six source images are square (1254x1254 as supplied, downscaled
+      // to 400x400 for the web build) so drawing each at the SAME width/
+      // height never stretches or distorts the art — only the per-type
+      // `scale` changes how big that square is drawn.
+      birds: {
+        sparrow: {
+          images: {
+            wingsUp: 'birds/sparrow-wings-up.png',
+            wingsDown: 'birds/sparrow-wings-down.png',
+            dive: 'birds/sparrow-dive.png'
+          },
+          scale: 1.0 // SPARROW_SCALE — smaller/quicker of the two, appears first (see zones.birds above)
+        },
+        pigeon: {
+          images: {
+            wingsUp: 'birds/pigeon-wings-up.png',
+            wingsDown: 'birds/pigeon-wings-down.png',
+            dive: 'birds/pigeon-dive.png'
+          },
+          scale: 1.3 // PIGEON_SCALE — bigger, heavier-looking; replaces the old helicopter tier (see zones.pigeons above)
+        },
+        // Base drawn box (px, before a type's own `scale`) that
+        // referenceSize*sizeMultiplier is designed to roughly match, so
+        // sparrows/pigeons read as a similar on-screen size to the other
+        // obstacle types rather than a jarring size mismatch.
+        baseSize: 190,
+        // BIRD_FLAP_FRAME_TIME — how long each of wingsUp/wingsDown holds
+        // before swapping to the other, while not diving. ~150ms reads
+        // as a steady, readable flap rather than a flicker.
+        flapFrameTimeMs: 150,
+        // BIRD_NOSEDIVE_DURATION — how long a nosedive lasts once
+        // entered, before the bird can return to normal wing-flap flight
+        // (if still on-screen).
+        nosediveDurationMs: 600,
+        // BIRD_NOSEDIVE_CHANCE — probability rolled periodically (every
+        // nosediveCheckIntervalMs, NOT every frame — see
+        // updateBirdObstacle()) for a bird currently flapping (never
+        // mid-dive, never on cooldown) to enter a nosedive. Checking on
+        // a timer rather than per-frame keeps the behaviour an
+        // intentional, occasional event instead of something that can
+        // trigger many times a second.
+        nosediveChance: 0.12,
+        nosediveCheckIntervalMs: 450,
+        // BIRD_NOSEDIVE_SPEED_MULTIPLIER — applied to vertical speed
+        // only while diving; horizontal drift is unaffected ("keep its
+        // horizontal position mostly stable").
+        nosediveSpeedMultiplier: 1.6,
+        // Small per-bird horizontal wobble so a flock doesn't all fall
+        // in dead-straight parallel lines.
+        driftSpeedMaxPxPerSec: 45,
+        // Collision hitbox: a fraction of the bird's drawn box,
+        // deliberately tighter than the generic obstacleRadiusFactor
+        // below since a bird sprite's wingtips take up far more of its
+        // bounding box than the body — a hit should feel like it needs
+        // to touch the body/head, not just graze a wingtip.
+        hitboxFactor: 0.24
+      }
     },
 
     // ---- collision sizes ----
