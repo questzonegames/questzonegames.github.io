@@ -111,7 +111,25 @@
     position: absolute; top: 8vh; left: 50%; transform: translateX(-50%);
     max-width: min(84%, 520px);
   }
-  .sb-play-btn { font-size: 18px; padding: 18px 46px; }
+  /* The supplied "starbound button" sprite (a sci-fi console panel,
+     2172x724 native, transparent background) replaces the plain gold
+     pill for this one button — image drawn at its own aspect ratio via
+     background-size:100% 100%, all the old pill styling (gradient/
+     radius/shadow) turned off, "Start Launch" centered on top of it. */
+  /* .sb-btn.sb-play-btn (double-class) — needs to out-specificity the
+     later, single-class .sb-btn rule below, which would otherwise win
+     on source order alone and silently restore the gold pill look. */
+  .sb-btn.sb-play-btn {
+    width: min(62vw, 460px);
+    aspect-ratio: 2172 / 724;
+    padding: 0; border-radius: 0; background: url('../../assets/img/starbound/start-button.png') center / 100% 100% no-repeat;
+    box-shadow: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(15px, 2.6vw, 21px); letter-spacing: 0.12em;
+    color: var(--text-main);
+    text-shadow: 0 0 12px rgba(140,190,255,0.55), 0 2px 3px rgba(0,0,0,0.85);
+  }
+  .sb-btn.sb-play-btn:active { transform: translateY(2px); box-shadow: none; }
   body:has(#sb-screen-menu:not(.hidden)) .sb-title,
   body:has(#sb-screen-menu:not(.hidden)) #sb-stage-wrap {
     visibility: hidden;
@@ -219,7 +237,7 @@
      hides the title + boxed game stage while this is showing). -->
 <div id="sb-screen-menu">
   <img class="sb-logo" src="../../assets/img/starbound/logo.png" alt="Starbound">
-  <button type="button" class="sb-btn sb-play-btn" id="sb-btn-start-launch">PLAY</button>
+  <button type="button" class="sb-btn sb-play-btn" id="sb-btn-start-launch">Start Launch</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>

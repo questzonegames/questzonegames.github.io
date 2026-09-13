@@ -1925,7 +1925,7 @@
     btnStartLaunch.textContent = 'LOADING…';
     await preloadAssets();
     btnStartLaunch.disabled = false;
-    btnStartLaunch.textContent = 'PLAY';
+    btnStartLaunch.textContent = 'Start Launch';
     requestAnimationFrame(loop);
   }
   init();
