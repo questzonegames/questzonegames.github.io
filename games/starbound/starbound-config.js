@@ -108,8 +108,12 @@
       // Pickups need real arcade pacing so lining up for one is an
       // active, timed decision, not a lazy drift.
       pickupFallSpeedPerSec: 260,
-      pickupWidth: 46,
-      pickupHeight: 58
+      // Real sprite (parachute + jerry can) — square/1024x1536 source,
+      // downscaled to 200x300 for the web build, so pickupWidth/Height
+      // below are kept at its exact 2:3 aspect ratio to avoid stretching.
+      image: 'fuel.png',
+      pickupWidth: 56,
+      pickupHeight: 84
     },
 
     // ---- Level 1: Earth -> Moon ----
@@ -289,11 +293,21 @@
       // updateStormCloud()/drawStormCloud() in starbound.js) instead of
       // the generic spawnObstacle() path — `types`/`speedPerSec` are
       // unused for it, same as the `birds` zone above.
+      // `satellites` (the Satellite Belt) likewise uses real sprites and
+      // its own progress-scaled spawner (see the `satelliteBelt` config
+      // block below and trySpawnSatellite()/updateSatellite()/
+      // drawSatellite() in starbound.js) — `types`/`speedPerSec` unused.
+      // `meteors` (the Meteor Wave — normal/fire/cracking meteors, real
+      // sprites) is the final hazard section, running from here all the
+      // way to the Moon — see the `meteorWave` config block below and
+      // trySpawnMeteor()/updateMeteor()/drawMeteor() in starbound.js.
+      // `types`/`speedPerSec` unused, same as the other sprite-driven
+      // zones above.
       zones: [
         { name: 'birds',       start: 0.00, types: [], speedPerSec: 0, spawnIntervalMinMs: 500,  spawnIntervalMaxMs: 950 },
         { name: 'storm',       start: 0.48, types: [], speedPerSec: 0, spawnIntervalMinMs: 650,  spawnIntervalMaxMs: 1200 },
-        { name: 'satellites',  start: 0.66, types: ['satellite'],   speedPerSec: 360, spawnIntervalMinMs: 900,  spawnIntervalMaxMs: 1500 },
-        { name: 'space',       start: 0.80, types: ['debris', 'meteor', 'rock'], speedPerSec: 480, spawnIntervalMinMs: 500, spawnIntervalMaxMs: 950 }
+        { name: 'satellites',  start: 0.66, types: [], speedPerSec: 0, spawnIntervalMinMs: 900,  spawnIntervalMaxMs: 1500 },
+        { name: 'meteors',     start: 0.80, types: [], speedPerSec: 0, spawnIntervalMinMs: 500,  spawnIntervalMaxMs: 950 }
       ],
 
       // ---- bird obstacles: sparrow, pigeon, eagle — real animated sprites ----
@@ -332,9 +346,22 @@
           scale: 1.0, // SPARROW_SCALE — smallest of the three
           cost: 1,    // spawn-pressure cost — see maxActiveObstaclePressure below
           fallSpeed: 260, fallSpeedVariance: 40,   // SPARROW_FALL_SPEED
-          diveSpeed: 900, diveSpeedVariance: 70,   // SPARROW_DIVE_SPEED — the fastest-diving bird by a wide margin; small size is what keeps it dodgeable
+          diveSpeed: 980, diveSpeedVariance: 80,   // SPARROW_DIVE_SPEED — raised again; the fastest-diving bird by a wide margin, small size is what keeps it dodgeable
           diveChance: 0.10,                        // SPARROW_DIVE_CHANCE — base chance per roll (see nosediveCheckIntervalMs); scales up with altitude within the bird section, see birdDiveProgress()
-          driftSpeedMaxPxPerSec: 45                // small constant wobble, unrelated to the pigeon's active strafing below
+          driftSpeedMaxPxPerSec: 45,               // small constant wobble during a NORMAL (non-triggered) dive, unrelated to the pigeon's active strafing below
+          // "Fly underneath a sparrow and it immediately dives at you" —
+          // checked every frame while flapping (NOT a probability roll):
+          // once the rocket is within this many px horizontally AND
+          // below the sparrow, it dives instantly (skipping the usual
+          // windup entirely — "immediately") with real tracking toward
+          // the rocket, at its own separate (faster) speed. A normal
+          // probabilistic dive (see diveChance above) still only ever
+          // wobbles — this aggressive tracking dive is reserved for
+          // actually being caught underneath one.
+          underRocketTriggerHalfWidthPx: 90,
+          underRocketDiveSpeed: 1200, underRocketDiveSpeedVariance: 90, // faster than the already-fast normal diveSpeed
+          underRocketTrackingStrength: 1.3, // aggressive — noticeably stronger pull than even the eagle's
+          underRocketMaxHorizontalSpeed: 260
         },
         pigeon: {
           images: {
@@ -451,36 +478,46 @@
         // used is randomised per strike (see fireLightning()).
         lightningImages: ['storm/lightning-1.png', 'storm/lightning-2.png', 'storm/lightning-3.png', 'storm/lightning-4.png'],
         baseSize: 230,
-        minScale: 0.75, // STORM_CLOUD_MIN_SCALE — the "small cloud" end: easier to avoid, smaller danger area
-        maxScale: 1.4,  // STORM_CLOUD_MAX_SCALE — the "medium cloud" end: wider, larger danger area
+        minScale: 0.55, // STORM_CLOUD_MIN_SCALE — the small end: easier to avoid, smaller danger area, but noticeably faster (see fallSpeedForMinScale)
+        maxScale: 1.85, // STORM_CLOUD_MAX_SCALE — the big end: wide, large danger area, but noticeably slower
         // STORM_CLOUD_SPAWN_RATE — multiplies the `storm` zone's own
         // spawnIntervalMinMs/MaxMs above (<1 = more frequent), on top of
         // the global obstacles.spawnRateMultiplier every zone already
-        // gets — a dedicated knob for this hazard specifically.
-        spawnRateMultiplier: 1.0,
-        fallSpeed: 120, fallSpeedVariance: 25,
+        // gets — a dedicated knob for this hazard specifically. Pulled
+        // well below 1 so the belt reads as genuinely busy with clouds
+        // rather than a handful of stragglers.
+        spawnRateMultiplier: 0.5,
+        // Fall speed is DERIVED per spawn from a cloud's own rolled
+        // scale (see spawnStormCloud()) — interpolated between these two
+        // endpoints so bigger clouds are always slower and smaller ones
+        // always faster, never independent of size.
+        fallSpeedForMinScale: 205, // small cloud -> fast
+        fallSpeedForMaxScale: 80,  // big cloud -> slow
+        fallSpeedVariance: 18,
         // CLOUD_CHARGE_TIME — how long a charge takes from start to
-        // either a strike or a fizzle.
-        chargeTimeMs: 1400,
+        // either a strike or a fizzle. Cut roughly in half so strikes
+        // come noticeably more often.
+        chargeTimeMs: 800,
         // CLOUD_FLASH_RATE — the flash interval ramps from
         // flashRateMaxMs (slow, right when charging starts — the early
         // warning) down to flashRateMinMs (fast, right before the
         // strike/fizzle) as the charge progresses, so the visual urgency
         // itself telegraphs how close the cloud is to firing.
-        flashRateMaxMs: 480,
-        flashRateMinMs: 150,
+        flashRateMaxMs: 360,
+        flashRateMinMs: 110,
         // CLOUD_STRIKE_COOLDOWN — minimum wait after a strike (or a
         // fizzle) before the SAME cloud can start charging again; also
         // reused (with its own random variance) as the wait before a
         // freshly-spawned cloud's very first charge, so clouds don't all
-        // sync up and charge in unison.
-        strikeCooldownMs: 2600,
+        // sync up and charge in unison. Cut roughly in half so the same
+        // cloud can fire again much sooner.
+        strikeCooldownMs: 1200,
         // LIGHTNING_STRIKE_CHANCE — chance a completed charge actually
         // fires a bolt rather than quietly fizzling back to waiting —
         // keeps the charge-up itself from being a 100% reliable "damage
         // is coming" signal, without making dodging feel unfair (the
         // charge/flash warning is still always genuine either way).
-        strikeChance: 0.8,
+        strikeChance: 0.95,
         // LIGHTNING_RANGE — multiplies the cloud's own (scale-adjusted)
         // size to get the bolt's length and how far its origin point can
         // wander along the cloud's lower perimeter — a bigger cloud
@@ -501,14 +538,256 @@
         // Cloud BODY collision — a fraction of its drawn size, same
         // "tighter than the generic obstacleRadiusFactor" idea as birds.
         hitboxFactor: 0.3,
-        // Hard cap on simultaneous clouds — this, not just the spawn
-        // timer, is what actually stops the screen from ever filling up
-        // with clouds (a spawn attempt while at the cap is skipped
-        // outright, same "skip rather than force it" policy as the bird
-        // spawner's pressure budget). A cloud can take several seconds
-        // to fall off-screen, so relying on the spawn timer alone would
-        // let them quietly stack up well past a dodgeable amount.
-        maxActiveClouds: 3
+        // Hard cap on simultaneous clouds — combined with the faster
+        // spawnRateMultiplier above, this is what actually delivers "way
+        // more clouds" rather than just a couple of stragglers, while
+        // still bounding things so the screen can't fill up completely
+        // (a spawn attempt while at the cap is skipped outright, same
+        // "skip rather than force it" policy as the bird spawner's
+        // pressure budget).
+        maxActiveClouds: 7
+      },
+
+      // ---- Satellite Belt: real sprites + a progress-scaled difficulty curve ----
+      // Every source image is square (1254x1254 as supplied, downscaled
+      // to 400x400) so drawing at its own baseSize never stretches or
+      // distorts the art.
+      //
+      // The belt has its own progress ramp (SATELLITE_BELT_PROGRESS,
+      // see satelliteBeltProgress() in starbound.js) — 0 at the moment
+      // altitude enters the `satellites` zone above, 1 right as it
+      // reaches the `space` zone. `progressBands` (below) is stepped
+      // through by that value the same "last band whose progress <= p
+      // wins" way birds.difficultyBands is, moving the section from a
+      // gentle single-satellite introduction to a dense, pattern-driven
+      // barrage — see trySpawnSatellite()/triggerSatellitePattern() in
+      // starbound.js for how patternDifficulty turns into actual
+      // multi-satellite spawns (slalom/gate/fast-rain/mixed/spinner-
+      // pressure), never a purely random screen-filling spawn.
+      satelliteBelt: {
+        types: {
+          // Satellite Wide — larger, moderate speed, good for blocking
+          // a lane outright (it never moves horizontally on its own).
+          wide: { image: 'satellites/wide.png', baseSize: 210, fallSpeed: 165, fallSpeedVariance: 15 },
+          // Satellite Thin Fast — smaller profile, much faster fall,
+          // built for reactive/surprise dodging.
+          thinFast: { image: 'satellites/thin-fast.png', baseSize: 150, fallSpeed: 430, fallSpeedVariance: 35 },
+          // Satellite Spinner — rotates continuously while falling
+          // (purely visual — spinSpeedDegPerSec — its hitbox stays a
+          // plain circle so the rotation never makes it feel unfair),
+          // awkward silhouette, anchors central pressure.
+          spinner: { image: 'satellites/spinner.png', baseSize: 190, fallSpeed: 200, fallSpeedVariance: 20, spinSpeedDegPerSec: 150 },
+          // Satellite Diagonal — steady constant horizontal drift (sign
+          // randomised per spawn) on top of its fall, so the player has
+          // to predict where its path actually crosses rather than just
+          // its current position.
+          diagonal: { image: 'satellites/diagonal.png', baseSize: 190, fallSpeed: 220, fallSpeedVariance: 20, diagonalDriftPxPerSec: 115 }
+        },
+        // Collision hitbox: a fraction of a satellite's drawn box —
+        // same "tighter than the full sprite" idea as birds/stormCloud.
+        hitboxFactor: 0.32,
+        // Base spawn-attempt cadence lives on the `satellites` zone
+        // entry above (an attempt can still be skipped — see
+        // trySpawnSatellite()); each band's own spawnIntervalMultiplier
+        // below (SATELLITE_SPAWN_RATE) scales it further, same pattern
+        // storm's spawnRateMultiplier uses on top of its zone.
+        // Same "skip the spawn outright rather than force an overlap"
+        // gap check the bird spawner uses.
+        minSpawnGapPx: 190,
+        spawnGapZoneHeightPx: 240,
+        // How long after a designed PATTERN fires before another one is
+        // allowed — keeps patterns feeling like deliberate set-pieces
+        // rather than overlapping into an unreadable mess. A band's own
+        // patternCooldownMs (see the final "wave" band below) overrides
+        // this where the section is meant to feel non-stop instead.
+        patternCooldownMs: 2200,
+        // SATELLITE_EARLY_START_FRACTION — altitude fraction (NOT belt-
+        // relative progress) where satellites start attempting to spawn,
+        // BEFORE the belt officially begins (see the independent timer
+        // in update() — this runs alongside, not instead of, the storm
+        // zone's own cloud spawner). Since this sits before the belt's
+        // own start, satelliteBeltProgress() naturally clamps to 0 during
+        // this window, so the very first satellites use band 0 (rarest,
+        // slowest, single-at-a-time) — they genuinely ease in alongside
+        // the tail of the storm cloud section rather than the belt
+        // starting with a hard cut the moment clouds stop.
+        earlyStartFraction: 0.60,
+        // SATELLITE_BELT_PROGRESS bands — see the block comment above.
+        // types: which satellites this band can spawn (plain single
+        // spawns AND pattern spawns both draw from this list).
+        // maxActive: SATELLITE_MAX_ACTIVE for this band (a spawn attempt
+        // is skipped outright once reached, same policy as the bird
+        // spawner's pressure budget / stormCloud's maxActiveClouds).
+        // spawnIntervalMultiplier: SATELLITE_SPAWN_RATE (<1 = more
+        // frequent attempts). speedMultiplier: SATELLITE_SPEED_MULTIPLIER
+        // applied on top of each type's own fallSpeed. patternDifficulty:
+        // SATELLITE_PATTERN_DIFFICULTY — 0 = never trigger a designed
+        // pattern (plain single spawns only), 1 = simple patterns (gate,
+        // spinner-pressure), 2 = the full pattern set (+ slalom,
+        // fast-rain, mixed). patternChance: how often a spawn attempt
+        // triggers a pattern instead of a single satellite.
+        // WAVE_DURATION_SECONDS — how long (real seconds) the final
+        // "sudden wave" band should actually last. The band's own
+        // `progress` threshold below is DERIVED from this (see
+        // deriveSatelliteWaveTiming() at the bottom of this file) against
+        // the belt's real duration (zones.satellites.start ->
+        // zones.meteors.start, scaled by level1.targetDurationSeconds),
+        // so asking for "the wave lasts ~13 seconds" stays true even if
+        // the belt's own altitude span or the level's overall pacing is
+        // ever retuned — rather than a hand-picked progress fraction
+        // silently drifting out of sync with real time. Raised from 7,
+        // then 13 — "make it a very heavy, intense barrage lasting at
+        // least 10 full seconds" — pushed to 15 so the safety clamp in
+        // deriveSatelliteWaveTiming() still leaves comfortable margin
+        // above the required 10s floor.
+        waveDurationSeconds: 15,
+        progressBands: [
+          // EASY INTRO — one at a time, generous gaps, Wide/Diagonal
+          // only, moderate speed, no patterns yet. Also what plays
+          // during the early-start overlap window above.
+          { progress: 0.00, types: ['wide', 'diagonal'], maxActive: 1, spawnIntervalMultiplier: 1.35, speedMultiplier: 0.85, patternDifficulty: 0, patternChance: 0 },
+          // BUILD PRESSURE — introduces Thin Fast + Spinner, up to 2
+          // active, simple patterns start appearing (gate / spinner
+          // forcing a lane choice). Moved earlier (was 0.35) to make
+          // room for the now much longer wave band below without
+          // squeezing this phase out entirely.
+          { progress: 0.15, types: ['wide', 'diagonal', 'thinFast', 'spinner'], maxActive: 2, spawnIntervalMultiplier: 1.0, speedMultiplier: 1.05, patternDifficulty: 1, patternChance: 0.3 },
+          // SUDDEN WAVE — jumps straight from "build pressure" into the
+          // full barrage (no separate intermediate step, so it reads as
+          // a deliberate sudden escalation, not a gradual ramp) and
+          // fills the LAST waveDurationSeconds of the belt — a
+          // near-continuous stream of patterns via a much shorter
+          // patternCooldownMs, very frequent spawn attempts, and the
+          // highest active cap/speed. Still built entirely from the same
+          // hand-designed patterns (always at least one guaranteed lane
+          // each), so it stays technically dodgeable through sustained,
+          // decisive movement rather than becoming random unavoidable
+          // damage. `progress` here is a placeholder — see
+          // deriveSatelliteWaveTiming() below, which overwrites it.
+          // "currently too light... satellites must appear continuously
+          // during the entire barrage... do not let the barrage end
+          // early or contain long empty pauses" — maxActive raised
+          // 8->12 (more can be alive on screen at once, so the
+          // trySpawnSatellite() active-cap gate almost never blocks a
+          // new pattern), spawnIntervalMultiplier lowered further
+          // (attempts fire much more often), patternCooldownMs cut
+          // roughly in half (the next pattern queues almost as soon as
+          // the last one finishes launching, rather than waiting).
+          { progress: 0.6, types: ['wide', 'diagonal', 'thinFast', 'spinner'], maxActive: 12, spawnIntervalMultiplier: 0.1, speedMultiplier: 1.85, patternDifficulty: 2, patternChance: 0.95, patternCooldownMs: 260 }
+        ]
+      },
+
+      // ---- Meteor Wave: real sprites, 3 distinct meteor identities ----
+      // Runs from here (the `meteors` zone above, start 0.80) all the
+      // way to the Moon — the final hazard section, no zone after it.
+      // Every source image is square (1254x1254 as supplied, downscaled
+      // to 400x400) so drawing at its own baseSize never stretches or
+      // distorts the art.
+      //
+      // NOTE: only 4 of the 5 requested fragment sprites were supplied
+      // (`meteor fragment 5.png` is missing from the asset folder) — a
+      // split still produces 5 independent physics fragments as
+      // specced, cycling through these 4 images (fragments[4] reuses
+      // fragments[0]'s art). Swap in a real 5th image here once
+      // supplied; nothing else needs to change.
+      //
+      // Three genuinely different identities (see updateMeteor() in
+      // starbound.js):
+      //   - normal: picks one of 3 fixed directions at spawn (straight
+      //     down / diagonal-left / diagonal-right) and gently rotates
+      //     the whole way down — most common, moderate threat.
+      //   - fire: a short glowing warning at the very top of the screen,
+      //     then drops dead straight at high speed — no drift at all,
+      //     danger is purely reaction time.
+      //   - cracked: falls like a normal meteor for a random delay,
+      //     then plays cracked-1 -> cracked-2 (with a scale pulse/flash/
+      //     shake) and pops into 5 fragments that burst outward+upward
+      //     before gravity takes over and they fall — each fragment
+      //     becomes its own independent obstacle with its own hitbox.
+      meteorWave: {
+        images: {
+          normal: 'meteors/normal.png',
+          fire: 'meteors/fire.png',
+          crackedStage1: 'meteors/cracked-1.png',
+          crackedStage2: 'meteors/cracked-2.png',
+          fragments: ['meteors/fragment-1.png', 'meteors/fragment-2.png', 'meteors/fragment-3.png', 'meteors/fragment-4.png']
+        },
+        baseSize: 190,
+        hitboxFactor: 0.34,
+
+        normal: {
+          fallSpeed: 220, fallSpeedVariance: 30, // METEOR_NORMAL_SPEED
+          rotationSpeedDegPerSec: 45, rotationSpeedVariance: 20, // METEOR_NORMAL_ROTATION_SPEED (sign randomised per spawn)
+          // Horizontal component when the randomly-chosen direction is
+          // diagonalLeft/diagonalRight (straight "vertical" gets none).
+          diagonalSpeedPxPerSec: 95,
+          cost: 1
+        },
+        fire: {
+          fallSpeed: 1150, // METEOR_FIRE_SPEED — dead straight, no drift at all. Raised again (was 800) — "faster too"
+          warningTimeMs: 300, // METEOR_FIRE_WARNING_TIME — a brief glowing tip visible at the very top of the screen before the full sprite drops in at speed
+          cost: 2
+        },
+        cracked: {
+          fallSpeed: 200, fallSpeedVariance: 20,
+          // Shortened (was 900-2200 / 260) so a cracked meteor completes
+          // its whole crack -> pop cycle well within the short real-time
+          // window the Meteor Wave actually runs for — a slow cycle was
+          // part of why splits felt like they "barely happened": many
+          // simply hadn't finished cracking before the run moved on.
+          crackDelayMinMs: 450, crackDelayMaxMs: 1100, // METEOR_CRACK_DELAY_MIN / METEOR_CRACK_DELAY_MAX
+          crackFrameTimeMs: 170, // METEOR_CRACK_FRAME_TIME — how long cracked-1 and cracked-2 each hold before advancing
+          cost: 1, // budget is never the limiting factor — "needs to be very common"
+          // How many cracked meteors may be actively mid-crack-sequence
+          // at once — was 1 ("do not spawn several on top of each
+          // other"), raised further since the split itself only ever
+          // produces fragments from ONE parent at a time; several
+          // separate parents cracking around the screen doesn't create
+          // the "stacked on top of each other" problem the original
+          // limit was guarding against.
+          maxSimultaneous: 4
+        },
+        fragment: {
+          baseSize: 105,
+          hitboxFactor: 0.42, // fragments are small — a slightly more generous fraction still keeps hits feeling fair; still the SAME generic onObstacleHit() damage path every other obstacle uses, nothing special-cased
+          // METEOR_FRAGMENT_POP_SPEED / METEOR_FRAGMENT_UPWARD_FORCE —
+          // both raised substantially ("shoot outward quickly and
+          // forcefully... wide spread") — see spawnMeteorFragments(),
+          // which also widened the actual horizontal spread factors.
+          popSpeed: 460,
+          upwardForce: 320,
+          gravity: 560, // METEOR_FRAGMENT_GRAVITY — accelerates vy downward every frame until...
+          fallSpeed: 480, // METEOR_FRAGMENT_FALL_SPEED — ...it's capped here, so fragments stay a meaningful hazard rather than drifting forever
+          rotationSpeedDegPerSec: 320 // METEOR_FRAGMENT_ROTATION_SPEED (base — each fragment gets its own randomised variant)
+        },
+
+        // Same "skip the spawn outright rather than force an overlap"
+        // gap check the bird/satellite spawners use.
+        minSpawnGapPx: 190,
+        spawnGapZoneHeightPx: 230,
+        // Spawn-pressure budget (sum of every active meteor/fragment's
+        // own `cost`) — a spawn attempt is skipped outright once
+        // reached, same policy as the bird spawner's pressure budget.
+        // A cracked meteor's cost (1) plus the 5 fragments it becomes
+        // (1 each) still naturally thins out everything else around a
+        // split rather than letting the screen flood right after one.
+        // Raised from 9 to give the now much-more-frequent cracked
+        // meteors real room to actually spawn.
+        maxActiveCost: 11,
+
+        // METEOR_*_SPAWN_WEIGHT bands, keyed by progress through the
+        // WHOLE Meteor Wave section (0 entering it, 1 at the Moon) —
+        // see meteorWaveProgress()/currentMeteorBand() in starbound.js.
+        // Cracked is now dominant from EARLY ON (not just near the end)
+        // and keeps climbing further at altitude — "very common...
+        // especially at higher altitudes". spawnIntervalMultiplier drops
+        // faster too, so attempts themselves come much more often.
+        progressBands: [
+          { progress: 0.00, weights: { normal: 0.65, fire: 0.1,  cracked: 0.25 }, spawnIntervalMultiplier: 0.9,  speedMultiplier: 0.9 },
+          { progress: 0.15, weights: { normal: 0.25, fire: 0.2,  cracked: 0.55 }, spawnIntervalMultiplier: 0.65, speedMultiplier: 1.0 },
+          { progress: 0.4,  weights: { normal: 0.15, fire: 0.25, cracked: 0.6  }, spawnIntervalMultiplier: 0.5,  speedMultiplier: 1.15 },
+          { progress: 0.65, weights: { normal: 0.1,  fire: 0.25, cracked: 0.65 }, spawnIntervalMultiplier: 0.35, speedMultiplier: 1.3 }
+        ]
       }
     },
 
@@ -573,6 +852,33 @@
     }
     bg.totalTravelPx = totalTravelPx; // exposed for starbound.js to clamp worldOffsetY against
     bg.scrollSpeedPerSec = totalTravelPx / STARBOUND_CONFIG.level1.targetDurationSeconds;
+  })();
+
+  // The Satellite Belt's final "sudden wave" band needs to last a real
+  // number of seconds (waveDurationSeconds) regardless of how long the
+  // belt itself is — so its progress THRESHOLD is derived here from the
+  // belt's actual real-time duration (zones.satellites.start ->
+  // zones.meteors.start, scaled by level1.targetDurationSeconds) rather
+  // than a hand-picked fraction that would silently drift if the belt's
+  // altitude span or the level's overall pacing is ever retuned.
+  (function deriveSatelliteWaveTiming() {
+    const zones = STARBOUND_CONFIG.obstacles.zones;
+    const beltStart = zones.find((z) => z.name === 'satellites').start;
+    const beltEnd = zones.find((z) => z.name === 'meteors').start;
+    const beltDurationSeconds = (beltEnd - beltStart) * STARBOUND_CONFIG.level1.targetDurationSeconds;
+    const bands = STARBOUND_CONFIG.obstacles.satelliteBelt.progressBands;
+    const waveBand = bands[bands.length - 1]; // the final "sudden wave" band, always last
+    const waveDurationSeconds = STARBOUND_CONFIG.obstacles.satelliteBelt.waveDurationSeconds;
+    const rawProgress = 1 - waveDurationSeconds / beltDurationSeconds;
+    // Safety floor: bands are looked up as "the LAST one in this array
+    // whose own progress <= current progress", which only works correctly
+    // if every band's progress is in ascending array order. A
+    // waveDurationSeconds long enough to push this threshold below the
+    // PREVIOUS band's own progress would silently swallow that band
+    // entirely (it would never win the lookup again) — so always leave
+    // it at least a sliver of a window instead.
+    const previousBandProgress = bands[bands.length - 2].progress;
+    waveBand.progress = Math.max(previousBandProgress + 0.02, rawProgress);
   })();
 
   window.STARBOUND_CONFIG = STARBOUND_CONFIG;

@@ -16,13 +16,16 @@
 //     CONFIG.obstacles.zones), and adding a new hand-drawn hazard later
 //     only means adding a zone/type entry plus one entry in
 //     OBSTACLE_DRAWERS below — no other code needs to change. The two
-//     bird types (sparrow, pigeon, eagle) and the stormcloud type are
-//     the exceptions: real animated sprites rather than hand-drawn
-//     canvas shapes, each spawned through their own trio of functions
-//     (trySpawnBirdObstacle()/updateBirdObstacle()/drawBirdObstacle();
-//     spawnStormCloud()/updateStormCloud()/drawStormCloud()) instead of
-//     the zone-timer path other types use — see CONFIG.obstacles.birds
-//     and CONFIG.obstacles.stormCloud.
+//     bird types (sparrow, pigeon, eagle), the stormcloud type, the 4
+//     satellite types, and the 4 meteor-wave types are the exceptions:
+//     real animated sprites rather than hand-drawn canvas shapes, each
+//     spawned through their own trio of functions (trySpawnBirdObstacle()/
+//     updateBirdObstacle()/drawBirdObstacle(); trySpawnStormCloud()/
+//     updateStormCloud()/drawStormCloud(); trySpawnSatellite()/
+//     updateSatellite()/drawSatellite(); trySpawnMeteor()/
+//     updateMeteorObstacle()/drawMeteorObstacle()) instead of the
+//     zone-timer path other types use — see CONFIG.obstacles.birds,
+//     .stormCloud, .satelliteBelt, and .meteorWave.
 //   - No XP/achievements/shop/save-progress wiring yet, per spec. The
 //     one future hook point is marked with a TODO near GAME_KEY below.
 (function () {
@@ -86,12 +89,25 @@
   // STORM_IMAGES.normal / .charged (the cloud body) and .lightning[i]
   // (the 4 bolt sprite variants) — see CONFIG.obstacles.stormCloud.
   let STORM_IMAGES = { normal: null, charged: null, lightning: [] };
+  // SATELLITE_IMAGES.wide / .thinFast / .spinner / .diagonal — see
+  // CONFIG.obstacles.satelliteBelt.
+  let SATELLITE_IMAGES = {};
+  // METEOR_IMAGES.normal / .fire / .crackedStage1 / .crackedStage2 /
+  // .fragments[i] — see CONFIG.obstacles.meteorWave.
+  let METEOR_IMAGES = { fragments: [] };
+  // The fuel pickup's real sprite (parachute + jerry can) — see
+  // CONFIG.fuel.image.
+  let FUEL_IMAGE = null;
   async function preloadAssets() {
     const stages = CONFIG.background.stages;
     const birdCfg = CONFIG.obstacles.birds;
     const birdTypes = Object.keys(birdCfg).filter((k) => birdCfg[k] && birdCfg[k].images);
     const stormCfg = CONFIG.obstacles.stormCloud;
-    const [loadedStages, loadedBirdSets, stormNormal, stormCharged, stormLightning] = await Promise.all([
+    const satCfg = CONFIG.obstacles.satelliteBelt;
+    const satTypes = Object.keys(satCfg.types);
+    const metCfg = CONFIG.obstacles.meteorWave;
+    const [loadedStages, loadedBirdSets, stormNormal, stormCharged, stormLightning, loadedSatImages,
+      metNormal, metFire, metCracked1, metCracked2, metFragments, fuelImg] = await Promise.all([
       Promise.all(stages.map((s) => loadImage(s.image))),
       Promise.all(birdTypes.map((type) => {
         const images = birdCfg[type].images;
@@ -101,11 +117,21 @@
       })),
       loadImage(stormCfg.images.normal),
       loadImage(stormCfg.images.charged),
-      Promise.all(stormCfg.lightningImages.map((src) => loadImage(src)))
+      Promise.all(stormCfg.lightningImages.map((src) => loadImage(src))),
+      Promise.all(satTypes.map((type) => loadImage(satCfg.types[type].image))),
+      loadImage(metCfg.images.normal),
+      loadImage(metCfg.images.fire),
+      loadImage(metCfg.images.crackedStage1),
+      loadImage(metCfg.images.crackedStage2),
+      Promise.all(metCfg.images.fragments.map((src) => loadImage(src))),
+      loadImage(CONFIG.fuel.image)
     ]);
     BACKGROUND_SCENES = buildBackgroundScenes(stages, loadedStages);
     BIRD_IMAGES = birdTypes.reduce((acc, type, i) => { acc[type] = loadedBirdSets[i]; return acc; }, {});
     STORM_IMAGES = { normal: stormNormal, charged: stormCharged, lightning: stormLightning };
+    SATELLITE_IMAGES = satTypes.reduce((acc, type, i) => { acc[type] = loadedSatImages[i]; return acc; }, {});
+    METEOR_IMAGES = { normal: metNormal, fire: metFire, crackedStage1: metCracked1, crackedStage2: metCracked2, fragments: metFragments };
+    FUEL_IMAGE = fuelImg;
     assetsReady = true;
   }
 
@@ -151,6 +177,9 @@
     pickups: [],
     nextPickupAt: 0,
     zoneSpawnTimers: {},   // zone name -> ms-until-next-spawn, ticked down per frame
+    satelliteSpawnQueue: [], // pending pattern entries — {delayMs, x, type, speedMultiplier}, see update()
+    nextSatellitePatternAllowedAt: 0,
+    satelliteSpawnTimerMs: 0, // independent of zoneSpawnTimers — see the Satellite Belt block in update()
     invulnerableUntil: 0,
     hitFlashUntil: 0,
     keyLeft: false,
@@ -193,6 +222,9 @@
     CONFIG.obstacles.zones.forEach((z) => {
       state.zoneSpawnTimers[z.name] = randRange(z.spawnIntervalMinMs, z.spawnIntervalMaxMs) * CONFIG.obstacles.spawnRateMultiplier;
     });
+    state.satelliteSpawnQueue = [];
+    state.nextSatellitePatternAllowedAt = 0;
+    state.satelliteSpawnTimerMs = randRange(300, 900);
     state.invulnerableUntil = 0;
     state.hitFlashUntil = 0;
     updateHud();
@@ -583,15 +615,6 @@
   // receives (ctx, obstacle, nowMs) and draws centred on (0,0) at its own
   // configured width/height (already translated by the caller).
   const OBSTACLE_DRAWERS = {
-    satellite(c) {
-      c.fillStyle = '#b9c2cf'; c.fillRect(-9, -9, 18, 18);
-      c.fillStyle = '#3d6f8a';
-      c.fillRect(-32, -6, 20, 12);
-      c.fillRect(12, -6, 20, 12);
-      c.strokeStyle = '#6c7684'; c.lineWidth = 2;
-      c.strokeRect(-32, -6, 20, 12); c.strokeRect(12, -6, 20, 12);
-      c.beginPath(); c.moveTo(-9, 0); c.lineTo(-12, 0); c.moveTo(9, 0); c.lineTo(12, 0); c.stroke();
-    },
     debris(c) {
       c.fillStyle = '#8a8f9a';
       c.beginPath();
@@ -745,6 +768,7 @@
       o.nextDiveCheckInMs = randRange(birds.nosediveCheckIntervalMs * 0.5, birds.nosediveCheckIntervalMs);
       if (type === 'sparrow') {
         o.driftSpeed = randRange(-birds.sparrow.driftSpeedMaxPxPerSec, birds.sparrow.driftSpeedMaxPxPerSec);
+        o.triggeredDive = false; // "flew underneath it" dive vs. the ordinary probabilistic one — see updateBirdObstacle()
       }
     }
   }
@@ -796,6 +820,25 @@
     // sparrow + eagle: flap <-> flap until a nosedive starts, then
     // PERMANENTLY diving (never reset back to flapping — see the
     // deliberate absence of any "return to flapping" branch below).
+    //
+    // Sparrows get a SECOND, entirely separate way into a dive on top of
+    // the ordinary probabilistic roll below: "fly underneath it and it
+    // immediately dives at you" — checked every single frame (not a
+    // timer/probability), and reserved for actually being caught
+    // underneath one, so a normal probabilistic dive still only ever
+    // wobbles. Checked BEFORE the main !o.diving block below so a
+    // trigger this frame is already reflected in this frame's movement/
+    // vertical-speed calc, not delayed a frame.
+    if (!o.diving && o.type === 'sparrow'
+      && Math.abs(state.rocketX - o.x) < cfg.underRocketTriggerHalfWidthPx
+      && state.rocketY > o.y) {
+      o.diving = true;
+      o.diveElapsedMs = birds.nosediveWindupMs; // skip the windup entirely — "immediately dive"
+      o.anim = 'dive';
+      o.triggeredDive = true;
+      o.diveSpeed = cfg.underRocketDiveSpeed + randRange(-cfg.underRocketDiveSpeedVariance, cfg.underRocketDiveSpeedVariance);
+    }
+
     if (!o.diving) {
       o.animElapsedMs += dtMs;
       if (o.animElapsedMs >= birds.flapFrameTimeMs) {
@@ -836,8 +879,16 @@
         o.vx += (state.rocketX - o.x) * cfg.trackingStrength * dt;
         o.vx = Math.max(-cfg.strafeSpeed, Math.min(cfg.strafeSpeed, o.vx));
         o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.vx * dt));
+      } else if (o.type === 'sparrow' && o.triggeredDive) {
+        // The "flew underneath it" dive: real, aggressive tracking
+        // toward the rocket's CURRENT x — unlike a normal sparrow dive,
+        // which only ever wobbles.
+        o.vx += (state.rocketX - o.x) * cfg.underRocketTrackingStrength * dt;
+        o.vx = Math.max(-cfg.underRocketMaxHorizontalSpeed, Math.min(cfg.underRocketMaxHorizontalSpeed, o.vx));
+        o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.vx * dt));
       } else {
-        // Sparrow: keeps only its small constant wobble during the dive.
+        // Sparrow: a normal (non-triggered) dive keeps only its small
+        // constant wobble.
         o.x = Math.max(half, Math.min(DESIGN_W - half, o.x + o.driftSpeed * dt));
       }
     }
@@ -895,13 +946,19 @@
     const drawSize = cfg.baseSize * scale;
     const t = difficultyT();
     const speedMul = 1 + t * (CONFIG.difficulty.maxSpeedMultiplier - 1); // same global "faster with altitude" ramp every other obstacle uses
+    // Fall speed is DERIVED from this cloud's own rolled scale — bigger
+    // clouds are always slower, smaller ones always faster, interpolated
+    // between the two configured endpoints rather than a flat speed
+    // independent of size.
+    const sizeT = (scale - cfg.minScale) / (cfg.maxScale - cfg.minScale);
+    const baseFallSpeed = cfg.fallSpeedForMinScale + (cfg.fallSpeedForMaxScale - cfg.fallSpeedForMinScale) * sizeT;
     const o = {
       type: 'stormcloud',
       x: randRange(drawSize / 2, DESIGN_W - drawSize / 2),
       y: -drawSize,
       drawSize,
       scale,
-      fallSpeed: (cfg.fallSpeed + randRange(-cfg.fallSpeedVariance, cfg.fallSpeedVariance)) * speedMul,
+      fallSpeed: (baseFallSpeed + randRange(-cfg.fallSpeedVariance, cfg.fallSpeedVariance)) * speedMul,
       seed: Math.random() * 1000,
       anim: 'normal',
       phase: 'waiting',
@@ -1038,6 +1095,475 @@
     }
   }
 
+  // ---- Satellite Belt: real sprites + a progress-scaled difficulty curve ----
+  // See CONFIG.obstacles.satelliteBelt for the shared tuning. Unlike
+  // birds/stormClouds, satellites don't run a per-instance behavioural
+  // state machine — the interesting part here is entirely in HOW they
+  // get spawned: single, generously-spaced picks early on, building up
+  // to designed multi-satellite PATTERNS (see triggerSatellitePattern())
+  // that always leave a guaranteed safe lane, never a random screen-fill.
+  function isSatelliteType(type) {
+    return !!CONFIG.obstacles.satelliteBelt.types[type];
+  }
+
+  function satelliteDrawSize(type) {
+    return CONFIG.obstacles.satelliteBelt.types[type].baseSize;
+  }
+
+  // SATELLITE_BELT_PROGRESS — 0 right as altitude enters the `satellites`
+  // zone, 1 right as it reaches the `space` zone above. Computed from
+  // the zone boundaries directly rather than a second hard-coded range,
+  // so it can never drift out of sync if those zone `start` fractions
+  // are ever retuned.
+  function satelliteBeltProgress() {
+    const zones = CONFIG.obstacles.zones;
+    const start = zones.find((z) => z.name === 'satellites').start;
+    const end = zones.find((z) => z.name === 'meteors').start;
+    return Math.max(0, Math.min(1, (altitudeFraction() - start) / (end - start)));
+  }
+
+  // Same "last band whose threshold <= value wins" convention as
+  // currentBirdBand()/currentObstacleZone().
+  function currentSatelliteBand(progress) {
+    const bands = CONFIG.obstacles.satelliteBelt.progressBands;
+    let band = bands[0];
+    for (let i = 0; i < bands.length; i++) { if (progress >= bands[i].progress) band = bands[i]; }
+    return band;
+  }
+
+  // Same "skip the spawn outright rather than force an overlap" gap
+  // check the bird spawner uses — this, not just SATELLITE_MAX_ACTIVE,
+  // is what actually guarantees a dodgeable route for a plain spawn.
+  function findSatelliteSpawnX(drawSize) {
+    const cfg = CONFIG.obstacles.satelliteBelt;
+    const half = drawSize / 2;
+    const minX = half, maxX = DESIGN_W - half;
+    const nearTopX = state.obstacles
+      .filter((o) => o.y < cfg.spawnGapZoneHeightPx)
+      .map((o) => o.x);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const x = randRange(minX, maxX);
+      if (nearTopX.every((ox) => Math.abs(ox - x) >= cfg.minSpawnGapPx)) return x;
+    }
+    return null;
+  }
+
+  // Places exactly one satellite — used both for a plain single spawn
+  // AND for each entry a pattern queues up (see the satelliteSpawnQueue
+  // processing in update()). speedMultiplier comes from the CURRENT
+  // band at the moment this specific satellite actually spawns (queued
+  // pattern entries carry their own band reference so a slow-building
+  // pattern can't retroactively get faster mid-flight).
+  function spawnSatelliteAt(type, x, speedMultiplier) {
+    const typeCfg = CONFIG.obstacles.satelliteBelt.types[type];
+    const drawSize = satelliteDrawSize(type);
+    const o = {
+      type,
+      x,
+      y: -drawSize,
+      drawSize,
+      fallSpeed: (typeCfg.fallSpeed + randRange(-typeCfg.fallSpeedVariance, typeCfg.fallSpeedVariance)) * speedMultiplier,
+      seed: Math.random() * 1000,
+      rotationDeg: 0
+    };
+    if (type === 'spinner') o.spinSpeedDegPerSec = typeCfg.spinSpeedDegPerSec * (Math.random() < 0.5 ? -1 : 1);
+    if (type === 'diagonal') o.driftSpeed = typeCfg.diagonalDriftPxPerSec * (Math.random() < 0.5 ? -1 : 1);
+    state.obstacles.push(o);
+  }
+
+  function updateSatellite(o, dt) {
+    if (o.type === 'spinner') o.rotationDeg += o.spinSpeedDegPerSec * dt;
+    if (o.type === 'diagonal') o.x += o.driftSpeed * dt; // deliberately NOT clamped to the screen edge — a diagonal mover is meant to drift off the side, not slide along the wall
+    o.y += o.fallSpeed * dt;
+  }
+
+  function drawSatellite(ctx2, o) {
+    const img = SATELLITE_IMAGES[o.type];
+    if (!img) return; // a still-loading/broken sprite degrades to "just don't draw it"
+    ctx2.save();
+    ctx2.translate(o.x, o.y);
+    if (o.type === 'spinner') ctx2.rotate(o.rotationDeg * Math.PI / 180); // purely visual — the hitbox stays a plain circle, see checkCollisions()
+    ctx2.drawImage(img, -o.drawSize / 2, -o.drawSize / 2, o.drawSize, o.drawSize);
+    ctx2.restore();
+  }
+
+  // Builds the relative (delayMs, x, type) entries for one named
+  // pattern, in DESIGN-space coordinates. Every pattern is hand-laid-out
+  // to guarantee at least one clear lane — see each pattern's own
+  // comment for exactly where that lane is.
+  function buildSatellitePattern(name) {
+    const W = DESIGN_W;
+    if (name === 'slalom') {
+      // Alternating left/right lanes, staggered in TIME rather than
+      // space — only ever one on screen from this pattern at once, the
+      // player weaves back and forth to follow it.
+      const types = ['wide', 'diagonal'];
+      return [0, 1, 2, 3].map((i) => ({ delayMs: i * 450, x: i % 2 === 0 ? W * 0.25 : W * 0.75, type: types[i % 2] }));
+    }
+    if (name === 'gate') {
+      // Two Wide satellites simultaneously, leaving a fixed-width gap
+      // in the middle comfortably wider than the rocket itself.
+      const gap = 340;
+      const cx = W / 2;
+      const half = satelliteDrawSize('wide') / 2;
+      return [
+        { delayMs: 0, x: cx - gap / 2 - half, type: 'wide' },
+        { delayMs: 0, x: cx + gap / 2 + half, type: 'wide' }
+      ];
+    }
+    if (name === 'fastRain') {
+      // The width is split into 4 lanes; one random lane is left
+      // completely untouched as the guaranteed safe path while Thin
+      // Fast satellites drop through the other three, staggered.
+      const lanes = 4, laneW = W / lanes;
+      const safeLane = Math.floor(Math.random() * lanes);
+      const entries = [];
+      let delay = 0;
+      for (let i = 0; i < lanes; i++) {
+        if (i === safeLane) continue;
+        entries.push({ delayMs: delay, x: laneW * i + laneW / 2, type: 'thinFast' });
+        delay += 160;
+      }
+      return entries;
+    }
+    if (name === 'mixed') {
+      // Wide blocks the left lane, Diagonal crosses the middle, Thin
+      // Fast follows through the right lane shortly after — the left
+      // lane (once Wide has largely passed) and the untouched far right
+      // approach both stay realistically reachable.
+      return [
+        { delayMs: 0, x: W * 0.2, type: 'wide' },
+        { delayMs: 300, x: W * 0.5, type: 'diagonal' },
+        { delayMs: 600, x: W * 0.8, type: 'thinFast' }
+      ];
+    }
+    // 'spinnerPressure': a Spinner anchors the centre lane, then ONE
+    // side (chosen at random) gets a second satellite shortly after —
+    // the OTHER side is deliberately left completely open as the
+    // guaranteed escape route.
+    const sideLeft = Math.random() < 0.5;
+    return [
+      { delayMs: 0, x: W * 0.5, type: 'spinner' },
+      { delayMs: 400, x: sideLeft ? W * 0.15 : W * 0.85, type: Math.random() < 0.5 ? 'wide' : 'diagonal' }
+    ];
+  }
+
+  // Queues up one named pattern's entries (see buildSatellitePattern())
+  // onto state.satelliteSpawnQueue, each carrying the CURRENT band's
+  // speedMultiplier so every satellite in the pattern spawns at the
+  // right speed once its own delay elapses (processed in update()).
+  function triggerSatellitePattern(band) {
+    const cfg = CONFIG.obstacles.satelliteBelt;
+    const patterns = band.patternDifficulty >= 2
+      ? ['slalom', 'gate', 'fastRain', 'mixed', 'spinnerPressure']
+      : ['gate', 'spinnerPressure'];
+    const name = patterns[Math.floor(Math.random() * patterns.length)];
+    buildSatellitePattern(name).forEach((e) => {
+      state.satelliteSpawnQueue.push({ delayMs: e.delayMs, x: e.x, type: e.type, speedMultiplier: band.speedMultiplier });
+    });
+    // A band's own patternCooldownMs (see the final "wave" band) makes
+    // patterns chain back-to-back for a near-continuous stream instead
+    // of the usual well-spaced set-pieces.
+    state.nextSatellitePatternAllowedAt = performance.now() + (band.patternCooldownMs != null ? band.patternCooldownMs : cfg.patternCooldownMs);
+  }
+
+  // The satellite belt's spawn ATTEMPT (see update()'s spawn-timer
+  // block) — like the bird/stormCloud spawners, an attempt can end up
+  // spawning nothing at all: SATELLITE_MAX_ACTIVE already reached, or no
+  // safely-spaced gap for a plain spawn right now.
+  function trySpawnSatellite() {
+    const band = currentSatelliteBand(satelliteBeltProgress());
+    const activeCount = state.obstacles.reduce((n, o) => n + (isSatelliteType(o.type) ? 1 : 0), 0);
+    if (activeCount >= band.maxActive) return;
+
+    // Patterns are deliberate multi-satellite set-pieces. Earlier bands
+    // only ever consider one while the screen is still fairly clear, so
+    // a burst never lands on top of an already-busy moment; the higher
+    // a band's own maxActive, the busier the screen is allowed to be
+    // when a NEW pattern still gets considered — by the final "wave"
+    // band this is loose enough that patterns genuinely overlap into a
+    // continuous stream, which is the point.
+    const patternChance = band.patternChance || 0;
+    // Loosened from `band.maxActive - 2` to `- 1`: on the early/build
+    // bands (maxActive 1-2) this is unchanged, but on the final "wave"
+    // band (maxActive 12) it lets a new pattern queue almost regardless
+    // of how busy the screen already is — "satellites must appear
+    // continuously during the entire barrage... do not let the barrage
+    // end early or contain long empty pauses".
+    const patternBusyThreshold = Math.max(1, band.maxActive - 1);
+    if (patternChance > 0 && activeCount <= patternBusyThreshold && performance.now() >= state.nextSatellitePatternAllowedAt
+      && Math.random() < patternChance) {
+      triggerSatellitePattern(band);
+      return;
+    }
+
+    const type = band.types[Math.floor(Math.random() * band.types.length)];
+    const drawSize = satelliteDrawSize(type);
+    const x = findSatelliteSpawnX(drawSize);
+    if (x === null) return; // no safely-spaced gap right now — skip rather than force an unfair spawn
+    spawnSatelliteAt(type, x, band.speedMultiplier);
+  }
+
+  // ---- Meteor Wave: real sprites, 3 distinct meteor identities ----
+  // See CONFIG.obstacles.meteorWave for the shared tuning. Runs from the
+  // `meteors` zone's own start all the way to the Moon — no zone after
+  // it, so (unlike satellites easing into the storm section) this just
+  // uses the normal single-zone spawn-timer dispatch.
+  function isMeteorWaveType(type) {
+    return type === 'meteorNormal' || type === 'meteorFire' || type === 'meteorCracked' || type === 'meteorFragment';
+  }
+
+  function meteorDrawSize(type) {
+    const cfg = CONFIG.obstacles.meteorWave;
+    return type === 'meteorFragment' ? cfg.fragment.baseSize : cfg.baseSize;
+  }
+
+  // 0 right as altitude enters the `meteors` zone, 1 right at the Moon.
+  function meteorWaveProgress() {
+    const start = CONFIG.obstacles.zones.find((z) => z.name === 'meteors').start;
+    return Math.max(0, Math.min(1, (altitudeFraction() - start) / (1 - start)));
+  }
+
+  function currentMeteorBand(progress) {
+    const bands = CONFIG.obstacles.meteorWave.progressBands;
+    let band = bands[0];
+    for (let i = 0; i < bands.length; i++) { if (progress >= bands[i].progress) band = bands[i]; }
+    return band;
+  }
+
+  function activeMeteorCost() {
+    let sum = 0;
+    for (const o of state.obstacles) if (isMeteorWaveType(o.type)) sum += o.cost || 0;
+    return sum;
+  }
+
+  function pickWeightedMeteorType(band) {
+    const entries = Object.entries(band.weights).filter(([, w]) => w > 0);
+    const total = entries.reduce((sum, [, w]) => sum + w, 0);
+    let r = Math.random() * total;
+    for (const [type, w] of entries) {
+      if (r < w) return type;
+      r -= w;
+    }
+    return entries[entries.length - 1][0];
+  }
+
+  // Same "skip the spawn outright rather than force an overlap" gap
+  // check the bird/satellite spawners use.
+  function findMeteorSpawnX(drawSize) {
+    const cfg = CONFIG.obstacles.meteorWave;
+    const half = drawSize / 2;
+    const minX = half, maxX = DESIGN_W - half;
+    const nearTopX = state.obstacles
+      .filter((o) => isMeteorWaveType(o.type) && o.y < cfg.spawnGapZoneHeightPx)
+      .map((o) => o.x);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const x = randRange(minX, maxX);
+      if (nearTopX.every((ox) => Math.abs(ox - x) >= cfg.minSpawnGapPx)) return x;
+    }
+    return null;
+  }
+
+  function spawnMeteorNormal(x, speedMul) {
+    const cfg = CONFIG.obstacles.meteorWave.normal;
+    const drawSize = meteorDrawSize('meteorNormal');
+    const direction = ['vertical', 'diagonalLeft', 'diagonalRight'][Math.floor(Math.random() * 3)];
+    const vx = direction === 'diagonalLeft' ? -cfg.diagonalSpeedPxPerSec
+      : direction === 'diagonalRight' ? cfg.diagonalSpeedPxPerSec : 0;
+    state.obstacles.push({
+      type: 'meteorNormal',
+      x, y: -drawSize, drawSize,
+      fallSpeed: (cfg.fallSpeed + randRange(-cfg.fallSpeedVariance, cfg.fallSpeedVariance)) * speedMul,
+      vx,
+      rotationDeg: Math.random() * 360,
+      rotationSpeed: (cfg.rotationSpeedDegPerSec + randRange(-cfg.rotationSpeedVariance, cfg.rotationSpeedVariance)) * (Math.random() < 0.5 ? -1 : 1),
+      cost: cfg.cost,
+      seed: Math.random() * 1000
+    });
+  }
+
+  function spawnMeteorFire(x, speedMul) {
+    const cfg = CONFIG.obstacles.meteorWave.fire;
+    const drawSize = meteorDrawSize('meteorFire');
+    // Spawns mostly off-screen above, with just its glowing tip peeking
+    // below y=0 — the "brief visual warning" — and STAYS there (no
+    // movement) until warningTimeMs elapses, at which point it starts
+    // falling at full fallSpeed from that same position: a sudden speed
+    // burst rather than a position jump.
+    state.obstacles.push({
+      type: 'meteorFire',
+      x, y: -drawSize + drawSize * 0.16, drawSize,
+      fallSpeed: cfg.fallSpeed * speedMul,
+      phase: 'warning',
+      warningElapsedMs: 0,
+      warningTotalMs: cfg.warningTimeMs,
+      cost: cfg.cost,
+      seed: Math.random() * 1000
+    });
+  }
+
+  function spawnMeteorCracked(x, speedMul) {
+    const cfg = CONFIG.obstacles.meteorWave.cracked;
+    const drawSize = meteorDrawSize('meteorCracked');
+    state.obstacles.push({
+      type: 'meteorCracked',
+      x, y: -drawSize, drawSize,
+      fallSpeed: (cfg.fallSpeed + randRange(-cfg.fallSpeedVariance, cfg.fallSpeedVariance)) * speedMul,
+      stage: 'falling',
+      elapsedMs: 0,
+      crackDelayMs: randRange(cfg.crackDelayMinMs, cfg.crackDelayMaxMs),
+      crackFrameElapsedMs: 0,
+      cost: cfg.cost,
+      seed: Math.random() * 1000
+    });
+  }
+
+  // Called the instant a cracked meteor finishes its pop — 5 independent
+  // fragments burst outward+upward from its current position, each with
+  // its OWN horizontal velocity, upward kick, rotation speed, and sprite
+  // (cycling through the 4 supplied fragment images — see the asset note
+  // on CONFIG.obstacles.meteorWave). Gravity then takes over per-frame
+  // in updateMeteorObstacle().
+  function spawnMeteorFragments(x, y) {
+    const cfg = CONFIG.obstacles.meteorWave.fragment;
+    const images = CONFIG.obstacles.meteorWave.images.fragments;
+    const drawSize = cfg.baseSize;
+    // left+up, slight-left+up, mostly-up, slight-right+up, right+up —
+    // matches the example concept, widened further ("wide spread...
+    // genuinely difficult to dodge" — was [-1,-0.5,0,0.5,1]) so the
+    // outer two fragments burst much further to each side; randomised
+    // magnitude per fragment so no two ever move identically.
+    const horizontalFactors = [-1.6, -0.8, 0, 0.8, 1.6];
+    horizontalFactors.forEach((factor, i) => {
+      state.obstacles.push({
+        type: 'meteorFragment',
+        x, y, drawSize,
+        vx: factor * cfg.popSpeed * randRange(0.8, 1.2),
+        vy: -cfg.upwardForce * randRange(0.7, 1.3),
+        rotationDeg: Math.random() * 360,
+        rotationSpeed: cfg.rotationSpeedDegPerSec * randRange(0.6, 1.4) * (Math.random() < 0.5 ? -1 : 1),
+        spriteIndex: i % images.length, // only 4 unique sprites for 5 physics fragments — see the asset note above
+        cost: 1,
+        seed: Math.random() * 1000
+      });
+    });
+  }
+
+  // Advances one meteor-wave obstacle's full behaviour for one frame —
+  // fully self-contained, like the bird/satellite updaters. A cracked
+  // meteor reaching stage 'popped' is handled by the caller (the main
+  // obstacle-advance loop in update()), which spawns its fragments and
+  // removes it the same frame.
+  function updateMeteorObstacle(o, dt) {
+    if (o.type === 'meteorNormal') {
+      o.rotationDeg += o.rotationSpeed * dt;
+      o.x += o.vx * dt;
+      o.y += o.fallSpeed * dt;
+    } else if (o.type === 'meteorFire') {
+      if (o.phase === 'warning') {
+        o.warningElapsedMs += dt * 1000;
+        if (o.warningElapsedMs >= o.warningTotalMs) o.phase = 'falling';
+      } else {
+        o.y += o.fallSpeed * dt;
+      }
+    } else if (o.type === 'meteorCracked') {
+      const cfg = CONFIG.obstacles.meteorWave.cracked;
+      const dtMs = dt * 1000;
+      o.y += o.fallSpeed * dt; // keeps falling through every stage, including the crack animation itself
+      if (o.stage === 'falling') {
+        o.elapsedMs += dtMs;
+        if (o.elapsedMs >= o.crackDelayMs) { o.stage = 'cracked1'; o.crackFrameElapsedMs = 0; }
+      } else if (o.stage === 'cracked1') {
+        o.crackFrameElapsedMs += dtMs;
+        if (o.crackFrameElapsedMs >= cfg.crackFrameTimeMs) { o.stage = 'cracked2'; o.crackFrameElapsedMs = 0; }
+      } else if (o.stage === 'cracked2') {
+        o.crackFrameElapsedMs += dtMs;
+        if (o.crackFrameElapsedMs >= cfg.crackFrameTimeMs) o.stage = 'popped';
+      }
+    } else if (o.type === 'meteorFragment') {
+      const cfg = CONFIG.obstacles.meteorWave.fragment;
+      o.vy = Math.min(o.vy + cfg.gravity * dt, cfg.fallSpeed);
+      o.x += o.vx * dt;
+      o.y += o.vy * dt;
+      o.rotationDeg += o.rotationSpeed * dt;
+    }
+  }
+
+  function drawMeteorObstacle(ctx2, o) {
+    const images = METEOR_IMAGES;
+    if (o.type === 'meteorNormal' || o.type === 'meteorFire') {
+      const img = o.type === 'meteorNormal' ? images.normal : images.fire;
+      if (!img) return;
+      ctx2.save();
+      ctx2.translate(o.x, o.y);
+      if (o.type === 'meteorNormal') ctx2.rotate(o.rotationDeg * Math.PI / 180);
+      ctx2.drawImage(img, -o.drawSize / 2, -o.drawSize / 2, o.drawSize, o.drawSize);
+      ctx2.restore();
+      return;
+    }
+    if (o.type === 'meteorCracked') {
+      const cfg = CONFIG.obstacles.meteorWave.cracked;
+      let img = images.normal, scale = 1, shakeX = 0, shakeY = 0, flashAlpha = 0;
+      if (o.stage === 'cracked1') {
+        img = images.crackedStage1;
+        scale = 1 + 0.05 * Math.sin((o.crackFrameElapsedMs / cfg.crackFrameTimeMs) * Math.PI);
+      } else if (o.stage === 'cracked2' || o.stage === 'popped') {
+        img = images.crackedStage2;
+        const t = o.crackFrameElapsedMs / cfg.crackFrameTimeMs;
+        scale = 1 + 0.12 * Math.sin(t * Math.PI); // subtle scale pulse
+        shakeX = (Math.random() - 0.5) * 6; // tiny shake
+        shakeY = (Math.random() - 0.5) * 6;
+        flashAlpha = 0.35 * Math.sin(t * Math.PI); // small flash
+      }
+      if (!img) return;
+      ctx2.save();
+      ctx2.translate(o.x + shakeX, o.y + shakeY);
+      ctx2.scale(scale, scale);
+      ctx2.drawImage(img, -o.drawSize / 2, -o.drawSize / 2, o.drawSize, o.drawSize);
+      if (flashAlpha > 0) {
+        ctx2.globalAlpha = flashAlpha;
+        ctx2.fillStyle = '#fff8d0';
+        ctx2.beginPath();
+        ctx2.arc(0, 0, o.drawSize * 0.5, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+      ctx2.restore();
+      return;
+    }
+    if (o.type === 'meteorFragment') {
+      const img = images.fragments[o.spriteIndex];
+      if (!img) return;
+      ctx2.save();
+      ctx2.translate(o.x, o.y);
+      ctx2.rotate(o.rotationDeg * Math.PI / 180);
+      ctx2.drawImage(img, -o.drawSize / 2, -o.drawSize / 2, o.drawSize, o.drawSize);
+      ctx2.restore();
+    }
+  }
+
+  // The Meteor Wave's spawn ATTEMPT (see update()'s spawn-timer block)
+  // — like the other sprite-driven spawners, an attempt can end up
+  // spawning nothing at all: maxActiveCost already reached, a cracked
+  // meteor picked while one is already mid-sequence ("do not spawn
+  // several cracking meteors on top of each other"), or no safely-spaced
+  // gap right now.
+  function trySpawnMeteor() {
+    const cfg = CONFIG.obstacles.meteorWave;
+    const band = currentMeteorBand(meteorWaveProgress());
+    const type = pickWeightedMeteorType(band); // 'normal' | 'fire' | 'cracked'
+    if (type === 'cracked') {
+      const activeCracked = state.obstacles.reduce((n, o) => n + (o.type === 'meteorCracked' ? 1 : 0), 0);
+      if (activeCracked >= cfg.cracked.maxSimultaneous) return;
+    }
+    const typeCost = type === 'normal' ? cfg.normal.cost : type === 'fire' ? cfg.fire.cost : cfg.cracked.cost;
+    if (activeMeteorCost() + typeCost > cfg.maxActiveCost) return;
+    const x = findMeteorSpawnX(cfg.baseSize);
+    if (x === null) return; // no safely-spaced gap right now — skip rather than force an unfair spawn
+    if (type === 'normal') spawnMeteorNormal(x, band.speedMultiplier);
+    else if (type === 'fire') spawnMeteorFire(x, band.speedMultiplier);
+    else spawnMeteorCracked(x, band.speedMultiplier);
+  }
+
   function currentObstacleZone() {
     const frac = altitudeFraction();
     const zones = CONFIG.obstacles.zones;
@@ -1075,27 +1601,11 @@
   }
 
   function drawFuelPickup(o) {
+    if (!FUEL_IMAGE) return; // still loading/broken — same "just don't draw it" policy as every other sprite
+    const cfg = CONFIG.fuel;
     ctx.save();
     ctx.translate(o.x, o.y);
-    // parachute
-    ctx.strokeStyle = '#e2504a'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(0, -26, 20, Math.PI, Math.PI * 2); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-20, -26); ctx.lineTo(-9, -6);
-    ctx.moveTo(0, -46); ctx.lineTo(0, -6);
-    ctx.moveTo(20, -26); ctx.lineTo(9, -6);
-    ctx.stroke();
-    // can
-    ctx.fillStyle = '#ffcf4d';
-    ctx.fillRect(-13, -6, 26, 32);
-    ctx.strokeStyle = '#a87a00'; ctx.lineWidth = 2;
-    ctx.strokeRect(-13, -6, 26, 32);
-    ctx.fillStyle = '#a87a00';
-    ctx.fillRect(-13, 6, 26, 6);
-    ctx.fillStyle = '#3a2a00';
-    ctx.font = 'bold 11px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('FUEL', 0, 3);
+    ctx.drawImage(FUEL_IMAGE, -cfg.pickupWidth / 2, -cfg.pickupHeight / 2, cfg.pickupWidth, cfg.pickupHeight);
     ctx.restore();
   }
 
@@ -1141,7 +1651,10 @@
       // unfair hits.
       const or_ = isBirdType(o.type) ? o.drawSize * CONFIG.obstacles.birds.hitboxFactor
         : isStormCloudType(o.type) ? o.drawSize * CONFIG.obstacles.stormCloud.hitboxFactor
-          : genericRadius;
+          : isSatelliteType(o.type) ? o.drawSize * CONFIG.obstacles.satelliteBelt.hitboxFactor
+            : o.type === 'meteorFragment' ? o.drawSize * CONFIG.obstacles.meteorWave.fragment.hitboxFactor
+              : isMeteorWaveType(o.type) ? o.drawSize * CONFIG.obstacles.meteorWave.hitboxFactor
+                : genericRadius;
       if (circleHit(state.rocketX, state.rocketY, rocketR, o.x, o.y, or_)) {
         onObstacleHit();
         break;
@@ -1241,20 +1754,64 @@
     if (state.phase === STATE.FLYING) {
       state.fuel = Math.max(0, state.fuel - CONFIG.fuel.drainPerSecond * dt);
 
-      // obstacle spawning, per current altitude zone
+      // obstacle spawning, per current altitude zone — storm/space/birds
+      // share this single-active-zone dispatch; satellites deliberately
+      // do NOT (see the independent timer just below) since they need
+      // to ease in ALONGSIDE the tail of the storm cloud section rather
+      // than starting on a hard zone cutoff.
       const zone = currentObstacleZone();
       state.zoneSpawnTimers[zone.name] -= dt * 1000;
-      if (state.zoneSpawnTimers[zone.name] <= 0) {
+      if (zone.name !== 'satellites' && state.zoneSpawnTimers[zone.name] <= 0) {
         if (zone.name === 'birds') trySpawnBirdObstacle();
         else if (zone.name === 'storm') trySpawnStormCloud();
+        else if (zone.name === 'meteors') trySpawnMeteor();
         else spawnObstacle(zone);
         const t = difficultyT();
         const mul = 1 - t * (1 - CONFIG.difficulty.minSpawnIntervalMultiplier);
-        // STORM_CLOUD_SPAWN_RATE (stormCloud.spawnRateMultiplier) is an
-        // extra knob on top of the global obstacles.spawnRateMultiplier
-        // every zone already gets, specific to this hazard.
+        // STORM_CLOUD_SPAWN_RATE (stormCloud.spawnRateMultiplier) and the
+        // Meteor Wave's own current-band spawnIntervalMultiplier are
+        // extra knobs on top of the global obstacles.spawnRateMultiplier
+        // every zone already gets, specific to each hazard.
         const stormMul = zone.name === 'storm' ? CONFIG.obstacles.stormCloud.spawnRateMultiplier : 1;
-        state.zoneSpawnTimers[zone.name] = randRange(zone.spawnIntervalMinMs, zone.spawnIntervalMaxMs) * mul * CONFIG.obstacles.spawnRateMultiplier * stormMul;
+        const meteorMul = zone.name === 'meteors' ? currentMeteorBand(meteorWaveProgress()).spawnIntervalMultiplier : 1;
+        state.zoneSpawnTimers[zone.name] = randRange(zone.spawnIntervalMinMs, zone.spawnIntervalMaxMs) * mul * CONFIG.obstacles.spawnRateMultiplier * stormMul * meteorMul;
+      }
+
+      // Satellite Belt spawning runs on its OWN independent timer,
+      // active over an ALTITUDE RANGE rather than gated by which zone
+      // is nominally "current" — from satelliteBelt.earlyStartFraction
+      // (still inside the storm cloud section) through to the `meteors`
+      // zone. satelliteBeltProgress() naturally clamps to 0 before the
+      // belt's own official start, so this early window plays band 0
+      // (rarest, single-at-a-time) — satellites genuinely ease in next
+      // to the clouds rather than the belt starting with a hard cut.
+      {
+        const satCfg = CONFIG.obstacles.satelliteBelt;
+        const meteorsStart = CONFIG.obstacles.zones.find((z) => z.name === 'meteors').start;
+        const satFrac = altitudeFraction();
+        if (satFrac >= satCfg.earlyStartFraction && satFrac < meteorsStart) {
+          state.satelliteSpawnTimerMs -= dt * 1000;
+          if (state.satelliteSpawnTimerMs <= 0) {
+            trySpawnSatellite();
+            const band = currentSatelliteBand(satelliteBeltProgress());
+            const satZone = CONFIG.obstacles.zones.find((z) => z.name === 'satellites');
+            const t = difficultyT();
+            const mul = 1 - t * (1 - CONFIG.difficulty.minSpawnIntervalMultiplier);
+            state.satelliteSpawnTimerMs = randRange(satZone.spawnIntervalMinMs, satZone.spawnIntervalMaxMs) * mul * CONFIG.obstacles.spawnRateMultiplier * band.spawnIntervalMultiplier;
+          }
+        }
+      }
+
+      // satellite belt pattern queue — each entry spawns once its own
+      // delay elapses (see triggerSatellitePattern()); processed every
+      // frame independently of the zone spawn-timer above.
+      for (let i = state.satelliteSpawnQueue.length - 1; i >= 0; i--) {
+        const q = state.satelliteSpawnQueue[i];
+        q.delayMs -= dt * 1000;
+        if (q.delayMs <= 0) {
+          spawnSatelliteAt(q.type, q.x, q.speedMultiplier);
+          state.satelliteSpawnQueue.splice(i, 1);
+        }
       }
 
       // fuel pickup spawning
@@ -1272,10 +1829,25 @@
         } else if (isStormCloudType(o.type)) {
           updateStormCloud(o, dt);
           o.y += o.fallSpeed * dt;
+        } else if (isSatelliteType(o.type)) {
+          updateSatellite(o, dt); // self-contained: owns its own vertical fall + any spin/drift
+        } else if (isMeteorWaveType(o.type)) {
+          updateMeteorObstacle(o, dt); // self-contained: owns its own vertical/horizontal movement + any stage timers
+          if (o.type === 'meteorCracked' && o.stage === 'popped') {
+            spawnMeteorFragments(o.x, o.y);
+            state.obstacles.splice(i, 1);
+            continue; // already removed — skip the generic cull check below
+          }
         } else {
           o.y += o.speed * dt;
         }
-        if (o.y > DESIGN_H + o.drawSize) state.obstacles.splice(i, 1);
+        // A diagonal satellite / a meteor fragment deliberately drifts
+        // un-clamped past the screen edge rather than sliding along it,
+        // so both also need their own horizontal cull alongside the
+        // shared vertical one.
+        const driftedOffSide = (isSatelliteType(o.type) || o.type === 'meteorFragment')
+          && (o.x < -o.drawSize * 2 || o.x > DESIGN_W + o.drawSize * 2);
+        if (o.y > DESIGN_H + o.drawSize || driftedOffSide) state.obstacles.splice(i, 1);
       }
       for (let i = state.pickups.length - 1; i >= 0; i--) {
         const p = state.pickups[i];
@@ -1308,6 +1880,8 @@
       state.obstacles.forEach((o) => {
         if (isBirdType(o.type)) { drawBirdObstacle(ctx, o); return; } // real sprite, own sizing — no canvas-shape scale trick
         if (isStormCloudType(o.type)) { drawStormCloud(ctx, o); return; }
+        if (isSatelliteType(o.type)) { drawSatellite(ctx, o); return; }
+        if (isMeteorWaveType(o.type)) { drawMeteorObstacle(ctx, o); return; }
         ctx.save();
         ctx.translate(o.x, o.y);
         ctx.scale(obstacleArtScale, obstacleArtScale);
