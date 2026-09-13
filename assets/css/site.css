@@ -923,20 +923,48 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
 }
 .game-section .hud-heading { font-size: clamp(19px, 2.8vw, 28px); margin: 0 0 clamp(18px, 2.6vw, 26px); }
 
-.game-grid {
+/* ---- "Games" section, v2 look: the supplied nebula-frame artwork
+   (assets/img/game-section-box-v2.png) replaces the CSS gunmetal panel
+   above for THIS section only — the Arcade Games section below still
+   uses the original .game-section look untouched.
+
+   The v1 rule above is left completely intact on purpose — it is the
+   ARCHIVED look. To revert this section back to version 1, just remove
+   the "game-section--nebula-v2" class from its <section> tag in
+   index.html; every rule it needs is still sitting right here. */
+.game-section.game-section--nebula-v2 {
+  border: none;
+  /* the artwork's own rounded corner fades out to fully transparent at
+     ~34px (measured on the source file) — the base .game-section rule's
+     16px radius was clipping the box tighter than that, slicing right
+     through the middle of that fade and leaving a jagged, "scratched"
+     seam at every corner. Matching the radius here lets the image's own
+     corner be the only one doing the rounding. */
+  border-radius: 34px;
+  background: #05070d url('../img/game-section-box-v2.png') center / 100% 100% no-repeat;
+  box-shadow: none;
+}
+/* the artwork already draws its own corner/edge treatment, so the
+   shared L-shaped corner-bracket accent (still used elsewhere, e.g. on
+   game tile hover) and the bottom edge-glow seam are switched off just
+   for this section. */
+.game-section.game-section--nebula-v2 > .corner-brackets,
+.game-section.game-section--nebula-v2 > .hud-edge-glow { display: none; }
+
+.games-grid-panel {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: clamp(8px, 1.2vw, 14px);
 }
-@media (max-width: 900px) { .game-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 560px) { .game-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) { .games-grid-panel { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 560px) { .games-grid-panel { grid-template-columns: repeat(3, 1fr); } }
 
 /* Same gunmetal-blue metal family as the nav bar and the panel around
    this grid: a flat vertical bevel instead of the shinier diagonal
    chrome-frame ring. Thumbnail cards (.has-thumb) sit their artwork 10px
    inset from the edge, so this background still shows through as their
    frame — one recipe, both card types. */
-.game-card {
+.game-tile {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -963,7 +991,7 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   transition: box-shadow 0.2s ease, transform 0.15s ease-out, background-color 0.15s ease;
   will-change: transform;
 }
-.game-card:hover {
+.game-tile:hover {
   box-shadow:
     inset 0 1px 0 rgba(200,220,255,0.24),
     inset 0 -1px 0 rgba(0,0,0,0.4),
@@ -971,15 +999,15 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
     0 8px 20px rgba(0,0,0,0.45),
     0 0 20px rgba(59,130,246,0.32);
 }
-.game-card .icon {
+.game-tile .icon {
   width: clamp(20px, 3.4vw, 30px);
   height: clamp(20px, 3.4vw, 30px);
   color: #cfe4ff;
   filter: drop-shadow(0 0 6px rgba(120,190,255,0.55));
 }
-.game-card .icon svg { width: 100%; height: 100%; }
-.game-card:hover .icon { filter: drop-shadow(0 0 10px rgba(140,200,255,0.8)); }
-.game-card .label {
+.game-tile .icon svg { width: 100%; height: 100%; }
+.game-tile:hover .icon { filter: drop-shadow(0 0 10px rgba(140,200,255,0.8)); }
+.game-tile .label {
   font-family: 'Orbitron', sans-serif;
   font-size: clamp(6.5px, 0.85vw, 8.5px);
   letter-spacing: 0.06em;
@@ -988,7 +1016,7 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   line-height: 1.3;
   color: var(--text-faint);
 }
-.game-card .number {
+.game-tile .number {
   font-family: 'Orbitron', sans-serif;
   font-weight: 800;
   font-size: clamp(12px, 1.6vw, 16px);
@@ -997,12 +1025,12 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   background-clip: text;
   color: transparent;
 }
-.game-card > * { position: relative; z-index: 3; }
+.game-tile > * { position: relative; z-index: 3; }
 
 /* tactile press: same sink-in-and-spring-back feel as the nav tabs and
    header chrome buttons, so clicking into a game feels like the same
    physical control family */
-.game-card:active {
+.game-tile:active {
   transform: perspective(700px) scale(0.97);
   transition: transform 0.05s ease, box-shadow 0.05s ease;
   box-shadow:
@@ -1010,32 +1038,32 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
     inset 0 0 12px rgba(59,130,246,0.3);
 }
 
-.game-card .tile-light {
+.game-tile .tile-light {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   opacity: 0; transition: opacity 0.25s ease;
   background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(150,195,255,0.16), transparent 42%);
 }
-.game-card:hover .tile-light { opacity: 1; }
+.game-tile:hover .tile-light { opacity: 1; }
 
-.game-card .tile-shimmer { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; border-radius: inherit; }
-.game-card .tile-shimmer::after {
+.game-tile .tile-shimmer { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; border-radius: inherit; }
+.game-tile .tile-shimmer::after {
   content: '';
   position: absolute; top: -140%; left: -45%;
   width: 26%; height: 380%;
   background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(210,228,255,0.32) 45%, rgba(154,127,255,0.18) 55%, rgba(255,255,255,0) 100%);
   transform: rotate(18deg);
 }
-.game-card:hover .tile-shimmer::after { animation: tile-shimmer 1.3s ease; }
+.game-tile:hover .tile-shimmer::after { animation: tile-shimmer 1.3s ease; }
 @keyframes tile-shimmer { from { left: -45%; } to { left: 145%; } }
 
 /* ---- .has-thumb: real game card with its own artwork (e.g. Space
    Snake) instead of the icon/label/number placeholder. Uses the exact
-   same .game-card frame/box-shadow ring stack and :hover state as
+   same .game-tile frame/box-shadow ring stack and :hover state as
    every other card — nothing overridden here. The artwork sits
    inset from the edge (instead of running full-bleed to 0) so that
    shared chrome/gunmetal/seam ring stack stays fully visible around
    it, same thickness as the frame around every placeholder card. ---- */
-.game-card .card-thumb {
+.game-tile .card-thumb {
   position: absolute;
   inset: 10px;
   z-index: 0;
@@ -1046,7 +1074,7 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   object-position: 50% 10%;
 }
 
-.game-card .card-thumb-fade {
+.game-tile .card-thumb-fade {
   position: absolute;
   inset: 10px;
   z-index: 1;
@@ -1060,7 +1088,7 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
    breathing room, against the card's own dark background instead of
    being cropped to fill the tile. No fade/title overlay needed since the
    logo already carries its own name. */
-.game-card.thumb-contain .card-thumb {
+.game-tile.thumb-contain .card-thumb {
   inset: 22px;
   width: calc(100% - 44px);
   height: calc(100% - 44px);
@@ -1068,7 +1096,7 @@ main.home { padding: 22px 0 10px; position: relative; z-index: 1; }
   object-position: 50% 50%;
 }
 
-.game-card .card-title {
+.game-tile .card-title {
   position: absolute;
   left: 14px; right: 14px; bottom: 14px;
   z-index: 3;

@@ -49,7 +49,7 @@
 
   function makeGameCard(opts) {
     const a = document.createElement('a');
-    a.className = 'game-card' + (opts.image ? ' has-thumb' : '') + (opts.thumbContain ? ' thumb-contain' : '');
+    a.className = 'game-tile' + (opts.image ? ' has-thumb' : '') + (opts.thumbContain ? ' thumb-contain' : '');
     a.href = opts.route || '#';
     a.setAttribute('aria-label', opts.title);
 
@@ -169,9 +169,9 @@
     });
   }
 
-  // ---- game-card interaction: tilt / cursor-light / shimmer, same
+  // ---- game-tile interaction: tilt / cursor-light / shimmer, same
   // shared component family as the Profile dashboard tiles. ----
-  document.querySelectorAll('.game-card').forEach((card) => {
+  document.querySelectorAll('.game-tile').forEach((card) => {
     const light = document.createElement('span');
     light.className = 'tile-light';
     const sweep = document.createElement('span');
