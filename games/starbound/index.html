@@ -86,7 +86,7 @@
   @keyframes sbFuelPulse { 50% { opacity: 0.55; } }
   #sb-fuel-pct { position: absolute; right: 4px; top: -1px; font-size: 9px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
 
-  /* ---- overlay screens (menu / game over / level complete) ---- */
+  /* ---- overlay screens (game over / level complete) ---- */
   .sb-overlay {
     position: absolute; inset: 0; z-index: 5;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -95,6 +95,27 @@
   }
   .sb-overlay.hidden { display: none; }
   .sb-logo { max-width: min(72%, 420px); width: 100%; height: auto; filter: drop-shadow(0 0 24px rgba(90,150,255,0.4)); }
+
+  /* ---- landing/menu screen: the FIRST thing you see — full-viewport,
+     right over the same interactive starfield the homepage uses (no
+     boxed panel, no game-console frame), just the logo near the top and
+     one play button dead center. The actual boxed game stage + its own
+     title only appear once PLAY is pressed (see the body:has() rule
+     below, which hides them while this is up). ---- */
+  #sb-screen-menu {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #sb-screen-menu.hidden { display: none; }
+  #sb-screen-menu .sb-logo {
+    position: absolute; top: 8vh; left: 50%; transform: translateX(-50%);
+    max-width: min(84%, 520px);
+  }
+  .sb-play-btn { font-size: 18px; padding: 18px 46px; }
+  body:has(#sb-screen-menu:not(.hidden)) .sb-title,
+  body:has(#sb-screen-menu:not(.hidden)) #sb-stage-wrap {
+    visibility: hidden;
+  }
   .sb-overlay-heading {
     font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: clamp(20px, 3.4vw, 30px);
     letter-spacing: 0.06em; color: var(--gold); text-shadow: 0 0 18px rgba(255,207,77,0.4);
@@ -165,16 +186,6 @@
       </div>
     </div>
 
-    <!-- ============== MENU ============== -->
-    <div id="sb-screen-menu" class="sb-overlay">
-      <img class="sb-logo" src="../../assets/img/starbound/logo.png" alt="Starbound">
-      <div class="sb-overlay-sub">Launch from Earth and climb as high as you can. Dodge what the sky throws at you, collect fuel to keep climbing, and reach the Moon.</div>
-      <div class="sb-overlay-btns">
-        <button type="button" class="sb-btn" id="sb-btn-start-launch">START LAUNCH</button>
-      </div>
-      <div class="sb-hint">← → or A / D to steer · on-screen arrows on touch devices</div>
-    </div>
-
     <!-- ============== GAME OVER ============== -->
     <div id="sb-screen-gameover" class="sb-overlay hidden">
       <div class="sb-overlay-heading" id="sb-gameover-heading">OUT OF FUEL</div>
@@ -202,11 +213,20 @@
   </div>
 </div>
 
+<!-- ============== LANDING / MENU — full-viewport, over the same
+     interactive starfield as the homepage; just the logo up top and
+     one play button dead center (see body:has() rule above, which
+     hides the title + boxed game stage while this is showing). -->
+<div id="sb-screen-menu">
+  <img class="sb-logo" src="../../assets/img/starbound/logo.png" alt="Starbound">
+  <button type="button" class="sb-btn sb-play-btn" id="sb-btn-start-launch">PLAY</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="../../assets/js/qz-config.js"></script>
 <script src="../../assets/js/qz-auth.js"></script>
 <script src="../../assets/js/qz-xp.js"></script>
-<script src="../../assets/js/stars-plain.js"></script>
+<script src="../../assets/js/starfield.js"></script>
 <script src="starbound-config.js"></script>
 <script src="starbound.js"></script>
 </body>
