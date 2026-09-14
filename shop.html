@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+<meta name="description" content="The Quest Zone Shop — spend Quest Points or Stardust on real, tradeable items.">
+<link rel="stylesheet" href="assets/css/site.css">
+<style>
+  main.shop-main { padding: 28px 0 70px; position: relative; z-index: 1; }
+
+  /* ---------- top bar: centered title, wallet displayed underneath ----------
+     Get Stardust used to live here — it's now a site-wide header button
+     (see qz-header-auth.js) next to the player's own name on every page,
+     not just this one, so it's gone from this bar entirely. */
+  .shop-topbar {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 14px; margin-bottom: clamp(22px, 3vw, 32px); text-align: center;
+  }
+  .shop-topbar .hud-heading { margin: 0; font-size: clamp(24px, 3.6vw, 34px); }
+  .shop-wallet { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+
+  .currency-box {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 14px 6px 8px; border-radius: 10px;
+    border: 1.5px solid var(--border-strong);
+    background:
+      radial-gradient(ellipse at 50% 120%, rgba(60,130,255,0.1), transparent 60%),
+      linear-gradient(165deg, #0e1a30 0%, #081020 60%, #060b16 100%);
+  }
+  .currency-box .cur-icon { flex: 0 0 auto; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+  .currency-box .cur-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .currency-box.currency-quest-points .cur-icon img { filter: drop-shadow(0 0 6px rgba(120,190,255,0.5)); }
+  .currency-box.currency-stardust .cur-icon img { filter: drop-shadow(0 0 6px rgba(255,215,106,0.5)); }
+  .currency-box .cur-text { display: flex; flex-direction: column; line-height: 1.2; }
+  .currency-box .cur-label { font-family: 'Orbitron', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue-light); opacity: 0.9; }
+  .currency-box .cur-value { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 0 10px rgba(120,170,255,0.4); }
+  .currency-box .cur-value.loading { opacity: 0.5; }
+
+  #shop-status-banner {
+    margin-bottom: 18px; padding: 12px 16px; border-radius: 10px;
+    border: 1px solid rgba(255,180,90,0.35); background: rgba(255,140,40,0.08);
+    color: #ffd9a8; font-size: 13.5px; display: none;
+  }
+  #shop-status-banner.show { display: block; }
+  #shop-status-banner.error { border-color: rgba(255,90,90,0.4); background: rgba(255,60,60,0.08); color: #ffb3b3; }
+
+  /* ---------- search + filters — same component family as the
+     Achievements/Inventory pages (search bar, chip-style filter row(s)) ---------- */
+  .shop-search {
+    width: 100%; padding: 10px 14px; margin-bottom: 12px;
+    border-radius: 8px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(4,8,16,0.6); color: var(--text);
+    font-size: 13px; font-family: inherit;
+  }
+  .shop-search::placeholder { color: var(--text-dim); }
+  .shop-search:focus { outline: none; border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+
+  .shop-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+  .shop-filters-status { margin-bottom: 18px; }
+  .shop-filter {
+    font-family: 'Orbitron', sans-serif; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 7px 12px; border-radius: 7px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(10,16,30,0.6); color: var(--text-dim); cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .shop-filter:hover { color: var(--text); border-color: rgba(150,200,255,0.5); }
+  .shop-filter.active {
+    color: #fff; background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%);
+    border-color: rgba(150,200,255,0.8); box-shadow: 0 0 12px rgba(70,140,255,0.5);
+  }
+  .shop-filter .cnt { opacity: 0.7; margin-left: 5px; font-weight: 400; }
+  /* status row reads as its own distinct chip family (amber) rather than
+     a second copy of the blue slot row, echoing how the Achievements
+     page's tier row is visually distinct from its category row */
+  .shop-filters-status .shop-filter.active {
+    background: linear-gradient(180deg, #e0a53b 0%, #8f5c1c 100%);
+    border-color: rgba(255,200,120,0.8); box-shadow: 0 0 12px rgba(255,180,70,0.4);
+  }
+
+  .shop-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px;
+  }
+
+  .shop-pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 26px; }
+  .shop-page {
+    min-width: 34px; height: 34px; padding: 0 8px;
+    font-family: 'Orbitron', sans-serif; font-size: 12px;
+    border-radius: 7px; border: 1px solid rgba(120,160,220,0.3);
+    background: rgba(10,16,30,0.6); color: var(--text-dim); cursor: pointer;
+  }
+  .shop-page:hover { color: var(--text); border-color: rgba(150,200,255,0.5); }
+  .shop-page.active {
+    color: #fff; background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%);
+    border-color: rgba(150,200,255,0.8); box-shadow: 0 0 10px rgba(70,140,255,0.5);
+  }
+  .shop-page:disabled { opacity: 0.35; cursor: not-allowed; }
+  .shop-empty {
+    grid-column: 1 / -1; text-align: center; padding: 50px 20px; color: var(--text-faint);
+    font-family: 'Exo 2', sans-serif; font-size: 14px;
+  }
+
+  /* ---------- item card ---------- */
+  .shop-card {
+    position: relative; display: flex; flex-direction: column;
+    border-radius: 12px; overflow: hidden; isolation: isolate;
+    border: 1.5px solid var(--border-strong);
+    background:
+      radial-gradient(ellipse at 50% 120%, rgba(60,130,255,0.08), transparent 60%),
+      linear-gradient(180deg, #141a2c 0%, #0b0f1c 55%, #070a12 100%);
+    box-shadow: inset 0 1px 0 rgba(190,210,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.5);
+  }
+  .shop-card.owned-max { opacity: 0.6; filter: grayscale(0.35); }
+  .shop-card-preview {
+    aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+    font-size: 46px; background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(130,160,255,0.14);
+  }
+  .shop-card-preview img { width: 62%; height: 62%; object-fit: contain; }
+  .shop-card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .shop-card-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 13px; color: #fff; letter-spacing: 0.02em; }
+  .shop-card-meta { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--text-faint); font-family: 'Exo 2', sans-serif; text-transform: uppercase; letter-spacing: 0.05em; }
+  .shop-card-owned { color: var(--blue-light); font-weight: 600; }
+  .shop-card-stock { font-size: 10.5px; color: #ffb877; font-family: 'Exo 2', sans-serif; }
+
+  .shop-price-row { display: flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 4px; }
+  .shop-price-row .price-icon { width: 18px; height: 18px; object-fit: contain; }
+  .shop-price-row .price-value { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 14px; color: #fff; }
+  .shop-price-row .price-free { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 13px; color: #7fe0a0; letter-spacing: 0.08em; }
+
+  .shop-buy-btn {
+    margin-top: 8px; width: 100%; font-family: 'Orbitron', sans-serif; font-weight: 800;
+    font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase;
+    border: none; border-radius: 8px; padding: 10px 8px; cursor: pointer;
+    background: linear-gradient(180deg, #ffe38a 0%, #ffc233 45%, #e08e00 100%);
+    color: #3a2200; box-shadow: 0 4px 0 #8a5c00, 0 8px 14px rgba(0,0,0,0.35);
+    transition: transform 0.08s ease;
+  }
+  .shop-buy-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a5c00, 0 4px 8px rgba(0,0,0,0.35); }
+  .shop-buy-btn.free { background: linear-gradient(180deg, #8be0a4 0%, #4cbf72 45%, #2c8f4d 100%); box-shadow: 0 4px 0 #1f6636, 0 8px 14px rgba(0,0,0,0.35); color: #05260f; }
+  .shop-buy-btn.stardust { background: linear-gradient(180deg, #ffe9a8 0%, #ffcd5c 45%, #d99c1a 100%); box-shadow: 0 4px 0 #8a5c00, 0 8px 14px rgba(0,0,0,0.35); color: #3a2200; }
+  .shop-buy-btn:disabled {
+    background: linear-gradient(180deg, #3a4256 0%, #232939 100%);
+    color: var(--text-faint); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    cursor: not-allowed;
+  }
+  .shop-buy-btn:disabled:active { transform: none; }
+  .shop-buy-btn.loading { position: relative; color: transparent !important; }
+  .shop-buy-btn.loading::after {
+    content: ''; position: absolute; inset: 0; margin: auto; width: 16px; height: 16px;
+    border: 2px solid rgba(0,0,0,0.3); border-top-color: rgba(0,0,0,0.75); border-radius: 50%;
+    animation: shopSpin 0.7s linear infinite;
+  }
+  @keyframes shopSpin { to { transform: rotate(360deg); } }
+
+  #shop-toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: linear-gradient(180deg, #142338, #0a1220); border: 1px solid rgba(120,200,140,0.5);
+    color: #d7ffe4; font-family: 'Exo 2', sans-serif; font-size: 13.5px; font-weight: 600;
+    padding: 12px 22px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 200;
+  }
+  #shop-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #shop-toast.error { border-color: rgba(255,110,110,0.5); color: #ffd0d0; }
+
+  /* ---------- purchase confirmation popup ---------- */
+  .shop-purchase-backdrop {
+    position: fixed; inset: 0; z-index: 300; display: none; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(4,7,14,0.75); backdrop-filter: blur(3px);
+  }
+  .shop-purchase-backdrop.show { display: flex; }
+  .shop-purchase-card {
+    position: relative; width: 100%; max-width: 340px; text-align: center; padding: 28px 24px 24px;
+    border-radius: 14px; border: 1.5px solid rgba(140,195,255,0.45);
+    background: linear-gradient(165deg, #101a30 0%, #060b16 100%);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(90,180,255,0.3);
+    font-family: 'Exo 2', sans-serif; color: #e8ecff;
+    transform: scale(0.92); opacity: 0; transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .shop-purchase-backdrop.show .shop-purchase-card { transform: scale(1); opacity: 1; }
+  .shop-purchase-icon {
+    width: 88px; height: 88px; margin: 0 auto 14px; border-radius: 12px;
+    background: radial-gradient(circle at 50% 35%, rgba(90,180,255,0.25), rgba(6,10,20,0.9));
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    box-shadow: 0 0 24px rgba(90,180,255,0.35); font-size: 42px;
+    filter: drop-shadow(0 0 10px rgba(255,210,90,0.5));
+  }
+  .shop-purchase-icon img { max-width: 78%; max-height: 78%; object-fit: contain; }
+  .shop-purchase-title {
+    font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 14px;
+    letter-spacing: 0.04em; color: #8fd2ff; margin-bottom: 8px; text-shadow: 0 0 12px rgba(90,180,255,0.5);
+  }
+  .shop-purchase-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 19px; color: #fff; margin-bottom: 8px; }
+  .shop-purchase-meta { font-size: 12px; color: #a9b1d6; line-height: 1.6; margin-bottom: 20px; }
+  .shop-purchase-continue {
+    padding: 10px 30px; border-radius: 9px; border: 1.5px solid rgba(150,200,255,0.5);
+    background: linear-gradient(180deg, #3b6fe0 0%, #1c3a8f 100%); color: #fff;
+    font-family: 'Orbitron', sans-serif; font-size: 11.5px; letter-spacing: 0.05em; cursor: pointer;
+  }
+  .shop-purchase-continue:hover { filter: brightness(1.15); }
+</style>
+</head>
+<body>
+
+<canvas id="site-starfield"></canvas>
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="logo" href="index.html">
+      <img src="assets/img/logo.png" alt="Quest Zone">
+    </a>
+    <div class="site-search">
+      <form action="index.html">
+        <input type="text" name="q" placeholder="Search games..." autocomplete="off">
+        <button type="submit" aria-label="Search">🔍</button>
+      </form>
+    </div>
+    <div class="header-actions">
+      <a href="profile/index.html" class="btn btn-chrome-dark">👤 Profile</a>
+      <a href="#" class="btn btn-chrome-blue" data-coming-soon="Accounts are coming soon — check back later!">Signup</a>
+      <a href="#" class="btn btn-chrome-dark" data-coming-soon="Accounts are coming soon — check back later!">Login</a>
+    </div>
+  </div>
+</header>
+
+<nav class="site-nav">
+  <div class="container">
+    <ul>
+      <li><a href="index.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg></span> Home</a></li>
+      <li><a href="guidebook.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M5.6,3 H18.4 A1.6,1.6 0 0 1 20,4.6 V19.4 A1.6,1.6 0 0 1 18.4,21 H5.6 A1.6,1.6 0 0 1 4,19.4 V4.6 A1.6,1.6 0 0 1 5.6,3 Z M6.6,3 H7.6 V21 H6.6 Z M13,9.6 L15.4,12 L13,14.4 L10.6,12 Z"/></svg></span> Guidebook</a></li>
+      <li><a href="highscores.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20h5v-6H3v6Z" opacity=".75"/><path d="M9.5 20h5V9h-5v11Z"/><path d="M16 20h5v-4h-5v4Z" opacity=".55"/></svg></span> Highscores</a></li>
+      <li><a href="shop.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8,8 V6.5 A4,4 0 0 1 16,6.5 V8 H14.4 V6.5 A2.4,2.4 0 0 0 9.6,6.5 V8 Z M4.5,8 H19.5 L20.3,20 A1.2,1.2 0 0 1 19.1,21.3 H4.9 A1.2,1.2 0 0 1 3.7,20 Z"/></svg></span> Shop</a></li>
+      <li><a href="profile/players.html"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 12a4.8 4.8 0 1 0 0-9.6 4.8 4.8 0 0 0 0 9.6Z"/><path d="M4 20.5c0-3.9 3.6-6.5 8-6.5s8 2.6 8 6.5V21H4v-.5Z"/></svg></span> Players</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="shop-main">
+  <div class="container">
+
+    <div class="shop-topbar">
+      <h1 class="hud-heading"><span class="dash"></span>Shop<span class="dash"></span></h1>
+      <div class="shop-wallet">
+        <div class="currency-box currency-quest-points">
+          <span class="cur-icon" aria-hidden="true"><img src="assets/img/currency/quest-points.png" alt=""></span>
+          <span class="cur-text">
+            <span class="cur-label">Quest Points</span>
+            <span class="cur-value loading" id="shop-qp-value">—</span>
+          </span>
+        </div>
+        <div class="currency-box currency-stardust">
+          <span class="cur-icon" aria-hidden="true"><img src="assets/img/currency/stardust.png" alt=""></span>
+          <span class="cur-text">
+            <span class="cur-label">Stardust</span>
+            <span class="cur-value loading" id="shop-stardust-value">—</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div id="shop-status-banner"></div>
+
+    <input type="text" id="shop-search" class="shop-search" placeholder="Search shop..." autocomplete="off">
+
+    <!-- item-slot row (All + every equipment slot, even at 0) -->
+    <div class="shop-filters" id="shop-filters" role="tablist" aria-label="Item slot"></div>
+    <!-- second, independent row: ownership/stock status — combines (AND)
+         with the slot row above, same two-row pattern as the Achievements
+         page's category + tier rows. -->
+    <div class="shop-filters shop-filters-status" id="shop-status-filters" role="tablist" aria-label="Stock status"></div>
+
+    <div class="shop-grid" id="shop-grid">
+      <div class="shop-empty">Loading the shop…</div>
+    </div>
+
+    <div class="shop-pagination" id="shop-pagination"></div>
+
+  </div>
+</main>
+
+<div id="shop-toast" role="status" aria-live="polite"></div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© 2026 Quest Zone. All rights reserved.</span>
+      <span><a href="index.html" style="color:var(--blue-light);text-decoration:none;">← Back to Quest Zone</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="assets/js/qz-config.js"></script>
+<script src="assets/js/qz-auth.js"></script>
+<script src="assets/js/qz-header-auth.js"></script>
+<script src="assets/js/email-verify-modal.js"></script>
+<script src="assets/js/inventory-data.js"></script>
+<script src="assets/js/item-notify.js"></script>
+<script src="assets/js/starfield.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/shop.js"></script>
+</body>
+</html>

@@ -64,8 +64,13 @@
   let adminReadOnly = false;      // true when an admin is viewing someone else's inventory (view-only)
   let isAdminSelf = false;        // true when the signed-in account is an admin viewing THEIR OWN inventory —
                                    // offers "RETURN TO ADMIN INVENTORY" alongside the normal equip/unequip
-  let ownedIds = new Set();       // item ids this account owns (inventory_items)
-  let acquiredAtById = {};        // item id -> inventory_items.acquired_at (ISO string)
+  let ownedIds = new Set();       // item ids this account owns (inventory_items OR item_instances)
+  let acquiredAtById = {};        // item id -> acquired_at/created_at (ISO string)
+  let instancesById = {};         // item id -> array of {instance_id, serial_number, edition_size} — SERIALIZED
+                                   // limited-edition items only (item_instances — see
+                                   // supabase/migrations/20260909050000_item_economy_foundation.sql). An
+                                   // account can own more than one copy of the SAME item here (e.g. both
+                                   // halves of a 2-edition run), each with its own permanent serial number.
   let equipped = {};              // slotKey -> itemId, ONLY for slots with a row (equipped_items)
   let activeFilter = 'all';
   let searchTerm = '';
@@ -250,10 +255,22 @@
     closeMenu();
     examineEl = document.createElement('div');
     examineEl.className = 'qz-examine';
+    // Serialized limited-edition items (see instancesById in
+    // loadAccountData) show their permanent serial number(s) here — the
+    // one place an account can confirm exactly which numbered copy(ies)
+    // it holds, e.g. "Serial #1 of 2". Owning more than one copy of the
+    // same limited item (allowed for some items) lists every serial.
+    const serials = instancesById[item.id];
+    const serialHtml = (serials && serials.length)
+      ? '<div class="qz-examine-serial">' +
+          serials.map((s) => 'Serial #' + s.serial_number + (s.edition_size ? ' of ' + s.edition_size : '')).join('<br>') +
+        '</div>'
+      : '';
     examineEl.innerHTML =
       '<div class="qz-examine-icon">' + thumbHtml(item) + '</div>' +
       '<div class="qz-examine-name">' + item.name + '</div>' +
       '<div class="qz-examine-slot">' + (SLOT_LABEL[item.slot] || item.slot) + '</div>' +
+      serialHtml +
       (isEquipped(item.id) ? '<div class="qz-examine-tag">Equipped</div>' : '');
     document.body.appendChild(examineEl);
 
@@ -528,16 +545,38 @@
     // required once an admin can also be the caller: without it, an
     // admin's unfiltered select would come back with EVERY account's rows
     // (RLS lets admins see all of them), not just the one being viewed.
-    const [invRes, eqRes] = await Promise.all([
+    const [invRes, eqRes, instRes] = await Promise.all([
       client.from('inventory_items').select('item_id,acquired_at').eq('user_id', viewUserId),
-      client.from('equipped_items').select('slot,item_id').eq('user_id', viewUserId)
+      client.from('equipped_items').select('slot,item_id').eq('user_id', viewUserId),
+      // Serialized limited-edition items (e.g. a numbered "#1/2") live
+      // here, not in inventory_items — see item_instances in
+      // 20260909050000_item_economy_foundation.sql. item_definitions is
+      // joined in for edition_size, since a bare item_instances row
+      // doesn't carry the edition's total size itself.
+      client.from('item_instances').select('item_id,instance_id,serial_number,created_at,item_definitions(edition_size)').eq('owner_id', viewUserId)
     ]);
     if (invRes.error) { setState('<div class="icon">⚠️</div>Could not load your inventory: ' + invRes.error.message); return false; }
     if (eqRes.error) { setState('<div class="icon">⚠️</div>Could not load your equipment: ' + eqRes.error.message); return false; }
+    // instRes failing isn't fatal to the whole page — fall back to no
+    // serialized items shown rather than blocking simple-ownership items
+    // (Admin Crown, Doggy Slippers, White T-shirt) from loading at all.
+    if (instRes.error) console.warn('Quest Zone: could not load serialized items', instRes.error);
 
     ownedIds = new Set((invRes.data || []).map((r) => r.item_id));
     acquiredAtById = {};
     (invRes.data || []).forEach((r) => { acquiredAtById[r.item_id] = r.acquired_at; });
+    instancesById = {};
+    (instRes.data || []).forEach((r) => {
+      ownedIds.add(r.item_id); // a serialized item is owned too, even though it's not an inventory_items row
+      if (!(r.item_id in acquiredAtById)) acquiredAtById[r.item_id] = r.created_at;
+      if (!instancesById[r.item_id]) instancesById[r.item_id] = [];
+      instancesById[r.item_id].push({
+        instance_id: r.instance_id,
+        serial_number: r.serial_number,
+        edition_size: r.item_definitions ? r.item_definitions.edition_size : null
+      });
+    });
+    Object.keys(instancesById).forEach((id) => instancesById[id].sort((a, b) => a.serial_number - b.serial_number));
     equipped = {};
     (eqRes.data || []).forEach((r) => { if (r.item_id) equipped[r.slot] = r.item_id; });
     return true;

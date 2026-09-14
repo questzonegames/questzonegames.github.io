@@ -70,6 +70,21 @@
       addChromeSweep(profileBtn);
     }
 
+    // Stardust top-up entry point — lives here (not on the Shop page
+    // itself) specifically so it's visible on every page next to the
+    // player's own name, not just while already on the Shop. No payment
+    // provider is configured yet (see shop.html), so this is a
+    // "coming soon" notice rather than a real checkout for now.
+    const stardustBtn = document.createElement('button');
+    stardustBtn.type = 'button';
+    stardustBtn.className = 'btn btn-chrome-blue';
+    stardustBtn.textContent = '✨ Get Stardust';
+    stardustBtn.addEventListener('click', () => {
+      if (window.qzToast) window.qzToast('Stardust purchases are coming soon.');
+    });
+    actions.appendChild(stardustBtn);
+    addChromeSweep(stardustBtn);
+
     if (profile && profile.is_admin) {
       const adminBtn = document.createElement('a');
       adminBtn.href = prefix + 'profile/admin.html';

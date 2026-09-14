@@ -131,6 +131,35 @@
         back:  '../assets/img/equipment/head/admin-crown-back.png',
         left:  '../assets/img/equipment/head/admin-crown-left.png'
       }
+    },
+    // White T-shirt — Shop's one new item this update (see
+    // supabase/migrations/20260914030000_white_tshirt_item.sql for the
+    // real, server-authoritative economy row: item_id 'white-tshirt',
+    // free, one per player, untradeable). Deliberately NO `views`/`frames`
+    // here — there's no on-body art yet, so it shows as a plain icon chip
+    // everywhere (Inventory, Worn Equipment, Shop) and is never
+    // visually equipped on the avatar until real art is supplied; add
+    // `views` the same way admin-crown/doggy-slippers do above once it
+    // exists, nothing else about this entry needs to change.
+    {
+      id: 'white-tshirt',
+      name: 'White T-shirt',
+      slot: 'body',
+      icon: '👕',
+      tradeable: false,
+      source: 'shop'
+    },
+    // Test Sword — a genuine limited-edition (only 2 ever made) test item
+    // for the shop's globally-limited-stock mechanic (see
+    // supabase/migrations/20260914060000_test_sword_item.sql for the real
+    // economy row). No `views` yet, same reasoning as White T-shirt above.
+    {
+      id: 'test-sword',
+      name: 'Test Sword',
+      slot: 'mainHand',
+      icon: '⚔️',
+      tradeable: false,
+      source: 'shop'
     }
   ];
 
