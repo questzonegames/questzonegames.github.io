@@ -21,6 +21,88 @@
   const input = window.PNA_Input.createInputManager(canvas, CFG.DESIGN_W, CFG.DESIGN_H);
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // ---------------------------------------------------------------
+  // Music/Sound volume preferences — localStorage (instant, works
+  // signed out) + account sync via the same generic, game-agnostic
+  // public.user_audio_settings table Anagram Quest already uses
+  // (keyed by user_id + game_key, RLS lets a player read/write only
+  // their own row directly, no RPC needed since a volume preference
+  // isn't something worth cheating). See wireAudioControls() below for
+  // the popover UI that drives this.
+  // ---------------------------------------------------------------
+  const AUDIO_GAME_SLUG = 'pup-n-away';
+  const PNAAudioPrefs = (function () {
+    function loadLocalPct(key, fallback) {
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) return Math.max(0, Math.min(100, parseInt(saved, 10)));
+      } catch (e) { /* localStorage unavailable — fall through to default */ }
+      return fallback;
+    }
+    function saveLocalPct(key, pct) {
+      try { localStorage.setItem(key, String(pct)); } catch (e) { /* ignore */ }
+    }
+
+    let sfxPct = loadLocalPct('pna-sfx-volume', 70);
+    let musicPct = loadLocalPct('pna-music-volume', 50);
+    audio.setSfxVolume(sfxPct / 100);
+    audio.setMusicVolume(musicPct / 100);
+
+    let saveTimer = null;
+    function debouncedAccountSave() {
+      if (!window.QZAuth || !window.QZAuth.client || !integration.profile) return;
+      clearTimeout(saveTimer);
+      // A slider fires many 'input' events per drag — debounce the
+      // network write so dragging doesn't spam upserts.
+      saveTimer = setTimeout(() => {
+        window.QZAuth.client
+          .from('user_audio_settings')
+          .upsert({ user_id: integration.profile.id, game_key: AUDIO_GAME_SLUG, music_volume: musicPct, sfx_volume: sfxPct, updated_at: new Date().toISOString() }, { onConflict: 'user_id,game_key' })
+          .then(({ error }) => { if (error) console.warn('Pup N Away: could not save audio settings', error); });
+      }, 500);
+    }
+
+    function setSfxPct(pct) {
+      sfxPct = Math.max(0, Math.min(100, pct));
+      audio.setSfxVolume(sfxPct / 100);
+      saveLocalPct('pna-sfx-volume', sfxPct);
+      debouncedAccountSave();
+    }
+    function setMusicPct(pct) {
+      musicPct = Math.max(0, Math.min(100, pct));
+      audio.setMusicVolume(musicPct / 100);
+      saveLocalPct('pna-music-volume', musicPct);
+      debouncedAccountSave();
+    }
+
+    // Pulls this player's saved row (if any) once signed in, overriding
+    // whatever localStorage/defaults already applied on this page load.
+    // A first-time sign-in writes the current local values up as that
+    // row's starting point instead of leaving the account with none.
+    async function loadFromAccount() {
+      const client = window.QZAuth && window.QZAuth.client;
+      const userId = integration.profile && integration.profile.id;
+      if (!client || !userId) return;
+      try {
+        const { data, error } = await client
+          .from('user_audio_settings').select('music_volume,sfx_volume')
+          .eq('user_id', userId).eq('game_key', AUDIO_GAME_SLUG).maybeSingle();
+        if (error) { console.warn('Pup N Away: could not load audio settings', error); return; }
+        if (data) {
+          if (typeof data.sfx_volume === 'number') { sfxPct = data.sfx_volume; audio.setSfxVolume(sfxPct / 100); saveLocalPct('pna-sfx-volume', sfxPct); }
+          if (typeof data.music_volume === 'number') { musicPct = data.music_volume; audio.setMusicVolume(musicPct / 100); saveLocalPct('pna-music-volume', musicPct); }
+        } else {
+          await client.from('user_audio_settings')
+            .upsert({ user_id: userId, game_key: AUDIO_GAME_SLUG, music_volume: musicPct, sfx_volume: sfxPct }, { onConflict: 'user_id,game_key' });
+        }
+      } catch (err) {
+        console.warn('Pup N Away: could not load audio settings', err);
+      }
+    }
+
+    return { getSfxPct: () => sfxPct, getMusicPct: () => musicPct, setSfxPct, setMusicPct, loadFromAccount };
+  })();
+
   let images = {};
   let state = STATES.LOADING;
   let stateBeforePause = STATES.TITLE;
@@ -110,10 +192,17 @@
   // State transitions
   // ---------------------------------------------------------------
   function goTo(next) {
+    const prev = state;
     state = next;
     const noOverlay = next === STATES.PLAYING || next === STATES.LIFE_LOST;
     ui.showScreen(noOverlay ? null : next);
     ui.setHudVisible(next === STATES.PLAYING || next === STATES.LIFE_LOST || next === STATES.PAUSED);
+
+    // Lobby music plays only on the title screen — starts the moment
+    // it's allowed to (an unlocked gesture) if we're there, stops the
+    // instant we leave it.
+    if (next === STATES.TITLE && prev !== STATES.TITLE) audio.startLobbyMusic();
+    else if (prev === STATES.TITLE && next !== STATES.TITLE) audio.stopLobbyMusic();
   }
 
   function startCountdown() {
@@ -271,7 +360,10 @@
       run.bounces++;
       basket.squash();
       dog.onBasketImpact();
-      audio.play('basketBounce');
+      // restart:true — a rapid-fire corner-trap bounce cuts the still-
+      // playing "boing" off and replays it from the top instead of
+      // layering a second copy on top (never echoes/stacks).
+      audio.play('basketBounce', { restart: true });
       if (returningToBasket) {
         // safe landing after the final bone — play the landing beat,
         // then hand off to the run-off-screen outro.
@@ -405,8 +497,91 @@
       else document.exitFullscreen && document.exitFullscreen();
     });
 
-    window.addEventListener('keydown', () => { /* any key counts toward unlocking audio autoplay */ audio.unlockOnFirstGesture(); }, { once: true });
-    canvas.addEventListener('pointerdown', () => { audio.unlockOnFirstGesture(); }, { once: true });
+    window.addEventListener('keydown', unlockAudioAndMaybeStartLobbyMusic, { once: true });
+    canvas.addEventListener('pointerdown', unlockAudioAndMaybeStartLobbyMusic, { once: true });
+  }
+
+  function unlockAudioAndMaybeStartLobbyMusic() {
+    // any gesture counts toward unlocking audio autoplay — if it
+    // happens while we're still sitting on the title screen, the
+    // lobby music that couldn't play before now can.
+    audio.unlockOnFirstGesture();
+    if (state === STATES.TITLE) audio.startLobbyMusic();
+  }
+
+  // ---------------------------------------------------------------
+  // Music/Sound popover — a fixed pair of icon buttons, always visible,
+  // sharing one popover element that gets repositioned/relabelled by
+  // whichever button was clicked. Same interaction pattern as Anagram
+  // Quest's audio controls.
+  // ---------------------------------------------------------------
+  function wireAudioControls() {
+    const popover = document.getElementById('pna-audio-popover');
+    if (!popover) return; // markup not present (shouldn't happen, but never throw over a UI nicety)
+    const titleEl = document.getElementById('pna-audio-popover-title');
+    const sliderEl = document.getElementById('pna-audio-popover-slider');
+    const valueEl = document.getElementById('pna-audio-popover-value');
+    const noteEl = document.getElementById('pna-audio-popover-note');
+    const buttons = Array.from(document.querySelectorAll('[data-audio-popover]'));
+
+    let openKind = null; // 'music' | 'sound' | null
+    let openBtn = null;
+
+    function closePopover() {
+      popover.classList.remove('show');
+      popover.setAttribute('aria-hidden', 'true');
+      buttons.forEach((b) => b.setAttribute('aria-expanded', 'false'));
+      openKind = null;
+      openBtn = null;
+    }
+
+    function openPopover(kind, btn) {
+      const isMusic = kind === 'music';
+      titleEl.textContent = isMusic ? 'MUSIC' : 'SOUND';
+      const pct = isMusic ? PNAAudioPrefs.getMusicPct() : PNAAudioPrefs.getSfxPct();
+      sliderEl.value = pct;
+      valueEl.textContent = pct;
+      noteEl.textContent = isMusic
+        ? 'Lobby and in-game background music.'
+        : 'Basket bounces, bone pickups, buttons, and every other sound effect.';
+
+      const rect = btn.getBoundingClientRect();
+      popover.style.top = (rect.bottom + 8) + 'px';
+      popover.style.right = (window.innerWidth - rect.right) + 'px';
+      popover.style.left = 'auto';
+
+      popover.classList.add('show');
+      popover.setAttribute('aria-hidden', 'false');
+      buttons.forEach((b) => b.setAttribute('aria-expanded', String(b === btn)));
+      openKind = kind;
+      openBtn = btn;
+    }
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        unlockAudioAndMaybeStartLobbyMusic();
+        const kind = btn.getAttribute('data-audio-popover');
+        if (openKind === kind && openBtn === btn) { closePopover(); return; }
+        openPopover(kind, btn);
+      });
+    });
+
+    sliderEl.addEventListener('input', () => {
+      const pct = parseInt(sliderEl.value, 10) || 0;
+      valueEl.textContent = pct;
+      if (openKind === 'sound') PNAAudioPrefs.setSfxPct(pct);
+      else if (openKind === 'music') PNAAudioPrefs.setMusicPct(pct);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!openKind) return;
+      if (popover.contains(e.target)) return;
+      if (buttons.some((b) => b.contains(e.target))) return;
+      closePopover();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && openKind) closePopover();
+    });
   }
 
   // ---------------------------------------------------------------
@@ -415,6 +590,7 @@
   async function boot() {
     resizeCanvasForDPR();
     wireButtons();
+    wireAudioControls();
     ui.showScreen('LOADING');
 
     const result = await window.PNA_Assets.loadAll((done, total) => ui.setLoadingProgress(done, total));
@@ -424,6 +600,7 @@
     }
 
     await integration.init();
+    PNAAudioPrefs.loadFromAccount(); // not awaited — applies live volume as soon as it resolves, doesn't block anything else here
 
     goTo(STATES.TITLE);
     requestAnimationFrame(loop);
@@ -437,7 +614,7 @@
   window.PNA_DEBUG = {
     get state() { return state; }, STATES, run,
     pump(dtSeconds) { resizeCanvasForDPR(); update(dtSeconds); render(); },
-    goTo, ui,
+    goTo, ui, audio,
     get dog() { return dog; }, get basket() { return basket; }, get collectibles() { return collectibles; }
   };
 })();
