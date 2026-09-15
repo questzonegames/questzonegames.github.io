@@ -506,6 +506,29 @@
     document.addEventListener('pointerdown', unlockAudioAndMaybeStartLobbyMusic, { once: true });
   }
 
+  // ---------------------------------------------------------------
+  // Mobile move buttons — the game is keyboard-only by design, which
+  // otherwise leaves touch devices with no way to move the basket at
+  // all. These two big buttons (hidden on desktop, see index.html's
+  // #pna-move-controls media query) sit below the toolbar and just
+  // hold the same left/right flags a held key would — basket.update()
+  // doesn't know or care whether input.state.left came from a key or
+  // a held button.
+  // ---------------------------------------------------------------
+  function wireHoldButton(el, onDown, onUp) {
+    if (!el) return;
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); onDown(); });
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointerleave', onUp);
+    el.addEventListener('pointercancel', onUp);
+  }
+  function wireMoveButtons() {
+    wireHoldButton(document.getElementById('pna-btn-move-left'),
+      () => { input.state.left = true; }, () => { input.state.left = false; });
+    wireHoldButton(document.getElementById('pna-btn-move-right'),
+      () => { input.state.right = true; }, () => { input.state.right = false; });
+  }
+
   function unlockAudioAndMaybeStartLobbyMusic() {
     // any gesture counts toward unlocking audio autoplay — if it
     // happens while we're still sitting on the title screen, the
@@ -550,9 +573,27 @@
         ? 'Lobby and in-game background music.'
         : 'Basket bounces, bone pickups, buttons, and every other sound effect.';
 
+      // These buttons live in the toolbar BELOW the game stage, so
+      // opening the popover downward (the old behavior) routinely
+      // pushed it past the bottom edge of the viewport. Open it upward
+      // instead, and clamp both axes so it always stays fully on
+      // screen regardless of window size or which button was clicked.
       const rect = btn.getBoundingClientRect();
-      popover.style.top = (rect.bottom + 8) + 'px';
-      popover.style.right = (window.innerWidth - rect.right) + 'px';
+      const margin = 8;
+      const popW = 220; // matches .pna-audio-popover's fixed width
+      const estimatedPopH = 140; // roughly the popover's real rendered height
+
+      if (rect.top >= estimatedPopH + margin) {
+        popover.style.bottom = (window.innerHeight - rect.top + margin) + 'px';
+        popover.style.top = 'auto';
+      } else {
+        popover.style.top = (rect.bottom + margin) + 'px';
+        popover.style.bottom = 'auto';
+      }
+
+      let right = window.innerWidth - rect.right;
+      right = Math.max(margin, Math.min(right, window.innerWidth - popW - margin));
+      popover.style.right = right + 'px';
       popover.style.left = 'auto';
 
       popover.classList.add('show');
@@ -596,6 +637,7 @@
     resizeCanvasForDPR();
     wireButtons();
     wireAudioControls();
+    wireMoveButtons();
     ui.showScreen('LOADING');
 
     const result = await window.PNA_Assets.loadAll((done, total) => ui.setLoadingProgress(done, total));

@@ -38,7 +38,7 @@
   }
   .topbar .back { display: flex; align-items: center; opacity: 0.92; transition: opacity 0.15s ease; }
   .topbar .back:hover { opacity: 1; }
-  .topbar .back img { height: 64px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
+  .topbar .back img { height: 88px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
 
   .pna-page {
     position: relative; z-index: 1;
@@ -137,6 +137,31 @@
   }
   .pna-audio-icon-btn svg { width: 60%; height: 60%; }
   .pna-audio-icon-btn:hover { border-color: var(--moon); box-shadow: 0 0 12px rgba(255,220,140,0.4); }
+
+  /* ---- mobile move buttons — the game is keyboard-only by design (see
+     pup-n-away-input.js), which leaves touch devices with no way to
+     move the basket at all. These two big thumb-sized buttons sit
+     BELOW the toolbar (outside the playable stage, like everything
+     else in the toolbar) and just hold the same left/right input flags
+     a held key would. Hidden on desktop — same show-on-touch pattern
+     as Starbound's d-pad — since keyboard already covers that case. */
+  #pna-move-controls {
+    display: none;
+    width: min(94vw, calc((100vh - 230px) * (1920 / 1080)));
+    margin-top: 10px;
+    justify-content: space-between;
+  }
+  .pna-move-btn {
+    width: 84px; height: 84px; border-radius: 50%;
+    background: var(--panel-bg); border: 1.5px solid var(--panel-border);
+    color: var(--moon); font-size: 34px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; touch-action: none;
+  }
+  .pna-move-btn:active { background: rgba(255,255,255,0.12); border-color: var(--moon); }
+  @media (max-width: 720px), (pointer: coarse) {
+    #pna-move-controls { display: flex; }
+  }
 
   .pna-audio-popover {
     position: fixed; z-index: 300;
@@ -349,6 +374,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 0 1 0 8"/></svg>
       </button>
     </div>
+  </div>
+
+  <!-- Mobile move buttons — see #pna-move-controls above (only shown on
+       touch/narrow screens). Held down, they act exactly like holding
+       A/D or the arrow keys — see wireMoveButtons() in pup-n-away.js. -->
+  <div id="pna-move-controls">
+    <button type="button" class="pna-move-btn" id="pna-btn-move-left" aria-label="Move basket left">◀</button>
+    <button type="button" class="pna-move-btn" id="pna-btn-move-right" aria-label="Move basket right">▶</button>
   </div>
 </div>
 

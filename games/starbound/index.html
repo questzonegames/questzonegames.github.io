@@ -29,12 +29,16 @@
   canvas#site-starfield { position: fixed; inset: 0; z-index: 0; }
 
   .topbar {
-    position: relative; z-index: 2;
+    /* z-index above #sb-screen-menu's 20 — that landing screen is a
+       full-viewport fixed overlay (see below) that otherwise sits on
+       top of this bar and silently swallows clicks on the back link,
+       even though it's visually transparent in that corner. */
+    position: relative; z-index: 21;
     display: flex; align-items: center; padding: 14px 18px;
   }
   .topbar .back { display: flex; align-items: center; opacity: 0.92; transition: opacity 0.15s ease; }
   .topbar .back:hover { opacity: 1; }
-  .topbar .back img { height: 64px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
+  .topbar .back img { height: 88px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
 
   .sb-page {
     position: relative; z-index: 1;
