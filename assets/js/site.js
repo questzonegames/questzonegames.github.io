@@ -131,6 +131,18 @@
       status: 'active',
       category: 'total-level'
     };
+    TOTAL_LEVEL_GAMES[2] = {
+      id: 'pup-n-away',
+      number: '03',
+      title: 'Pup N Away',
+      // the real Pup N Away logo, shown whole and centered — same
+      // thumbContain treatment as the other two live tiles above.
+      image: 'assets/img/pup-n-away/logo/logo.png',
+      thumbContain: true,
+      route: 'games/pup-n-away/',
+      status: 'active',
+      category: 'total-level'
+    };
 
     TOTAL_LEVEL_GAMES.forEach((g) => {
       totalLevelGrid.appendChild(makeGameCard({

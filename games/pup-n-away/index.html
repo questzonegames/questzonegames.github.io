@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pup N Away — Quest Zone</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../../assets/img/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../../assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --moon: #ffe9a8;
+    --moon-dark: #b98a2a;
+    --text-main: #fff7ea;
+    --text-dim: #b9c2da;
+    --panel-bg: rgba(10,14,28,0.88);
+    --panel-border: rgba(160,180,255,0.3);
+    --accent: #7fa8ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: #060814;
+    color: var(--text-main);
+    font-family: 'Nunito', sans-serif;
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; padding: 14px 18px;
+  }
+  .topbar .back img { height: 30px; display: block; }
+
+  .pna-page {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 4px 14px 30px;
+  }
+
+  .pna-title {
+    font-family: 'Baloo 2', sans-serif; font-weight: 800;
+    font-size: clamp(22px, 4vw, 34px);
+    letter-spacing: 0.02em;
+    background: linear-gradient(180deg, #fff 0%, #ffe9a8 55%, #d9a441 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 24px rgba(255,220,140,0.3);
+    margin: 4px 0 14px;
+  }
+
+  /* ---- stage: fixed 1920x1080 design ratio, scaled responsively ---- */
+  #pna-stage-wrap {
+    position: relative;
+    width: min(94vw, calc((100vh - 170px) * (1920 / 1080)));
+    aspect-ratio: 1920 / 1080;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1.5px solid var(--panel-border);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 18px 50px rgba(0,0,0,0.55), 0 0 40px rgba(120,150,255,0.12);
+    background: #04060c;
+    /* HUD sizing below is expressed in container-width units (cqw) so
+       it scales with the STAGE's own on-screen size, not the viewport —
+       the stage can be small on a phone even in landscape, or large on
+       a phone in portrait letterboxed by width, so vw alone would get
+       either case wrong. */
+    container-type: inline-size;
+  }
+  canvas#pna-canvas {
+    display: block; width: 100%; height: 100%; touch-action: none;
+  }
+
+  /* ---- HUD overlay ---- */
+  #pna-hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap;
+    padding: clamp(6px, 1.6cqw, 14px) clamp(6px, 1.8cqw, 16px);
+    gap: clamp(4px, 1cqw, 10px);
+    pointer-events: none; z-index: 3;
+  }
+  #pna-hud.hidden { display: none; }
+  .pna-hud-block {
+    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    border-radius: clamp(6px, 1cqw, 10px);
+    padding: clamp(4px, 0.9cqw, 8px) clamp(6px, 1.4cqw, 14px);
+    font-family: 'Baloo 2', sans-serif;
+    pointer-events: auto;
+    white-space: nowrap;
+  }
+  .pna-hud-label { font-size: clamp(7px, 1cqw, 9.5px); letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
+  .pna-hud-value { font-size: clamp(11px, 1.8cqw, 17px); font-weight: 700; color: var(--moon); }
+  #pna-hud-lives { font-size: clamp(9px, 1.6cqw, 15px); letter-spacing: 2px; }
+  #pna-hud-level { font-size: clamp(8px, 1.2cqw, 12px) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22cqw; }
+  .pna-hud-right { display: flex; gap: clamp(3px, 0.8cqw, 8px); align-items: flex-start; }
+  .pna-icon-btn {
+    background: var(--panel-bg); border: 1px solid var(--panel-border); color: var(--text-main);
+    border-radius: clamp(6px, 1cqw, 10px);
+    width: clamp(24px, 4cqw, 38px); height: clamp(24px, 4cqw, 38px);
+    font-size: clamp(11px, 1.8cqw, 17px); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; pointer-events: auto;
+    flex: none;
+  }
+  .pna-icon-btn:active { transform: translateY(1px); }
+
+  /* ---- miss banner ---- */
+  #pna-miss-banner {
+    position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+    font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: clamp(20px, 6cqw, 40px);
+    color: #ff8a8a; text-shadow: 0 0 20px rgba(255,80,80,0.6), 0 2px 4px rgba(0,0,0,0.8);
+    opacity: 0; pointer-events: none; z-index: 4; transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  #pna-miss-banner.hidden { display: none; }
+  #pna-miss-banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+  /* ---- overlay screens ---- */
+  .pna-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: clamp(8px, 2cqw, 16px); text-align: center; padding: clamp(10px, 3cqw, 20px);
+    background: radial-gradient(ellipse at center, rgba(14,18,34,0.55) 0%, rgba(4,6,14,0.88) 75%);
+  }
+  .pna-overlay.hidden { display: none; }
+  .pna-logo { max-width: min(72%, 460px); width: 100%; height: auto; filter: drop-shadow(0 0 24px rgba(255,220,140,0.35)); }
+
+  #pna-screen-title { z-index: 20; }
+  #pna-screen-title .pna-logo { max-width: min(84%, 540px); margin-bottom: 6px; }
+
+  .pna-overlay-heading {
+    font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: clamp(16px, 4.5cqw, 30px);
+    letter-spacing: 0.02em; color: var(--moon); text-shadow: 0 0 18px rgba(255,220,140,0.4);
+  }
+  .pna-overlay-sub { color: var(--text-dim); font-size: clamp(10px, 2cqw, 13px); max-width: 420px; }
+  .pna-stat-line { font-family: 'Baloo 2', sans-serif; font-size: clamp(11px, 2.3cqw, 15px); color: var(--text-main); }
+  .pna-stat-line b { color: var(--moon); }
+
+  .pna-btn {
+    font-family: 'Baloo 2', sans-serif; font-weight: 800; letter-spacing: 0.02em;
+    border: none; cursor: pointer; border-radius: 999px;
+    padding: clamp(9px, 2.2cqw, 15px) clamp(18px, 5cqw, 34px); font-size: clamp(11px, 2.3cqw, 15px);
+    background: linear-gradient(180deg, #ffe9a8 0%, #ffcf5c 45%, #d9922a 100%);
+    color: #3a2500;
+    box-shadow: 0 8px 0 #8a5c00, 0 14px 24px rgba(0,0,0,0.4);
+    transition: transform 0.08s ease;
+  }
+  .pna-btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #8a5c00, 0 8px 16px rgba(0,0,0,0.4); }
+  .pna-btn.secondary {
+    background: linear-gradient(180deg, #6f92e0 0%, #2f4d9f 100%);
+    color: #fff; box-shadow: 0 8px 0 #16255c, 0 14px 24px rgba(0,0,0,0.4);
+  }
+  .pna-btn.secondary:active { box-shadow: 0 4px 0 #16255c, 0 8px 16px rgba(0,0,0,0.4); }
+  .pna-overlay-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---- loading ---- */
+  #pna-screen-loading { z-index: 25; background: #04060c; }
+  .pna-loading-track { width: min(70%, 360px); height: 10px; border-radius: 6px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  #pna-loading-bar { height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg, #ffcf5c, #ffe9a8); transition: width 0.15s ease; }
+
+  /* ---- countdown ---- */
+  #pna-screen-countdown { background: transparent; }
+  #pna-countdown-number {
+    font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: clamp(40px, 20cqw, 140px);
+    color: var(--moon); text-shadow: 0 0 30px rgba(255,220,140,0.5);
+  }
+
+  .pna-hint { margin-top: 12px; font-size: 12px; color: var(--text-dim); }
+
+  @media (prefers-reduced-motion: reduce) {
+    #pna-miss-banner { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
+</div>
+
+<div class="pna-page">
+  <div class="pna-title">PUP N AWAY</div>
+
+  <div id="pna-stage-wrap">
+    <canvas id="pna-canvas" width="1920" height="1080"></canvas>
+
+    <div id="pna-hud" class="hidden">
+      <div class="pna-hud-block">
+        <div class="pna-hud-label">Score</div>
+        <div class="pna-hud-value" id="pna-hud-score">0</div>
+      </div>
+      <div class="pna-hud-block">
+        <div class="pna-hud-label" id="pna-hud-level-label">Bones: <span id="pna-hud-bones">0 / 0</span></div>
+        <div class="pna-hud-value" id="pna-hud-level" style="font-size:12px;color:var(--text-dim);"></div>
+      </div>
+      <div class="pna-hud-right">
+        <div class="pna-hud-block">
+          <div class="pna-hud-label">Lives</div>
+          <div id="pna-hud-lives">❤❤❤</div>
+        </div>
+        <button type="button" class="pna-icon-btn" id="pna-btn-mute" title="Mute">🔊</button>
+        <button type="button" class="pna-icon-btn" id="pna-btn-pause" title="Pause">⏸</button>
+        <button type="button" class="pna-icon-btn" id="pna-btn-fullscreen" title="Fullscreen">⛶</button>
+      </div>
+    </div>
+
+    <div id="pna-miss-banner" class="hidden">Missed!</div>
+
+    <!-- ============== LOADING ============== -->
+    <div id="pna-screen-loading" class="pna-overlay hidden">
+      <img class="pna-logo" src="../../assets/img/pup-n-away/logo/logo.png" alt="Pup N Away">
+      <div class="pna-loading-track"><div id="pna-loading-bar"></div></div>
+      <div class="pna-overlay-sub" id="pna-loading-label">Loading… 0%</div>
+    </div>
+
+    <!-- ============== TITLE ============== -->
+    <div id="pna-screen-title" class="pna-overlay hidden">
+      <img class="pna-logo" src="../../assets/img/pup-n-away/logo/logo.png" alt="Pup N Away">
+      <button type="button" class="pna-btn" id="pna-btn-start">Play</button>
+      <div class="pna-hint">A / D or ◀ ▶ to move the basket — mouse and touch also work</div>
+    </div>
+
+    <!-- ============== INTRO (dream transition) ============== -->
+    <div id="pna-screen-intro" class="pna-overlay hidden">
+      <img class="pna-logo" src="../../assets/img/pup-n-away/dog/misc/sit.png" alt="" style="max-width:min(40%,260px);filter:drop-shadow(0 0 20px rgba(140,170,255,0.4));">
+      <div class="pna-overlay-heading">Time for a dream…</div>
+      <div class="pna-overlay-sub">The pup drifts off to sleep, chasing dreams full of bones.</div>
+      <button type="button" class="pna-btn secondary" id="pna-btn-skip-intro">Skip Intro</button>
+    </div>
+
+    <!-- ============== COUNTDOWN ============== -->
+    <div id="pna-screen-countdown" class="pna-overlay hidden">
+      <div id="pna-countdown-number">3</div>
+    </div>
+
+    <!-- ============== LEVEL COMPLETE ============== -->
+    <div id="pna-screen-level-complete" class="pna-overlay hidden">
+      <div class="pna-overlay-heading" id="pna-lc-level-name">Level Complete!</div>
+      <div class="pna-stat-line">Score: <b id="pna-lc-score">0</b></div>
+      <div class="pna-stat-line">Bones collected: <b id="pna-lc-bones">0 / 0</b></div>
+      <div class="pna-overlay-btns">
+        <button type="button" class="pna-btn" id="pna-btn-continue">Continue</button>
+        <button type="button" class="pna-btn secondary" id="pna-btn-replay-level">Replay</button>
+        <button type="button" class="pna-btn secondary" id="pna-btn-return-lc">Return to Quest Zone</button>
+      </div>
+    </div>
+
+    <!-- ============== GAME OVER ============== -->
+    <div id="pna-screen-game-over" class="pna-overlay hidden">
+      <div class="pna-overlay-heading">Game Over</div>
+      <div class="pna-stat-line">Final score: <b id="pna-go-score">0</b></div>
+      <div class="pna-overlay-btns">
+        <button type="button" class="pna-btn" id="pna-btn-restart-level-go">Restart Level</button>
+        <button type="button" class="pna-btn secondary" id="pna-btn-return-go">Return to Quest Zone</button>
+      </div>
+    </div>
+
+    <!-- ============== PAUSED ============== -->
+    <div id="pna-screen-paused" class="pna-overlay hidden">
+      <div class="pna-overlay-heading">Paused</div>
+      <div class="pna-overlay-btns">
+        <button type="button" class="pna-btn" id="pna-btn-resume">Resume</button>
+        <button type="button" class="pna-btn secondary" id="pna-btn-restart-paused">Restart Level</button>
+        <button type="button" class="pna-btn secondary" id="pna-btn-return-paused">Return to Quest Zone</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="../../assets/js/qz-config.js"></script>
+<script src="../../assets/js/qz-auth.js"></script>
+<script src="pup-n-away-config.js"></script>
+<script src="pup-n-away-assets.js"></script>
+<script src="pup-n-away-input.js"></script>
+<script src="pup-n-away-audio.js"></script>
+<script src="pup-n-away-physics.js"></script>
+<script src="pup-n-away-basket.js"></script>
+<script src="pup-n-away-dog.js"></script>
+<script src="pup-n-away-collectibles.js"></script>
+<script src="pup-n-away-levels.js"></script>
+<script src="pup-n-away-ui.js"></script>
+<script src="pup-n-away-integration.js"></script>
+<script src="pup-n-away.js"></script>
+</body>
+</html>
