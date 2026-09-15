@@ -32,7 +32,9 @@
     position: relative; z-index: 2;
     display: flex; align-items: center; padding: 14px 18px;
   }
-  .topbar .back img { height: 30px; display: block; }
+  .topbar .back { display: flex; align-items: center; opacity: 0.92; transition: opacity 0.15s ease; }
+  .topbar .back:hover { opacity: 1; }
+  .topbar .back img { height: 64px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
 
   .sb-page {
     position: relative; z-index: 1;

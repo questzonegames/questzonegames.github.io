@@ -27,12 +27,18 @@
     font-family: 'Nunito', sans-serif;
     overflow-x: hidden;
   }
+  /* Same interactive deep-space background as the homepage (hover-glow
+     stars, drifting nebulae, occasional galaxy/shooting star) — see
+     assets/js/starfield.js, shared verbatim, no game-specific copy. */
+  canvas#site-starfield { position: fixed; inset: 0; z-index: 0; }
 
   .topbar {
     position: relative; z-index: 2;
     display: flex; align-items: center; padding: 14px 18px;
   }
-  .topbar .back img { height: 30px; display: block; }
+  .topbar .back { display: flex; align-items: center; opacity: 0.92; transition: opacity 0.15s ease; }
+  .topbar .back:hover { opacity: 1; }
+  .topbar .back img { height: 64px; width: auto; display: block; filter: drop-shadow(0 0 10px rgba(90,150,255,0.4)); }
 
   .pna-page {
     position: relative; z-index: 1;
@@ -40,88 +46,96 @@
     padding: 4px 14px 30px;
   }
 
-  .pna-title {
-    font-family: 'Baloo 2', sans-serif; font-weight: 800;
-    font-size: clamp(22px, 4vw, 34px);
-    letter-spacing: 0.02em;
-    background: linear-gradient(180deg, #fff 0%, #ffe9a8 55%, #d9a441 100%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    text-shadow: 0 0 24px rgba(255,220,140,0.3);
-    margin: 4px 0 14px;
+  .pna-title-logo {
+    display: block;
+    width: min(70vw, 360px);
+    height: auto;
+    margin: 4px 0 10px;
+    filter: drop-shadow(0 0 18px rgba(255,220,140,0.3));
+  }
+
+  /* Everything the player needs to read/press while playing (score,
+     bones, timer, lives, the quick controls) used to sit as an overlay
+     ON TOP of the canvas — which covered bones spawned near the top of
+     a level. It now lives in its own toolbar bar BELOW the game stage
+     instead, entirely outside the playable area, so nothing in the
+     level is ever obscured. See #pna-toolbar / #pna-hud below. */
+  #pna-toolbar {
+    width: min(94vw, calc((100vh - 230px) * (1920 / 1080)));
+    margin-top: 10px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: clamp(4px, 1cqw, 10px);
+    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: clamp(6px, 1.6cqw, 12px) clamp(6px, 1.8cqw, 14px);
+    /* Sized in container-width units (cqw) so it scales with the
+       TOOLBAR's own on-screen width, not the viewport — it always
+       matches the stage's width above it, on any screen size. */
+    container-type: inline-size;
   }
 
   /* ---- stage: fixed 1920x1080 design ratio, scaled responsively ---- */
   #pna-stage-wrap {
     position: relative;
-    width: min(94vw, calc((100vh - 170px) * (1920 / 1080)));
+    width: min(94vw, calc((100vh - 230px) * (1920 / 1080)));
     aspect-ratio: 1920 / 1080;
     border-radius: 14px;
     overflow: hidden;
     border: 1.5px solid var(--panel-border);
     box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 18px 50px rgba(0,0,0,0.55), 0 0 40px rgba(120,150,255,0.12);
     background: #04060c;
-    /* HUD sizing below is expressed in container-width units (cqw) so
-       it scales with the STAGE's own on-screen size, not the viewport —
-       the stage can be small on a phone even in landscape, or large on
-       a phone in portrait letterboxed by width, so vw alone would get
-       either case wrong. */
-    container-type: inline-size;
   }
   canvas#pna-canvas {
     display: block; width: 100%; height: 100%; touch-action: none;
   }
 
-  /* ---- HUD overlay ---- */
+  /* ---- HUD row — gameplay stats, only relevant/shown while a level is
+     actually in progress (see ui.setHudVisible()) ---- */
   #pna-hud {
-    position: absolute; top: 0; left: 0; right: 0;
-    display: flex; justify-content: space-between; align-items: flex-start;
-    flex-wrap: wrap;
-    padding: clamp(6px, 1.6cqw, 14px) clamp(6px, 1.8cqw, 16px);
+    display: flex; flex-wrap: wrap; align-items: center;
     gap: clamp(4px, 1cqw, 10px);
-    pointer-events: none; z-index: 3;
   }
   #pna-hud.hidden { display: none; }
   .pna-hud-block {
-    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border);
     border-radius: clamp(6px, 1cqw, 10px);
     padding: clamp(4px, 0.9cqw, 8px) clamp(6px, 1.4cqw, 14px);
     font-family: 'Baloo 2', sans-serif;
-    pointer-events: auto;
     white-space: nowrap;
   }
   .pna-hud-label { font-size: clamp(7px, 1cqw, 9.5px); letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
   .pna-hud-value { font-size: clamp(11px, 1.8cqw, 17px); font-weight: 700; color: var(--moon); }
   .pna-hud-timer-value { font-variant-numeric: tabular-nums; }
-  #pna-hud-lives { font-size: clamp(9px, 1.6cqw, 15px); letter-spacing: 2px; }
+  #pna-hud-lives { font-size: clamp(9px, 1.6cqw, 15px); letter-spacing: 2px; color: #ff4d5e; text-shadow: 0 0 6px rgba(255,77,94,0.5); }
   #pna-hud-level { font-size: clamp(8px, 1.2cqw, 12px) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22cqw; }
-  .pna-hud-right { display: flex; gap: clamp(3px, 0.8cqw, 8px); align-items: flex-start; }
+
+  /* ---- toolbar controls — icon buttons, always visible (mute/pause/
+     fullscreen live in the gated #pna-hud above since they only make
+     sense mid-level; Music/Sound stay reachable from every screen,
+     including the title screen, so they live here instead). ---- */
+  .pna-toolbar-controls { display: flex; gap: clamp(3px, 0.8cqw, 8px); align-items: center; }
   .pna-icon-btn {
-    background: var(--panel-bg); border: 1px solid var(--panel-border); color: var(--text-main);
+    background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-main);
     border-radius: clamp(6px, 1cqw, 10px);
     width: clamp(24px, 4cqw, 38px); height: clamp(24px, 4cqw, 38px);
     font-size: clamp(11px, 1.8cqw, 17px); cursor: pointer;
-    display: flex; align-items: center; justify-content: center; pointer-events: auto;
+    display: flex; align-items: center; justify-content: center;
     flex: none;
   }
   .pna-icon-btn:active { transform: translateY(1px); }
 
-  /* ---- Music/Sound volume controls — a fixed top-right pair of icon
-     buttons, always visible regardless of which screen is showing
-     (title, playing, paused, etc.), each opening a shared popover with
-     a 0-100% slider. Page-level (position:fixed), not confined to the
-     boxed game stage, same pattern as Anagram Quest's global audio
+  /* ---- Music/Sound volume controls — see .pna-toolbar-controls above
+     for where these buttons now live. Each opens the shared popover
+     below with a 0-100% slider, same pattern as Anagram Quest's audio
      controls — see wireAudioControls() in pup-n-away.js. */
-  .pna-global-audio-controls {
-    position: fixed; top: 14px; right: 16px; z-index: 60;
-    display: flex; gap: 10px;
-  }
   .pna-audio-icon-btn {
-    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
-    border: 1.5px solid var(--panel-border); background: var(--panel-bg);
+    width: clamp(24px, 4cqw, 38px); height: clamp(24px, 4cqw, 38px); flex: none;
+    border-radius: clamp(6px, 1cqw, 10px);
+    border: 1.5px solid var(--panel-border); background: rgba(255,255,255,0.05);
     color: var(--moon); display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: box-shadow 0.15s ease, border-color 0.15s ease;
   }
-  .pna-audio-icon-btn svg { width: 18px; height: 18px; }
+  .pna-audio-icon-btn svg { width: 60%; height: 60%; }
   .pna-audio-icon-btn:hover { border-color: var(--moon); box-shadow: 0 0 12px rgba(255,220,140,0.4); }
 
   .pna-audio-popover {
@@ -213,23 +227,15 @@
 </style>
 </head>
 <body>
+<canvas id="site-starfield"></canvas>
 
 <div class="topbar">
   <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
 </div>
 
-<!-- Music/Sound controls — always visible, page-level (not confined to
-     the boxed game stage), same pattern as Anagram Quest's audio
-     controls: two icon buttons sharing one popover with a 0-100%
-     slider each. See wireAudioControls() in pup-n-away.js. -->
-<div class="pna-global-audio-controls">
-  <button class="pna-audio-icon-btn" type="button" data-audio-popover="music" title="Music" aria-haspopup="true" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-  </button>
-  <button class="pna-audio-icon-btn" type="button" data-audio-popover="sound" title="Sound" aria-haspopup="true" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 0 1 0 8"/></svg>
-  </button>
-</div>
+<!-- Shared popover for the Music/Sound buttons below (now inside
+     #pna-toolbar, not page-fixed) — JS repositions it under whichever
+     button was clicked. See wireAudioControls() in pup-n-away.js. -->
 <div id="pna-audio-popover" class="pna-audio-popover" role="dialog" aria-hidden="true">
   <div class="pna-audio-popover-title" id="pna-audio-popover-title">SOUND</div>
   <div class="pna-audio-popover-row">
@@ -240,34 +246,10 @@
 </div>
 
 <div class="pna-page">
-  <div class="pna-title">PUP N AWAY</div>
+  <img class="pna-title-logo" src="../../assets/img/pup-n-away/logo/logo.png" alt="Pup N Away">
 
   <div id="pna-stage-wrap">
     <canvas id="pna-canvas" width="1920" height="1080"></canvas>
-
-    <div id="pna-hud" class="hidden">
-      <div class="pna-hud-block">
-        <div class="pna-hud-label">Score</div>
-        <div class="pna-hud-value" id="pna-hud-score">0</div>
-      </div>
-      <div class="pna-hud-block">
-        <div class="pna-hud-label" id="pna-hud-level-label">Bones: <span id="pna-hud-bones">0 / 0</span></div>
-        <div class="pna-hud-value" id="pna-hud-level" style="font-size:12px;color:var(--text-dim);"></div>
-      </div>
-      <div class="pna-hud-block">
-        <div class="pna-hud-label">Time</div>
-        <div class="pna-hud-value pna-hud-timer-value" id="pna-hud-timer">0:00.0</div>
-      </div>
-      <div class="pna-hud-block">
-        <div class="pna-hud-label">Lives</div>
-        <div id="pna-hud-lives">❤❤❤</div>
-      </div>
-      <div class="pna-hud-right">
-        <button type="button" class="pna-icon-btn" id="pna-btn-mute" title="Mute">🔊</button>
-        <button type="button" class="pna-icon-btn" id="pna-btn-pause" title="Pause">⏸</button>
-        <button type="button" class="pna-icon-btn" id="pna-btn-fullscreen" title="Fullscreen">⛶</button>
-      </div>
-    </div>
 
     <div id="pna-miss-banner" class="hidden">Missed!</div>
 
@@ -331,11 +313,49 @@
       </div>
     </div>
   </div>
+
+  <!-- Toolbar — every readout and control lives here, entirely OUTSIDE
+       the playable 16:9 stage above, so nothing in a level is ever
+       covered up. #pna-hud (gameplay stats + mute/pause/fullscreen) is
+       only shown mid-level; the Music/Sound buttons next to it stay
+       reachable from every screen. -->
+  <div id="pna-toolbar">
+    <div id="pna-hud" class="hidden">
+      <div class="pna-hud-block">
+        <div class="pna-hud-label">Score</div>
+        <div class="pna-hud-value" id="pna-hud-score">0</div>
+      </div>
+      <div class="pna-hud-block">
+        <div class="pna-hud-label" id="pna-hud-level-label">Bones: <span id="pna-hud-bones">0 / 0</span></div>
+        <div class="pna-hud-value" id="pna-hud-level" style="font-size:12px;color:var(--text-dim);"></div>
+      </div>
+      <div class="pna-hud-block">
+        <div class="pna-hud-label">Time</div>
+        <div class="pna-hud-value pna-hud-timer-value" id="pna-hud-timer">0:00.0</div>
+      </div>
+      <div class="pna-hud-block">
+        <div class="pna-hud-label">Lives</div>
+        <div id="pna-hud-lives">❤❤❤</div>
+      </div>
+      <button type="button" class="pna-icon-btn" id="pna-btn-mute" title="Mute">🔊</button>
+      <button type="button" class="pna-icon-btn" id="pna-btn-pause" title="Pause">⏸</button>
+      <button type="button" class="pna-icon-btn" id="pna-btn-fullscreen" title="Fullscreen">⛶</button>
+    </div>
+    <div class="pna-toolbar-controls">
+      <button class="pna-audio-icon-btn" type="button" data-audio-popover="music" title="Music" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </button>
+      <button class="pna-audio-icon-btn" type="button" data-audio-popover="sound" title="Sound" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 0 1 0 8"/></svg>
+      </button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="../../assets/js/qz-config.js"></script>
 <script src="../../assets/js/qz-auth.js"></script>
+<script src="../../assets/js/starfield.js"></script>
 <script src="pup-n-away-config.js"></script>
 <script src="pup-n-away-assets.js"></script>
 <script src="pup-n-away-input.js"></script>

@@ -48,7 +48,10 @@
       const levelEl = $('pna-hud-level');
       if (scoreEl) scoreEl.textContent = String(score);
       if (bonesEl) bonesEl.textContent = bonesCollected + ' / ' + bonesTotal;
-      if (livesEl) livesEl.textContent = '❤'.repeat(Math.max(0, lives));
+      // A plain text heart glyph (not the ❤️ emoji) so the CSS color
+      // below is what actually renders it red on every platform/font,
+      // instead of leaving it to whatever color an emoji font ships.
+      if (livesEl) livesEl.textContent = '♥'.repeat(Math.max(0, lives));
       if (levelEl) levelEl.textContent = levelName;
     }
 

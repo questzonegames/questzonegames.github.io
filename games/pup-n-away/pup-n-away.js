@@ -497,8 +497,13 @@
       else document.exitFullscreen && document.exitFullscreen();
     });
 
+    // Listen as widely as possible for the very first gesture — the
+    // title screen's own overlay sits on top of the canvas, so a click
+    // on it (anywhere, not just the Play button) never reaches the
+    // canvas-only listener below; a page-level listener catches that
+    // too, so lobby music starts the instant ANY interaction happens.
     window.addEventListener('keydown', unlockAudioAndMaybeStartLobbyMusic, { once: true });
-    canvas.addEventListener('pointerdown', unlockAudioAndMaybeStartLobbyMusic, { once: true });
+    document.addEventListener('pointerdown', unlockAudioAndMaybeStartLobbyMusic, { once: true });
   }
 
   function unlockAudioAndMaybeStartLobbyMusic() {
