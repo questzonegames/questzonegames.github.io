@@ -118,8 +118,9 @@
 
     function draw(ctx, images) {
       ctx.save();
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      // Smoothing is set once centrally, in pup-n-away.js's
+      // resizeCanvasForDPR(), whenever the canvas backing store
+      // actually changes size.
 
       if (state.grounded) {
         const dir = state.facing;

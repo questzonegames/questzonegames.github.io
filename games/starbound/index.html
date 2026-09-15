@@ -25,6 +25,15 @@
     color: var(--text-main);
     font-family: 'Saira', sans-serif;
     overflow-x: hidden;
+    /* Kills the "double-tap/rapid-tap zooms or highlights text" problem
+       on mobile — the viewport meta's user-scalable=no already blocks
+       pinch-zoom; touch-action:manipulation additionally drops the
+       double-tap-to-zoom gesture (while still allowing normal page
+       scroll/pan), and the -webkit- trio stops iOS's own text-
+       selection/callout flash from a fast tap landing on any text. */
+    -webkit-user-select: none; -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   canvas#site-starfield { position: fixed; inset: 0; z-index: 0; }
 

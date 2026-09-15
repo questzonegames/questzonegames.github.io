@@ -20,13 +20,19 @@
   const ctx = canvas.getContext('2d');
 
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Coarse-pointer (touch) devices: fewer stars, a capped-lower backing
+  // store, and no shooting stars — the cursor hover-glow this file is
+  // built around never triggers on touch anyway (no mouse), so there's
+  // no loss in trimming the parts of the scene a phone was paying full
+  // price for without ever seeing the payoff.
+  const isMobile = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   const BASE_BG = '#05060d';
   const BASE_BG_RGB = [5, 6, 13];
   const CONTENT_WIDTH = 1200; // roughly the boxed content column
   const HOVER_RADIUS = 130;
   const NEBULA_HOVER_RADIUS = 260;
 
-  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1 : 2);
   let cssW = 0, cssH = 0;
   let stars = [];
   let nebulae = [];
@@ -112,7 +118,7 @@
   }
 
   function makeStars(w, h) {
-    const count = Math.floor((w * h) / 1300);
+    const count = Math.floor((w * h) / (isMobile ? 2600 : 1300));
     return Array.from({ length: count }, () => makeOneStar(w, () => Math.random() * h));
   }
 
@@ -327,7 +333,7 @@
       }
 
       // ---- rare shooting stars, biased to the outer thirds, themed trail ----
-      if (!reduceMotion) {
+      if (!reduceMotion && !isMobile) {
         if (t >= nextShootAt) {
           spawnShootingStar();
           nextShootAt = t + 10000 + Math.random() * 10000;

@@ -58,8 +58,9 @@
         ctx.translate(item.x, item.y + floatY);
         ctx.rotate(rot);
         ctx.scale(scale, scale);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        // Smoothing is set once centrally, in pup-n-away.js's
+        // resizeCanvasForDPR(), whenever the canvas backing store
+        // actually changes size.
         if (img) {
           ctx.drawImage(img, -size / 2, -size / 2, size, size);
         } else {

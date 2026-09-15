@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Anagram Quest — Quest Zone</title>
 <link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="../../assets/img/favicon-16.png">
@@ -41,6 +41,17 @@
     color: var(--text-main);
     font-family: 'Saira', sans-serif;
     overflow-x: hidden;
+    /* Kills the "double-tap/rapid-tap zooms or highlights text" problem
+       on mobile — the viewport meta's user-scalable=no already blocks
+       pinch-zoom; touch-action:manipulation additionally drops the
+       double-tap-to-zoom gesture (while still allowing normal page
+       scroll/pan, unlike touch-action:none), and the -webkit- trio
+       stops iOS's own text-selection/callout flash from a fast tap
+       landing on any text on the page. No real text field exists here
+       to need selection, so disabling it site-wide on this page is safe. */
+    -webkit-user-select: none; -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   /* Same background as the Quest Zone homepage — #site-starfield is the

@@ -20,6 +20,15 @@
   const levels = window.PNA_Levels.createLevelManager();
   const input = window.PNA_Input.createInputManager(canvas, CFG.DESIGN_W, CFG.DESIGN_H);
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Coarse-pointer (touch) devices are treated as "mobile" for perf
+  // purposes — a lower canvas backing-store resolution and cheaper
+  // image resampling are the two biggest, cheapest wins against jank
+  // on a phone GPU, and neither is visually missed at phone viewing
+  // distance/size. window.PNA_MOBILE is also read by every other
+  // module's own draw() (dog/basket/collectibles) so the smoothing
+  // quality choice stays consistent everywhere in one place.
+  const isMobile = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  window.PNA_MOBILE = isMobile;
 
   // ---------------------------------------------------------------
   // Music/Sound volume preferences — localStorage (instant, works
@@ -133,13 +142,22 @@
   // (which the stylesheet keeps at a strict 16:9 letterboxed box).
   // ---------------------------------------------------------------
   function resizeCanvasForDPR() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Mobile GPUs pay for every extra backing-store pixel — capping at
+    // 1x there (vs 2x on desktop) cuts the fill rate to a quarter with
+    // no visible loss at phone viewing distance, and is the single
+    // biggest lever against jank on a phone.
+    const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1 : 2);
     const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
     const targetW = Math.round(cssW * dpr);
     const targetH = Math.round(cssH * dpr);
     if (canvas.width !== targetW || canvas.height !== targetH) {
       canvas.width = targetW;
       canvas.height = targetH;
+      // Resizing the canvas element resets ALL context state, including
+      // smoothing — re-apply here (once per actual resize, not every
+      // frame) rather than in every module's own draw() call.
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = isMobile ? 'low' : 'high';
     }
     // Map the fixed 1920x1080 design space onto whatever the canvas's
     // real backing-store size is — every draw call below only ever
@@ -389,8 +407,9 @@
   function drawBackground() {
     const key = levels.backgroundKey(currentLevel);
     const img = images[key];
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    // Smoothing is set once, in resizeCanvasForDPR(), whenever the
+    // canvas backing store actually changes size — no need to redo it
+    // on every draw call/module.
     if (img) {
       ctx.drawImage(img, 0, 0, CFG.DESIGN_W, CFG.DESIGN_H);
     } else {

@@ -64,8 +64,9 @@
       ctx.scale(sx, sy);
 
       if (img) {
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        // Smoothing is set once centrally, in pup-n-away.js's
+        // resizeCanvasForDPR(), whenever the canvas backing store
+        // actually changes size.
         ctx.drawImage(img, -half, -state.height / 2, state.width, state.height);
       } else {
         // Honest placeholder — clearly primitive shapes, not an attempt

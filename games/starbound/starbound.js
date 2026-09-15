@@ -144,8 +144,15 @@
   // the drawing context so every draw call can keep using DESIGN_W/H
   // design-space coordinates regardless of real screen size/zoom.
   let scaleX = 1, scaleY = 1; // design-px -> backing-store-px, kept for input hit-testing math
+  // Coarse-pointer (touch) devices are treated as "mobile" — the
+  // unclamped devicePixelRatio below could be 3+ on a phone, meaning a
+  // 9x larger canvas backing store than a capped 1x, which was the
+  // single biggest cause of mobile jank here (busier scene than Pup N
+  // Away: obstacles, birds, particles, all redrawn every frame at that
+  // resolution).
+  const isMobile = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   function resizeCanvas() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1 : 2);
     const rect = canvas.getBoundingClientRect();
     const cssW = Math.max(1, Math.round(rect.width));
     const cssH = Math.max(1, Math.round(rect.height));
