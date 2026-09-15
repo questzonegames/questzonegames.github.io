@@ -517,10 +517,23 @@
   // ---------------------------------------------------------------
   function wireHoldButton(el, onDown, onUp) {
     if (!el) return;
+    // Pointer Events cover modern mobile browsers, but a duplicate,
+    // explicit Touch Event path is wired alongside them (both call the
+    // same onDown/onUp, which are idempotent — setting the same
+    // left/right flag twice is harmless) so a real phone still works
+    // even if something about its Pointer Event support is flaky.
+    // preventDefault on every path stops iOS's own text-selection/
+    // callout gesture from grabbing the touch instead of the button —
+    // that gesture was both showing the "copy/paste" highlight AND
+    // swallowing the touch so the basket never moved.
     el.addEventListener('pointerdown', (e) => { e.preventDefault(); onDown(); });
-    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointerup', (e) => { e.preventDefault(); onUp(); });
     el.addEventListener('pointerleave', onUp);
     el.addEventListener('pointercancel', onUp);
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); onDown(); }, { passive: false });
+    el.addEventListener('touchend', (e) => { e.preventDefault(); onUp(); }, { passive: false });
+    el.addEventListener('touchcancel', onUp);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
   function wireMoveButtons() {
     wireHoldButton(document.getElementById('pna-btn-move-left'),
