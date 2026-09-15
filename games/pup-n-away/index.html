@@ -91,6 +91,7 @@
   }
   .pna-hud-label { font-size: clamp(7px, 1cqw, 9.5px); letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
   .pna-hud-value { font-size: clamp(11px, 1.8cqw, 17px); font-weight: 700; color: var(--moon); }
+  .pna-hud-timer-value { font-variant-numeric: tabular-nums; }
   #pna-hud-lives { font-size: clamp(9px, 1.6cqw, 15px); letter-spacing: 2px; }
   #pna-hud-level { font-size: clamp(8px, 1.2cqw, 12px) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22cqw; }
   .pna-hud-right { display: flex; gap: clamp(3px, 0.8cqw, 8px); align-items: flex-start; }
@@ -192,11 +193,15 @@
         <div class="pna-hud-label" id="pna-hud-level-label">Bones: <span id="pna-hud-bones">0 / 0</span></div>
         <div class="pna-hud-value" id="pna-hud-level" style="font-size:12px;color:var(--text-dim);"></div>
       </div>
+      <div class="pna-hud-block">
+        <div class="pna-hud-label">Time</div>
+        <div class="pna-hud-value pna-hud-timer-value" id="pna-hud-timer">0:00.0</div>
+      </div>
+      <div class="pna-hud-block">
+        <div class="pna-hud-label">Lives</div>
+        <div id="pna-hud-lives">❤❤❤</div>
+      </div>
       <div class="pna-hud-right">
-        <div class="pna-hud-block">
-          <div class="pna-hud-label">Lives</div>
-          <div id="pna-hud-lives">❤❤❤</div>
-        </div>
         <button type="button" class="pna-icon-btn" id="pna-btn-mute" title="Mute">🔊</button>
         <button type="button" class="pna-icon-btn" id="pna-btn-pause" title="Pause">⏸</button>
         <button type="button" class="pna-icon-btn" id="pna-btn-fullscreen" title="Fullscreen">⛶</button>
@@ -216,7 +221,7 @@
     <div id="pna-screen-title" class="pna-overlay hidden">
       <img class="pna-logo" src="../../assets/img/pup-n-away/logo/logo.png" alt="Pup N Away">
       <button type="button" class="pna-btn" id="pna-btn-start">Play</button>
-      <div class="pna-hint">A / D or ◀ ▶ to move the basket — mouse and touch also work</div>
+      <div class="pna-hint">A / D or ◀ ▶ to move the basket</div>
     </div>
 
     <!-- ============== INTRO (dream transition) ============== -->
@@ -237,6 +242,7 @@
       <div class="pna-overlay-heading" id="pna-lc-level-name">Level Complete!</div>
       <div class="pna-stat-line">Score: <b id="pna-lc-score">0</b></div>
       <div class="pna-stat-line">Bones collected: <b id="pna-lc-bones">0 / 0</b></div>
+      <div class="pna-stat-line">Time: <b id="pna-lc-time" style="font-variant-numeric: tabular-nums;">0:00.0</b></div>
       <div class="pna-overlay-btns">
         <button type="button" class="pna-btn" id="pna-btn-continue">Continue</button>
         <button type="button" class="pna-btn secondary" id="pna-btn-replay-level">Replay</button>

@@ -26,29 +26,23 @@
     const img = images['baskets.default'] || null;
 
     function update(dt, input) {
-      const left = input.left || (input.pointerActive && input.pointerDesignX < state.x - 6);
-      const right = input.right || (input.pointerActive && input.pointerDesignX > state.x + 6);
-
-      if (input.pointerActive && !input.left && !input.right) {
-        // pointer/touch: smoothly follow the target X instead of a
-        // binary left/right accelerate — feels natural for drag/mouse
-        const target = Math.max(state.width / 2, Math.min(CFG.DESIGN_W - state.width / 2, input.pointerDesignX));
-        state.x += (target - state.x) * Math.min(1, P.pointerFollowLerp * (dt * 60));
-        state.vx = (target - state.x);
+      // Keyboard only, by explicit request — A/D and the arrow keys are
+      // the sole way to strafe; mouse/touch never move the basket.
+      // Movement is instant and constant-speed by explicit request: no
+      // acceleration, no deceleration, no momentum. The basket is either
+      // at a dead stop or moving at exactly basketSpeed, and a counter-
+      // strafe (left -> right or right -> left) flips direction on the
+      // very next frame with zero carry-over — velocity is just a
+      // direct reflection of which key is down right now, never
+      // integrated over time.
+      if (input.left && !input.right) {
+        state.vx = -P.basketSpeed;
+      } else if (input.right && !input.left) {
+        state.vx = P.basketSpeed;
       } else {
-        if (input.left && !input.right) {
-          state.vx -= P.basketAcceleration * dt;
-        } else if (input.right && !input.left) {
-          state.vx += P.basketAcceleration * dt;
-        } else {
-          // decelerate toward zero
-          const decel = P.basketDeceleration * dt;
-          if (state.vx > 0) state.vx = Math.max(0, state.vx - decel);
-          else if (state.vx < 0) state.vx = Math.min(0, state.vx + decel);
-        }
-        state.vx = Math.max(-P.basketSpeed, Math.min(P.basketSpeed, state.vx));
-        state.x += state.vx * dt;
+        state.vx = 0;
       }
+      state.x += state.vx * dt;
 
       const half = state.width / 2;
       if (state.x < half) { state.x = half; state.vx = 0; }

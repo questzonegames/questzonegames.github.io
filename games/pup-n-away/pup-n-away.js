@@ -43,6 +43,7 @@
   let missTimerMs = 0;
   let returningToBasket = false;
   let levelOutcomeHandledPending = false;
+  let levelElapsedMs = 0;   // resets each level; how long THIS attempt has taken so far
 
   // ---------------------------------------------------------------
   // Canvas sizing — internal resolution tied to design coordinates,
@@ -81,10 +82,15 @@
     collectibles = window.PNA_Collectibles.createCollectibleField(level, onBoneCollected);
     returningToBasket = false;
     run.bonesThisRun = 0;
+    // Every level is a fresh attempt: three lives and the clock back to
+    // zero, regardless of how the previous level or run went.
+    run.lives = CFG.PHYSICS.startingLives;
+    levelElapsedMs = 0;
     ui.updateHud({
       score: run.score, bonesCollected: 0, bonesTotal: collectibles.total,
       lives: run.lives, levelName: level.name
     });
+    ui.setTimerText(0);
   }
 
   function onBoneCollected(item, collectedCount, total) {
@@ -119,7 +125,6 @@
 
   function beginRun() {
     run.score = 0;
-    run.lives = CFG.PHYSICS.startingLives;
     run.bounces = 0;
     run.playtimeStart = performance.now();
     levels.reset();
@@ -189,7 +194,8 @@
       score: run.score,
       bonesCollected: collectibles.collectedCount(),
       bonesTotal: collectibles.total,
-      isFinalLevel: levels.isLastLevel()
+      isFinalLevel: levels.isLastLevel(),
+      timeMs: levelElapsedMs
     });
     goTo(STATES.LEVEL_COMPLETE);
     await saveRunResults(levels.isLastLevel());
@@ -227,6 +233,8 @@
     }
 
     if (state === STATES.LIFE_LOST) {
+      // Timer pauses the instant a life is lost and picks back up (not
+      // reset) once the dog relaunches — it never counts the miss delay.
       missTimerMs -= dt * 1000;
       if (missTimerMs <= 0) {
         if (run.lives <= 0) {
@@ -240,6 +248,9 @@
     }
 
     if (state !== STATES.PLAYING) return;
+
+    levelElapsedMs += dt * 1000;
+    ui.setTimerText(levelElapsedMs);
 
     basket.update(dt, input.state);
 
@@ -369,10 +380,10 @@
     ui.bindButton('pna-btn-restart-level-go', () => {
       audio.play('buttonClick');
       // Game Over already recorded the finished run — restarting here
-      // begins a genuinely fresh run (score/bounces/lives reset), not a
-      // continuation of the run that just ended.
+      // begins a genuinely fresh run (score/bounces reset; setupLevel()
+      // below always resets lives), not a continuation of the run that
+      // just ended.
       run.score = 0;
-      run.lives = CFG.PHYSICS.startingLives;
       run.bounces = 0;
       run.playtimeStart = performance.now();
       setupLevel(levels.current());
@@ -382,7 +393,7 @@
     ui.bindButton('pna-btn-return-go', () => { window.location.href = '../../index.html'; });
     ui.bindButton('pna-btn-pause', () => { audio.play('buttonClick'); pauseGame(); });
     ui.bindButton('pna-btn-resume', () => { audio.play('buttonClick'); resumeGame(); });
-    ui.bindButton('pna-btn-restart-paused', () => { audio.play('buttonClick'); run.lives = CFG.PHYSICS.startingLives; setupLevel(levels.current()); startCountdown(); });
+    ui.bindButton('pna-btn-restart-paused', () => { audio.play('buttonClick'); setupLevel(levels.current()); startCountdown(); });
     ui.bindButton('pna-btn-return-paused', () => { window.location.href = '../../index.html'; });
     ui.bindButton('pna-btn-mute', () => {
       const muted = audio.toggleMuted();

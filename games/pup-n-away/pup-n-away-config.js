@@ -164,9 +164,7 @@
     // the physics catching-plane width used by the bounce formula.
     basketWidth: 260,
     basketHeight: 130,
-    basketSpeed: 1300,             // px/s, max horizontal speed
-    basketAcceleration: 9000,      // px/s^2 while a direction is held
-    basketDeceleration: 12000,     // px/s^2 once released — brakes rather than sliding forever
+    basketSpeed: 1300,             // px/s — constant speed the instant a direction key is held, no ramp-up
     basketSquashMs: 130,           // brief visual squash on impact
 
     // ---- dog ----
@@ -186,10 +184,7 @@
     // ---- collectibles ----
     collectibleIdlePeriodMs: 2200,
     collectibleFloatPx: 10,
-    collectibleSpinDeg: 6,
-
-    // ---- input smoothing ----
-    pointerFollowLerp: 0.35        // mouse/touch basket-follow smoothing (0-1, higher = snappier)
+    collectibleSpinDeg: 6
   };
 
   // ---------------------------------------------------------------

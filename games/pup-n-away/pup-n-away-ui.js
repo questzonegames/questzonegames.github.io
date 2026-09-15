@@ -8,6 +8,17 @@
 (function () {
   function $(id) { return document.getElementById(id); }
 
+  // M:SS.t — tenths are precise enough to read a level-completion time
+  // at a glance without the display feeling twitchy every frame.
+  function formatTime(ms) {
+    const totalTenths = Math.max(0, Math.floor(ms / 100));
+    const tenths = totalTenths % 10;
+    const totalSeconds = Math.floor(totalTenths / 10);
+    const seconds = totalSeconds % 60;
+    const minutes = Math.floor(totalSeconds / 60);
+    return minutes + ':' + String(seconds).padStart(2, '0') + '.' + tenths;
+  }
+
   function createUIManager() {
     const screens = {
       LOADING: $('pna-screen-loading'),
@@ -61,14 +72,21 @@
       if (el) el.textContent = text;
     }
 
-    function setLevelCompletePanel({ levelName, score, bonesCollected, bonesTotal, isFinalLevel }) {
+    function setTimerText(ms) {
+      const el = $('pna-hud-timer');
+      if (el) el.textContent = formatTime(ms);
+    }
+
+    function setLevelCompletePanel({ levelName, score, bonesCollected, bonesTotal, isFinalLevel, timeMs }) {
       const nameEl = $('pna-lc-level-name');
       const scoreEl = $('pna-lc-score');
       const bonesEl = $('pna-lc-bones');
+      const timeEl = $('pna-lc-time');
       const continueBtn = $('pna-btn-continue');
       if (nameEl) nameEl.textContent = levelName + ' Complete!';
       if (scoreEl) scoreEl.textContent = String(score);
       if (bonesEl) bonesEl.textContent = bonesCollected + ' / ' + bonesTotal;
+      if (timeEl) timeEl.textContent = formatTime(timeMs);
       if (continueBtn) continueBtn.textContent = isFinalLevel ? 'Finish' : 'Continue';
     }
 
@@ -90,7 +108,7 @@
 
     return {
       showScreen, setHudVisible, updateHud, flashMissBanner, setLoadingProgress,
-      setCountdownText, setLevelCompletePanel, setGameOverPanel, bindButton,
+      setCountdownText, setTimerText, setLevelCompletePanel, setGameOverPanel, bindButton,
       setMuteButtonState
     };
   }
