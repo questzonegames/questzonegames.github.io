@@ -197,10 +197,89 @@
       } catch (err) { console.warn('[Pup N Away] could not equip item', err); return false; }
     }
 
+    // ---------------------------------------------------------------
+    // Level Editor (admin only) — every call is re-checked server-side
+    // by the RPC itself (public.is_admin()), never trusted from
+    // profile.is_admin alone; that client-side flag only controls
+    // whether the LEVEL EDITOR button/screen is shown, same as the
+    // existing admin debug-hitbox toggle. See
+    // supabase/migrations/20260919010000_pup_n_away_level_layouts.sql.
+    // ---------------------------------------------------------------
+    async function getLevelEditorData(levelId) {
+      if (!signedIn || !window.QZAuth.client) return null;
+      const { data, error } = await window.QZAuth.client.rpc('admin_get_pup_n_away_level_editor_data', {
+        p_level_id: levelId
+      });
+      if (error) throw error;
+      const rows = data || [];
+      const draft = rows.find((r) => r.status === 'draft') || null;
+      const published = rows.find((r) => r.status === 'published') || null;
+      return {
+        draftObjects: draft ? draft.objects : null,
+        publishedObjects: published ? published.objects : null,
+        publishedVersion: published ? published.version : null
+      };
+    }
+
+    async function listLevelVersions(levelId) {
+      if (!signedIn || !window.QZAuth.client) return [];
+      const { data, error } = await window.QZAuth.client.rpc('admin_list_pup_n_away_level_versions', {
+        p_level_id: levelId
+      });
+      if (error) throw error;
+      return data || [];
+    }
+
+    async function saveLevelDraft(levelId, objects) {
+      if (!signedIn || !window.QZAuth.client) throw new Error('Not signed in.');
+      const { error } = await window.QZAuth.client.rpc('admin_save_pup_n_away_level_draft', {
+        p_level_id: levelId, p_objects: objects
+      });
+      if (error) throw error;
+    }
+
+    async function publishLevel(levelId, objects) {
+      if (!signedIn || !window.QZAuth.client) throw new Error('Not signed in.');
+      const { data, error } = await window.QZAuth.client.rpc('admin_publish_pup_n_away_level', {
+        p_level_id: levelId, p_objects: objects
+      });
+      if (error) throw error;
+      return data;
+    }
+
+    async function restoreLevelVersion(levelId, version) {
+      if (!signedIn || !window.QZAuth.client) throw new Error('Not signed in.');
+      const { data, error } = await window.QZAuth.client.rpc('admin_restore_pup_n_away_level_version', {
+        p_level_id: levelId, p_version: version
+      });
+      if (error) throw error;
+      return data;
+    }
+
+    // Public (non-admin) read used by normal gameplay to override a
+    // level's dog/basket spawn + bones with the currently published
+    // editor layout, if one exists — readable by anyone via the view's
+    // own RLS-backed grant, no admin check here. Never throws: any
+    // failure (offline, RLS, missing row) just means "no override",
+    // and the caller falls back to the level's bundled static layout —
+    // see resolvePublishedLevelOverrides() in pup-n-away.js.
+    async function getPublishedLevelObjects(levelId) {
+      if (!window.QZAuth || !window.QZAuth.client) return null;
+      try {
+        const { data, error } = await window.QZAuth.client
+          .from('pup_n_away_published_level_layouts').select('objects')
+          .eq('level_id', levelId).maybeSingle();
+        if (error || !data) return null;
+        return data.objects;
+      } catch (err) { return null; }
+    }
+
     return {
       init, gameStarted, saveScoreResult, recordProgress, getProgression, recordActComplete,
       getLevelCompletions, recordLevelComplete,
       getOwnedEquipment, getEquippedBasket, equipBasket,
+      getLevelEditorData, listLevelVersions, saveLevelDraft, publishLevel, restoreLevelVersion,
+      getPublishedLevelObjects,
       get signedIn() { return signedIn; }, get profile() { return profile; }
     };
   }

@@ -129,6 +129,14 @@
   let dog = null;
   let collectibles = null;
   let currentLevel = null;
+  let editor = null;
+  // Playtest (Level Editor only) — a real run through the real physics/
+  // state machine using the editor's current UNSAVED layout, but never
+  // recorded: saveRunResults()/completeLevel()'s progression calls and
+  // gameStarted() all check this flag and skip. See startPlaytest()
+  // and goTo()'s own playtestMode handling below.
+  let playtestMode = false;
+  let playtestPriorOverride = null;
 
   const run = {
     score: 0,
@@ -183,7 +191,7 @@
   function setupLevel(level) {
     currentLevel = level;
     basket = window.PNA_Basket.createBasket(images);
-    basket.state.x = CFG.DESIGN_W / 2;
+    basket.state.x = (level.basketStart && typeof level.basketStart.x === 'number') ? level.basketStart.x : CFG.DESIGN_W / 2;
     dog = window.PNA_Dog.createDog(images, level);
     dog.state.y = basket.state.y - 14;
     dog.state.x = basket.state.x;
@@ -221,6 +229,22 @@
   function goTo(next) {
     const prev = state;
     state = next;
+    // Any exit to the Lobby while a Playtest is running is treated as
+    // "exit playtest" — restores whatever layout override existed
+    // before the playtest started (so a later, real, non-editor play
+    // session never sees playtest-only unsaved data) and reopens the
+    // editor exactly where the admin left it, unsaved changes intact.
+    let reopenEditorAfterThisGoTo = false;
+    if (next === STATES.LOBBY && playtestMode) {
+      playtestMode = false;
+      const levelId = currentLevel && currentLevel.id;
+      if (levelId) {
+        if (playtestPriorOverride) levels.setLevelOverride(levelId, playtestPriorOverride);
+        else levels.clearLevelOverride(levelId);
+      }
+      playtestPriorOverride = null;
+      reopenEditorAfterThisGoTo = true;
+    }
     const noOverlay = next === STATES.PLAYING || next === STATES.LIFE_LOST;
     ui.showScreen(noOverlay ? null : next);
     ui.setHudVisible(next === STATES.PLAYING || next === STATES.LIFE_LOST || next === STATES.PAUSED);
@@ -241,6 +265,13 @@
       const startBtn = document.getElementById('pna-btn-start');
       if (startBtn) startBtn.disabled = false;
     }
+
+    const playtestBar = document.getElementById('pna-editor-playtest-bar');
+    if (playtestBar) playtestBar.classList.toggle('pna-editor-active', playtestMode);
+    if (reopenEditorAfterThisGoTo && editor) {
+      const reopenLevelId = currentLevel && currentLevel.id;
+      editor.open({ reopenLevelId });
+    }
   }
 
   function startCountdown() {
@@ -257,10 +288,7 @@
   // "replay the latest content" behavior — there is no further act to
   // send them to yet).
   async function computeStartingLevelIndex() {
-    const all = levels.all();
-    const completedIds = new Set(await integration.getLevelCompletions());
-    const firstIncomplete = all.findIndex((l) => !completedIds.has(l.id));
-    return firstIncomplete >= 0 ? firstIncomplete : all.length - 1;
+    return levels.firstLevelIndexOfAct(1);
   }
 
   // Shared by both "Start Game" (Lobby) and picking a level directly
@@ -279,13 +307,25 @@
       run.bounces = 0;
       run.playtimeStart = performance.now();
       setupLevel(levels.current());
-      integration.gameStarted();
+      if (!playtestMode) integration.gameStarted();
       startCountdown();
     }
     const activeScreen = document.querySelector('.pna-overlay:not(.hidden)');
     if (reduceMotion || !activeScreen) { doStart(); return; }
     activeScreen.classList.add('pna-fading-out');
     setTimeout(() => { activeScreen.classList.remove('pna-fading-out'); doStart(); }, 350);
+  }
+
+  // Level Editor's Playtest button — a REAL run through the real state
+  // machine/physics using the editor's current unsaved layout (never
+  // what's actually published), with progression/score/XP recording
+  // fully suppressed (see playtestMode's other check sites) and never
+  // publishing or saving anything itself.
+  function startPlaytest(levelId, fields) {
+    playtestPriorOverride = levels.getLevelOverride(levelId);
+    levels.setLevelOverride(levelId, fields);
+    playtestMode = true;
+    transitionToLevel(levelId);
   }
 
   async function startGame() {
@@ -337,6 +377,7 @@
   }
 
   async function saveRunResults(completed) {
+    if (playtestMode) return; // Playtest never touches score/progression/XP
     const playtimeSeconds = (performance.now() - run.playtimeStart) / 1000;
     await integration.saveScoreResult(run.score);
     await integration.recordProgress({
@@ -364,6 +405,7 @@
     });
     goTo(STATES.LEVEL_COMPLETE);
     await saveRunResults(isFinalOfAct);
+    if (playtestMode) return; // Playtest never touches progression/unlocks
     // Powers Level Select's sequential unlock/replay logic — a stricter,
     // separate fact from the "reached" stat saveRunResults() above just
     // recorded (see 20260918010000_pup_n_away_level_progress.sql).
@@ -512,6 +554,11 @@
     lastTime = now;
     dt = Math.min(dt, 1 / 20); // clamp worst-case step
 
+    // Level Editor owns the canvas/frame entirely while open — dog
+    // physics, timers, scoring, bone collection and lives never run in
+    // Edit Mode (see PNA_Editor.tick(), which does its own drawing).
+    if (editor && editor.isOpen()) { editor.tick(dt); return; }
+
     if (state !== STATES.PAUSED && state !== STATES.LOADING) {
       update(dt);
     }
@@ -562,6 +609,15 @@
       audio.stopLobbyMusic();
       window.location.href = '../../index.html';
     });
+    // Level Editor's floating Playtest-mode control — goTo(LOBBY)'s own
+    // playtestMode handling (see above) does the actual "exit playtest,
+    // restore the prior override, reopen the editor" work; this button
+    // just triggers it, same as reaching Game Over/Level Complete and
+    // clicking their own Return to Lobby buttons during a playtest.
+    ui.bindButton('pna-editor-exit-playtest', () => {
+      audio.play('buttonClick');
+      goTo(STATES.LOBBY);
+    });
 
     // Result-panel buttons use bindButtonOnce() — disabled the instant
     // they're clicked (re-enabled next time that panel is freshly
@@ -601,7 +657,7 @@
       run.playtimeStart = performance.now();
       levels.goToActStart(currentLevel.act);
       setupLevel(levels.current());
-      integration.gameStarted();
+      if (!playtestMode) integration.gameStarted();
       startCountdown();
     });
     ui.bindButtonOnce('pna-btn-return-go', () => {
@@ -784,9 +840,57 @@
     await integration.init();
     PNAAudioPrefs.loadFromAccount(); // not awaited — applies live volume as soon as it resolves, doesn't block anything else here
     wireAdminDebugToggle();
+    editor = window.PNA_Editor.createEditor({
+      canvas, images, CFG, levels, integration, audio, ui, startPlaytest,
+      resizeCanvasForDPR,
+      onExitToLobby: () => goTo(STATES.LOBBY)
+    });
+    wireLevelEditorButton();
+    await loadPublishedLevelOverrides();
 
     goTo(STATES.LOBBY);
     requestAnimationFrame(loop);
+  }
+
+  // Admin-only Level Editor launch button — same client-side gate as
+  // wireAdminDebugToggle() below (profile.is_admin only controls
+  // whether this button SHOWS; every actual editor read/write
+  // re-checks public.is_admin() server-side via its RPC regardless —
+  // see PNA_Editor.open() and pup-n-away-integration.js). A non-admin
+  // never sees this button, and even if they called
+  // window.PNA_DEBUG.editor.open() directly from devtools, the first
+  // real data load inside it would fail server-side and bounce them
+  // back to the Lobby (see open()'s silentIfForbidden handling).
+  function wireLevelEditorButton() {
+    const btn = document.getElementById('pna-btn-level-editor');
+    if (!btn) return;
+    const isAdmin = !!(integration.profile && integration.profile.is_admin);
+    if (!isAdmin) return;
+    btn.hidden = false;
+    btn.addEventListener('click', async () => {
+      audio.play('buttonClick');
+      await editor.open({});
+    });
+  }
+
+  // Fetches each level's currently PUBLISHED editor layout (if any) once
+  // at boot and installs it as a runtime override (see
+  // levels.setLevelOverride()) — normal gameplay then plays that layout
+  // through the exact same setupLevel()/collectibles/physics code path
+  // as always, no separate implementation. A level with no published
+  // row, or any failure here (offline, RLS, slow network), just plays
+  // its bundled static PNA_CONFIG.LEVELS entry — the 4s-per-level
+  // timeout guarantees this never meaningfully delays boot.
+  async function loadPublishedLevelOverrides() {
+    function withTimeout(p, ms) {
+      return Promise.race([p, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+    }
+    await Promise.all(levels.all().map(async (level) => {
+      try {
+        const objects = await withTimeout(integration.getPublishedLevelObjects(level.id), 4000);
+        if (objects) levels.setLevelOverride(level.id, levels.editorObjectsToLevelFields(objects));
+      } catch (err) { /* level just plays its bundled static layout */ }
+    }));
   }
 
   // ---------------------------------------------------------------
@@ -835,6 +939,7 @@
     get state() { return state; }, STATES, run,
     pump(dtSeconds) { resizeCanvasForDPR(); update(dtSeconds); render(); },
     goTo, ui, audio, menus, levels, integration, startGame, transitionToLevel, wireAdminDebugToggle,
-    get dog() { return dog; }, get basket() { return basket; }, get collectibles() { return collectibles; }
+    get dog() { return dog; }, get basket() { return basket; }, get collectibles() { return collectibles; },
+    get editor() { return editor; }
   };
 })();

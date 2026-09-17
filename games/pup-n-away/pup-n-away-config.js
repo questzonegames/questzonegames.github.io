@@ -120,6 +120,15 @@
         itemCard: IMG + 'ui/equipment/equipment-item-card.png',
         scrollbarTrack: IMG + 'ui/equipment/scrollbar-track.png',
         scrollbarThumb: IMG + 'ui/equipment/scrollbar-thumb.png'
+      },
+      // Admin-only Level Editor entry point — real supplied plaque art
+      // ("admin tool.png"), used as-is, never recolored/recreated with
+      // CSS. Only ever shown to profile.is_admin (see
+      // wireAdminDebugToggle()'s own comment for why that client flag
+      // is fine for SHOWING a control — every actual editor read/write
+      // re-checks public.is_admin() server-side regardless).
+      editor: {
+        adminPlaque: IMG + 'ui/editor/admin-tool.png'
       }
     }
   };

@@ -22,10 +22,85 @@
     return LEVELS.reduce((max, l) => Math.max(max, l.act), 1);
   }
 
+  // ---------------------------------------------------------------
+  // Level Editor object <-> level-field conversion, shared by the
+  // editor (pup-n-away-editor.js) and the runtime override loader
+  // below. The editor only ever touches object PLACEMENT (dog/basket
+  // spawn, bones) — background/gravity/bounceSpeed stay whatever the
+  // static LEVELS entry says, always.
+  //
+  // The basket's own start Y is a fixed physics constant (the bounce
+  // plane, see pup-n-away-basket.js), never per-level — basket_spawn's
+  // y is carried for display only and ignored on load; only its x is
+  // real. There's a hazards/boosters/wind category in the editor's
+  // toolbar spec that has NO corresponding gameplay behavior in this
+  // engine today (the physics/collision system only knows about bones
+  // as collectibles) — those object types are deliberately not
+  // included here; adding them for real is a physics-engine change,
+  // not an editor-data-model change.
+  // ---------------------------------------------------------------
+  function levelToEditorObjects(level) {
+    const CFG = window.PNA_CONFIG;
+    const objects = [];
+    objects.push({
+      instanceId: 'dog-spawn',
+      assetType: 'dog_spawn',
+      x: level.dogStart.x, y: level.dogStart.y,
+      rotation: 0, scale: 1, layer: 5, enabled: true,
+      properties: { vx: level.dogStart.vx, vy: level.dogStart.vy }
+    });
+    objects.push({
+      instanceId: 'basket-spawn',
+      assetType: 'basket_spawn',
+      x: (level.basketStart && typeof level.basketStart.x === 'number') ? level.basketStart.x : CFG.DESIGN_W / 2,
+      y: CFG.DESIGN_H - 90,
+      rotation: 0, scale: 1, layer: 5, enabled: true,
+      properties: {}
+    });
+    (level.bones || []).forEach((b, i) => {
+      objects.push({
+        instanceId: 'bone-' + i + '-' + Math.random().toString(36).slice(2, 8),
+        assetType: 'dream_bone',
+        x: b.x, y: b.y,
+        rotation: 0, scale: 1, layer: 4, enabled: true,
+        properties: {}
+      });
+    });
+    return objects;
+  }
+
+  function editorObjectsToLevelFields(objects) {
+    const list = Array.isArray(objects) ? objects : [];
+    const dogObj = list.find((o) => o.assetType === 'dog_spawn');
+    const basketObj = list.find((o) => o.assetType === 'basket_spawn');
+    const bones = list
+      .filter((o) => o.assetType === 'dream_bone' && o.enabled !== false)
+      .map((o) => ({ x: o.x, y: o.y }));
+    const fields = { bones };
+    if (dogObj) {
+      const p = dogObj.properties || {};
+      fields.dogStart = { x: dogObj.x, y: dogObj.y, vx: p.vx || 0, vy: typeof p.vy === 'number' ? p.vy : -900 };
+    }
+    if (basketObj) fields.basketStart = { x: basketObj.x };
+    return fields;
+  }
+
   function createLevelManager() {
     let index = 0;
+    // levelId -> { dogStart?, basketStart?, bones? } — a published (or,
+    // during Playtest, unsaved-draft) editor layout overriding the
+    // static level's own object placement. See
+    // resolvePublishedLevelOverrides() in pup-n-away.js.
+    const overrides = {};
+    function setLevelOverride(levelId, fields) { overrides[levelId] = fields; }
+    function clearLevelOverride(levelId) { delete overrides[levelId]; }
+    function getLevelOverride(levelId) { return overrides[levelId] || null; }
 
-    function current() { return LEVELS[index]; }
+    function current() {
+      const base = LEVELS[index];
+      const ov = overrides[base.id];
+      return ov ? Object.assign({}, base, ov) : base;
+    }
     function currentNumber() { return index + 1; }
     function totalLevels() { return LEVELS.length; }
     function isLastLevel() { return index >= LEVELS.length - 1; }
@@ -58,10 +133,12 @@
 
     return {
       current, currentNumber, totalLevels, isLastLevel, advance, reset, backgroundKey,
-      goToActStart, goToIndex, goToLevelId, all,
+      goToActStart, goToIndex, goToLevelId, all, firstLevelIndexOfAct,
       isFinalLevelOfAct: () => isFinalLevelOfAct(current()),
       nextActExists: () => LEVELS.some((l) => l.act === current().act + 1),
-      highestAct
+      highestAct,
+      setLevelOverride, clearLevelOverride, getLevelOverride,
+      levelToEditorObjects, editorObjectsToLevelFields
     };
   }
 

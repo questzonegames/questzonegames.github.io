@@ -776,6 +776,232 @@
 
   .pna-hint { margin-top: 12px; font-size: 12px; color: var(--text-dim); }
 
+  /* Admin-only Level Editor launcher — a plain real HTML button (no
+     supplied art fits "launch button" — the ADMIN toolbar graphic is a
+     3-column asset-slot panel, used for real inside the editor itself,
+     see #pna-editor-toolbar below). Positioned outside the lobby's own
+     5-button frame since it isn't part of that baked artwork. */
+  .pna-editor-launch-btn {
+    position: absolute; top: 10px; right: 10px; z-index: 6;
+    margin: 0; padding: 7px 12px; cursor: pointer;
+    background: linear-gradient(180deg, #16327a 0%, #0e2050 100%);
+    border: 1.5px solid #ffd66b; border-radius: 8px;
+    color: #ffd66b; font-family: 'Baloo 2', sans-serif; font-weight: 700;
+    font-size: clamp(10px, 2vw, 13px); letter-spacing: 0.03em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pna-editor-launch-btn[hidden] { display: none; }
+  .pna-editor-launch-btn:hover { transform: scale(1.05); box-shadow: 0 2px 12px rgba(255,214,107,0.5); }
+  .pna-editor-launch-btn:focus-visible { outline: 2px solid #ffd66b; outline-offset: 2px; }
+
+  /* =================================================================
+     Level Editor (admin only) — real HTML toolbar/topbar/properties
+     panel around the SAME #pna-stage-wrap/#pna-canvas gameplay uses
+     (re-laid-out via body.pna-editor-mode's grid below, never moved in
+     the DOM or duplicated). Desktop-only by design (see
+     #pna-editor-toosmall below) — matches the blue/gold/moon/star
+     theme with real CSS, no functional control is ever baked into a
+     background image.
+     ================================================================= */
+  body.pna-editor-mode .pna-page {
+    display: grid; height: 100vh; width: 100%; max-width: 1920px; margin: 0 auto;
+    padding: 10px 14px 14px; box-sizing: border-box;
+    grid-template-columns: clamp(260px, 17vw, 320px) minmax(700px, 1fr) clamp(240px, 15vw, 300px);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "topbar topbar topbar" "toolbar stage props";
+    gap: 10px;
+    /* The base (non-editor) .pna-page rule sets align-items:center for
+       its OWN flex layout — that inherited value survives switching
+       display to grid here and makes every grid item size to its own
+       content and center within its track instead of stretching to
+       fill it (the real cause of the toolbar column overflowing its
+       row and overlapping the topbar). Must be reset explicitly. */
+    align-items: stretch; justify-items: stretch;
+    /* Desktop-only admin tool (see #pna-editor-toosmall) — usability at
+       a real editing size matters more than never scrolling
+       horizontally on a cramped window. */
+    overflow-x: auto;
+  }
+  body.pna-editor-mode .pna-title-logo,
+  body.pna-editor-mode #pna-hud-wrapper,
+  body.pna-editor-mode #pna-move-controls,
+  body.pna-editor-mode .pna-editor-launch-btn { display: none; }
+  /* #pna-stage-wrap simply STRETCHES to fill its grid cell completely
+     (a grid item filling its own cell is unambiguous, unlike chaining
+     percentage-height through aspect-ratio inside a grid, which is
+     NOT reliable cross-browser and was the root cause of the huge
+     black unused area bug). The actual 16:9 fit-and-center then
+     happens on #pna-canvas itself via the standard "flex child with
+     max-width/max-height + aspect-ratio" pattern — the same technique
+     as object-fit:contain, just for a canvas. The editor's menu
+     overlays (Lobby, Level Select, ...) are always hidden while the
+     editor is open (see PNA_Editor.open()), so this only ever affects
+     the canvas — never their own, unrelated 16:9 layout. */
+  body.pna-editor-mode #pna-stage-wrap {
+    grid-area: stage; width: 100%; height: 100%; margin: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  body.pna-editor-mode #pna-canvas {
+    width: auto; height: auto; max-width: 100%; max-height: 100%;
+    aspect-ratio: 1920 / 1080; flex: none;
+  }
+
+  .pna-editor-panel {
+    background: linear-gradient(180deg, #0e2050 0%, #0a1638 100%);
+    border: 1.5px solid #3a5cc4; border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255,214,107,0.18), 0 8px 22px rgba(0,0,0,0.45);
+    color: #eaf0ff; display: none;
+  }
+  body.pna-editor-mode .pna-editor-panel { display: flex; }
+
+  #pna-editor-topbar {
+    grid-area: topbar; flex-direction: row; align-items: center; justify-content: space-between;
+    min-height: 44px; box-sizing: border-box;
+    padding: 8px 14px; gap: 10px; flex-wrap: wrap;
+  }
+  .pna-editor-level-picker { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .pna-editor-level-picker select {
+    background: #132a63; color: #eaf0ff; border: 1px solid #3a5cc4; border-radius: 6px;
+    padding: 4px 6px; font: inherit; cursor: pointer;
+  }
+  .pna-editor-level-picker strong { color: #ffd66b; font-weight: 700; }
+  .pna-editor-tools, .pna-editor-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pna-editor-btn {
+    background: #16327a; color: #eaf0ff; border: 1px solid #3a5cc4; border-radius: 7px;
+    padding: 6px 10px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .pna-editor-btn:hover { background: #1e3f96; border-color: #ffd66b; }
+  .pna-editor-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pna-editor-btn.pna-editor-btn-primary { background: #1a7a4a; border-color: #2fd889; }
+  .pna-editor-btn.pna-editor-btn-primary:hover { background: #1f9459; }
+  .pna-editor-btn.pna-editor-btn-danger { background: #7a1a2a; border-color: #ff6a80; }
+  .pna-editor-btn.pna-editor-btn-danger:hover { background: #96202f; }
+  .pna-editor-btn.pna-editor-btn-toggle-on { background: #ffd66b; color: #1a1200; border-color: #ffd66b; }
+  .pna-editor-unsaved-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #ff6a6a;
+    box-shadow: 0 0 6px rgba(255,106,106,0.8); margin-left: 4px; vertical-align: middle;
+  }
+  .pna-editor-unsaved-dot.hidden { display: none; }
+
+  /* The real supplied 3-column ADMIN toolbar graphic — shown whole,
+     uncropped, never stretched off its own 1024/1536 ratio. The image
+     sets the panel's intrinsic width; #pna-editor-toolbar scrolls
+     vertically (without cropping/squashing the art) if it doesn't fit,
+     per the brief. Each empty gold square is a real slot — hotspots
+     are positioned as percentages of THIS image, the same convention
+     as every other PNA_CONFIG.UI_HOTSPOTS-driven overlay in this game. */
+  #pna-editor-toolbar-column { grid-area: toolbar; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  /* Sized to its own content (the real toolbar image's natural
+     aspect-driven height at the column's full width) — it does NOT
+     stretch to fill the column; #pna-editor-spawned-assets below it
+     takes whatever vertical space is left, per the brief's "toolbar
+     and Spawned Assets panel" left-column layout. */
+  #pna-editor-toolbar { flex: 0 0 auto; max-height: 55vh; flex-direction: column; padding: 0; overflow-y: auto; overflow-x: hidden; }
+  #pna-editor-toolbar::-webkit-scrollbar { width: 6px; }
+  #pna-editor-toolbar::-webkit-scrollbar-thumb { background: #3a5cc4; border-radius: 4px; }
+  #pna-editor-toolbar-art-wrap { position: relative; width: 100%; flex-shrink: 0; }
+  #pna-editor-toolbar-art { display: block; width: 100%; height: auto; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+  .pna-editor-asset-slot {
+    position: absolute; margin: 0; padding: 0; border: 0; background: transparent; cursor: grab;
+    border-radius: 14%;
+  }
+  .pna-editor-asset-slot img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; padding: 10%; box-sizing: border-box; }
+  .pna-editor-asset-slot:hover, .pna-editor-asset-slot:focus-visible { box-shadow: 0 0 0 3px #ffd66b; outline: none; }
+  .pna-editor-asset-slot.pna-editor-asset-armed { box-shadow: 0 0 0 3px #ffd66b, 0 0 14px rgba(255,214,107,0.7); }
+
+  /* Spawned Assets — every currently placed object, live. flex:1 so it
+     takes whatever height is left in the column after the toolbar's
+     own (content-sized) height; scrolls internally with one clean
+     scrollbar, never the page's own. */
+  #pna-editor-spawned-assets { flex: 1 1 auto; min-height: 120px; flex-direction: column; padding: 10px 0 10px 12px; }
+  #pna-editor-spawned-assets .pna-editor-props-title { padding-right: 12px; }
+  #pna-editor-spawned-assets-list { flex: 1; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 4px; }
+  #pna-editor-spawned-assets-list::-webkit-scrollbar { width: 6px; }
+  #pna-editor-spawned-assets-list::-webkit-scrollbar-thumb { background: #3a5cc4; border-radius: 4px; }
+  .pna-editor-spawn-row {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    background: #10245c; border: 1px solid #2c4ba0; border-radius: 7px; padding: 5px 7px;
+    color: #eaf0ff; font: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0;
+  }
+  .pna-editor-spawn-row:hover { border-color: #ffd66b; }
+  .pna-editor-spawn-row.pna-editor-spawn-row-selected { border-color: #ffd66b; background: #1a3a86; box-shadow: 0 0 0 1px #ffd66b; }
+  .pna-editor-spawn-row img { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; pointer-events: none; }
+  .pna-editor-spawn-row-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pna-editor-spawn-row-lock { flex-shrink: 0; font-size: 12px; }
+
+  #pna-editor-selection-status { flex-direction: column; flex-shrink: 0; padding: 10px 12px; }
+  #pna-editor-selection-status-body { font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5; }
+  #pna-editor-selection-status-body .pna-editor-status-coords { font-weight: 400; color: #9db0e8; font-size: 11px; }
+  #pna-editor-selection-status-body .pna-editor-status-locked { color: #ffb84d; }
+  #pna-editor-selection-status-body .pna-editor-status-unlocked { color: #7fe0a0; }
+
+  .pna-editor-lock-badge {
+    position: absolute; width: 22%; height: 22%; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(10,16,40,0.85); border: 2px solid #ffb84d; border-radius: 999px;
+    color: #ffb84d; font-size: 12px;
+  }
+
+  #pna-editor-props { grid-area: props; flex-direction: column; padding: 10px 12px; overflow-y: auto; }
+  .pna-editor-props-title { font-size: 11px; letter-spacing: 0.08em; color: #ffd66b; font-weight: 700; padding-bottom: 8px; }
+  .pna-editor-props-empty { font-size: 11.5px; color: #9db0e8; line-height: 1.4; }
+  .pna-editor-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 9px; }
+  .pna-editor-field label { font-size: 10.5px; color: #9db0e8; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pna-editor-field input[type="number"], .pna-editor-field input[type="text"] {
+    background: #132a63; color: #eaf0ff; border: 1px solid #3a5cc4; border-radius: 6px;
+    padding: 5px 7px; font: inherit; font-size: 12.5px; width: 100%; box-sizing: border-box;
+  }
+  .pna-editor-field.pna-editor-field-row { flex-direction: row; align-items: center; gap: 6px; }
+  .pna-editor-field.pna-editor-field-row label { text-transform: none; font-size: 11.5px; order: 2; }
+  .pna-editor-field input:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pna-editor-field-note { font-size: 9.5px; color: #6f84c0; line-height: 1.3; }
+  .pna-editor-props-id { font-size: 10.5px; color: #6f84c0; word-break: break-all; margin-bottom: 8px; }
+  .pna-editor-props-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+
+  #pna-editor-viewport-overlay {
+    position: absolute; inset: 0; z-index: 4; cursor: default;
+  }
+  #pna-editor-status {
+    position: absolute; left: 8px; bottom: 8px; z-index: 6;
+    background: rgba(6,12,32,0.82); border: 1px solid #3a5cc4; border-radius: 6px;
+    padding: 4px 9px; font-size: 11px; color: #eaf0ff; pointer-events: none;
+  }
+  #pna-editor-drag-readout {
+    position: absolute; z-index: 7; background: rgba(6,12,32,0.9); border: 1px solid #ffd66b;
+    border-radius: 5px; padding: 2px 6px; font-size: 10.5px; color: #ffd66b; pointer-events: none;
+    transform: translate(10px, -50%); white-space: nowrap; display: none;
+  }
+  .pna-editor-context-menu {
+    position: fixed; z-index: 50; background: #0e2050; border: 1px solid #ffd66b; border-radius: 8px;
+    padding: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: flex; flex-direction: column; min-width: 140px;
+  }
+  .pna-editor-context-menu button {
+    background: transparent; border: 0; color: #eaf0ff; text-align: left; padding: 7px 10px;
+    font: inherit; font-size: 12px; border-radius: 5px; cursor: pointer;
+  }
+  .pna-editor-context-menu button:hover { background: #1e3f96; }
+  .pna-editor-context-menu button.pna-editor-btn-danger:hover { background: #7a1a2a; }
+
+  #pna-editor-playtest-bar {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 60;
+    display: none; align-items: center; gap: 10px; background: rgba(6,12,32,0.92);
+    border: 1.5px solid #ffd66b; border-radius: 999px; padding: 8px 8px 8px 16px;
+    color: #ffd66b; font-weight: 700; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  #pna-editor-playtest-bar.pna-editor-active { display: flex; }
+
+  #pna-editor-toosmall {
+    display: none; position: fixed; inset: 0; z-index: 70; background: #04060c;
+    align-items: center; justify-content: center; text-align: center; padding: 24px;
+    color: #eaf0ff; font-size: 15px; line-height: 1.5;
+  }
+  @media (max-width: 1000px), (max-height: 620px) {
+    body.pna-editor-mode #pna-editor-toosmall { display: flex; }
+    body.pna-editor-mode .pna-page { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     #pna-miss-banner { transition: none; }
     .pna-overlay { transition: none; }
@@ -834,6 +1060,14 @@
           <button type="button" class="pna-ui-hotspot" id="pna-lobby-btn-return-home" aria-label="Return to Quest Zone Home Page"></button>
         </div>
       </div>
+      <!-- Admin-only Level Editor entry point — a plain real button, shown
+           only to profile.is_admin (see wireLevelEditorButton() in
+           pup-n-away.js). Client-side hiding is a convenience only: every
+           editor read/write re-checks public.is_admin() server-side
+           regardless. The supplied admin-tool.png plaque is used for real
+           INSIDE the editor as the asset toolbar background — see
+           #pna-editor-toolbar-art below. -->
+      <button type="button" id="pna-btn-level-editor" class="pna-editor-launch-btn" hidden aria-label="Level Editor (admin)">MAP EDITOR</button>
       <div class="pna-hint">A / D or ◀ ▶ to move the basket</div>
     </div>
 
@@ -1008,7 +1242,75 @@
     <button type="button" class="pna-move-btn" id="pna-btn-move-left" aria-label="Move basket left"><span>◀</span></button>
     <button type="button" class="pna-move-btn" id="pna-btn-move-right" aria-label="Move basket right"><span>▶</span></button>
   </div>
+
+  <!-- ============== LEVEL EDITOR (admin only) ==============
+       Real HTML panels laid out around the EXISTING #pna-stage-wrap
+       (re-positioned by body.pna-editor-mode's CSS grid, never moved
+       in the DOM or duplicated — the editor draws into the same
+       #pna-canvas gameplay uses). Hidden entirely unless
+       body.pna-editor-mode is active. See pup-n-away-editor.js. -->
+  <div id="pna-editor-topbar" class="pna-editor-panel">
+    <div class="pna-editor-level-picker">
+      <label for="pna-editor-act-select">Act</label>
+      <select id="pna-editor-act-select"></select>
+      <label for="pna-editor-level-select">Level</label>
+      <select id="pna-editor-level-select"></select>
+      <strong id="pna-editor-level-name"></strong>
+      <span id="pna-editor-unsaved-dot" class="pna-editor-unsaved-dot hidden" title="Unsaved changes"></span>
+    </div>
+    <div class="pna-editor-tools">
+      <button type="button" class="pna-editor-btn" id="pna-editor-undo" title="Undo (Ctrl+Z)">Undo</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-redo" title="Redo (Ctrl+Y)">Redo</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-grid-toggle" title="Toggle grid">Grid</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-snap-toggle" title="Toggle snap to grid">Snap</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-hitbox-toggle" title="Toggle hitboxes">Hitboxes</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-zoom-out" title="Zoom out">&minus;</button>
+      <span id="pna-editor-zoom-value">100%</span>
+      <button type="button" class="pna-editor-btn" id="pna-editor-zoom-in" title="Zoom in">+</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-zoom-reset" title="Reset zoom">Reset Zoom</button>
+    </div>
+    <div class="pna-editor-actions">
+      <button type="button" class="pna-editor-btn" id="pna-editor-playtest" title="Playtest">Playtest</button>
+      <button type="button" class="pna-editor-btn" id="pna-editor-save-draft" title="Save Draft (Ctrl+S)">Save Draft</button>
+      <button type="button" class="pna-editor-btn pna-editor-btn-primary" id="pna-editor-publish" title="Publish Level">Publish Level</button>
+      <button type="button" class="pna-editor-btn pna-editor-btn-danger" id="pna-editor-exit" title="Exit to Lobby">Exit to Lobby</button>
+    </div>
+  </div>
+
+  <div id="pna-editor-toolbar-column">
+    <div id="pna-editor-toolbar" class="pna-editor-panel">
+      <div id="pna-editor-toolbar-art-wrap">
+        <img id="pna-editor-toolbar-art" src="../../assets/img/pup-n-away/ui/editor/admin-tool.png" alt="Asset toolbar" draggable="false">
+        <div id="pna-editor-toolbar-slots"></div>
+      </div>
+    </div>
+    <div id="pna-editor-spawned-assets" class="pna-editor-panel">
+      <div class="pna-editor-props-title">SPAWNED ASSETS</div>
+      <div id="pna-editor-spawned-assets-list"></div>
+    </div>
+    <div id="pna-editor-selection-status" class="pna-editor-panel">
+      <div class="pna-editor-props-title">SELECTION</div>
+      <div id="pna-editor-selection-status-body">NO ASSET SELECTED</div>
+    </div>
+  </div>
+
+  <div id="pna-editor-props" class="pna-editor-panel">
+    <div class="pna-editor-props-title">PROPERTIES</div>
+    <div id="pna-editor-props-body"><div class="pna-editor-props-empty">Select an object to edit its properties, or click a toolbar asset to place a new one.</div></div>
+  </div>
+
+  <div id="pna-editor-drag-readout"></div>
+  <div id="pna-editor-playtest-bar">
+    <span>PLAYTEST MODE — unsaved changes preserved, nothing is recorded</span>
+    <button type="button" class="pna-editor-btn pna-editor-btn-primary" id="pna-editor-exit-playtest">Exit Playtest</button>
+  </div>
 </div>
+
+<!-- Outside .pna-page on purpose: body.pna-editor-mode's small-screen
+     media query hides .pna-page entirely, and this message needs to
+     stay visible when that happens (see the CSS rule right next to
+     #pna-editor-toosmall's own definition above). -->
+<div id="pna-editor-toosmall">This admin tool needs a larger desktop window (at least 1000&times;620px) to edit levels safely. Please resize your browser or use a larger screen.</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
 <script src="../../assets/js/qz-config.js"></script>
@@ -1020,19 +1322,20 @@
      of these files from a previous session, which is indistinguishable
      from a real regression when testing — several past "still broken"
      reports turned out to be this. -->
-<script src="pup-n-away-config.js?v=17"></script>
-<script src="pup-n-away-assets.js?v=17"></script>
-<script src="pup-n-away-input.js?v=17"></script>
-<script src="pup-n-away-audio.js?v=17"></script>
-<script src="pup-n-away-physics.js?v=17"></script>
-<script src="pup-n-away-basket.js?v=17"></script>
-<script src="pup-n-away-dog.js?v=17"></script>
-<script src="pup-n-away-collectibles.js?v=17"></script>
-<script src="pup-n-away-levels.js?v=17"></script>
-<script src="pup-n-away-ui.js?v=17"></script>
-<script src="pup-n-away-integration.js?v=17"></script>
-<script src="pup-n-away-menus.js?v=17"></script>
-<script src="pup-n-away.js?v=17"></script>
+<script src="pup-n-away-config.js?v=29"></script>
+<script src="pup-n-away-assets.js?v=29"></script>
+<script src="pup-n-away-input.js?v=29"></script>
+<script src="pup-n-away-audio.js?v=29"></script>
+<script src="pup-n-away-physics.js?v=29"></script>
+<script src="pup-n-away-basket.js?v=29"></script>
+<script src="pup-n-away-dog.js?v=29"></script>
+<script src="pup-n-away-collectibles.js?v=29"></script>
+<script src="pup-n-away-levels.js?v=29"></script>
+<script src="pup-n-away-ui.js?v=29"></script>
+<script src="pup-n-away-integration.js?v=29"></script>
+<script src="pup-n-away-menus.js?v=29"></script>
+<script src="pup-n-away-editor.js?v=29"></script>
+<script src="pup-n-away.js?v=29"></script>
 <script>
   // Development-only hotspot alignment aid (see the .pna-ui-debug CSS
   // rule above) — never enabled unless explicitly requested via
