@@ -7,8 +7,13 @@
 <link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="../../assets/img/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="../../assets/img/apple-touch-icon.png">
+<!-- Gold bonus-life heart isn't in the initial HUD markup (only
+     inserted once lives exceed 3), so it's preloaded explicitly here —
+     red/black are already preloaded for free via the always-present
+     <img> tags in the Lives section itself. -->
+<link rel="preload" as="image" href="../../assets/img/pup-n-away/hud/hearts/gold.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --moon: #ffe9a8;
@@ -63,26 +68,6 @@
     filter: drop-shadow(0 0 18px rgba(255,220,140,0.3));
   }
 
-  /* Everything the player needs to read/press while playing (score,
-     bones, timer, lives, the quick controls) used to sit as an overlay
-     ON TOP of the canvas — which covered bones spawned near the top of
-     a level. It now lives in its own toolbar bar BELOW the game stage
-     instead, entirely outside the playable area, so nothing in the
-     level is ever obscured. See #pna-toolbar / #pna-hud below. */
-  #pna-toolbar {
-    width: min(94vw, calc((100vh - 230px) * (1920 / 1080)));
-    margin-top: 10px;
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: clamp(4px, 1cqw, 10px);
-    background: var(--panel-bg); border: 1px solid var(--panel-border);
-    border-radius: 14px;
-    padding: clamp(6px, 1.6cqw, 12px) clamp(6px, 1.8cqw, 14px);
-    /* Sized in container-width units (cqw) so it scales with the
-       TOOLBAR's own on-screen width, not the viewport — it always
-       matches the stage's width above it, on any screen size. */
-    container-type: inline-size;
-  }
-
   /* ---- stage: fixed 1920x1080 design ratio, scaled responsively ---- */
   #pna-stage-wrap {
     position: relative;
@@ -98,54 +83,191 @@
     display: block; width: 100%; height: 100%; touch-action: none;
   }
 
-  /* ---- HUD row — gameplay stats, only relevant/shown while a level is
-     actually in progress (see ui.setHudVisible()) ---- */
+  /* =================================================================
+     HUD toolbar — the supplied transparent PNG (a dream-themed frame
+     with 4 pre-labelled sections: Score/Bones/Time/Lives) is the whole
+     visual design now; nothing is drawn behind or around it. Every
+     live value is real HTML, absolutely positioned over the artwork's
+     own empty content boxes using PERCENTAGES measured directly from
+     the PNG's pixels (see below) — so the numbers always stay locked
+     to their boxes as the image scales, on any screen size.
+
+     #pna-hud-wrapper lays out three things, kept from drifting apart
+     by one grid instead of separate fixed offsets:
+       column 1 (1fr, empty)  |  column 2 (auto = the toolbar itself)  |  column 3 (1fr, audio buttons, aligned to its own start)
+     Two equal 1fr flanks is the standard trick that keeps the middle
+     "auto" column — the toolbar — genuinely centered in the wrapper
+     regardless of what (if anything) sits in column 3, rather than the
+     toolbar+buttons pair being centered as one block. Below the mobile
+     breakpoint there isn't room for a 3rd column at all, so the layout
+     switches to a simple centered column instead (toolbar, then the
+     audio buttons right-aligned under it) — see the media query.
+     ================================================================= */
+  #pna-hud-wrapper {
+    width: 100%;
+    margin-top: 3px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: 14px;
+  }
+  /* The supplied PNG's own canvas has huge transparent margins above
+     and below the actual drawn bar (measured directly from the pixels:
+     the real art only occupies y=266..432 of the full 724-tall image —
+     ~23% of it) — so even a near-zero CSS margin here still left a
+     large-looking gap to the stage above, because that "gap" was
+     baked into the image's own transparent padding, not this margin.
+     #pna-toolbar-crop clips the layout box down to just the real bar's
+     height (aspect-ratio 2172/166, matching the measured art height)
+     via overflow:hidden; #pna-toolbar-frame inside it stays the FULL
+     image (so the column-percentage math below, measured against the
+     full 2172x724 canvas, is untouched) and is pulled up by exactly
+     the top margin's own fraction (266/724 = 12.247% of the crop's
+     width, since margin percentages resolve against the containing
+     block's WIDTH even for margin-top) so the visible art's top edge
+     lands flush at the crop container's own top edge. */
+  #pna-toolbar-crop {
+    grid-column: 2;
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 2172 / 166;
+    /* calc(94vw - 130px), not plain 94vw — reserves enough room on
+       either side for the audio-button column (~85px) plus its gaps
+       so that group never gets pushed past the viewport edge on
+       desktop/tablet widths above the mobile breakpoint. */
+    width: min(calc(94vw - 130px), calc((100vh - 230px) * (1920 / 1080)));
+  }
+  #pna-toolbar-frame {
+    position: relative;
+    width: 100%;
+    margin-top: -12.247%;
+    /* Sized in container-width units (cqw) so every live value scales
+       with the TOOLBAR's own on-screen width, not the viewport. */
+    container-type: inline-size;
+  }
+  /* The <img> sets the wrapper's real aspect ratio/height — width:100%
+     height:auto is what "preserve aspect ratio, never stretch/crop"
+     means in practice for a plain <img>. */
+  #pna-toolbar-art { display: block; width: 100%; height: auto; }
+
+  /* Overlay sits exactly on top of the <img>, inset:0 — every child
+     column below is positioned as a PERCENTAGE of this same box, which
+     is why it never drifts from the artwork at any size. */
   #pna-hud {
-    display: flex; flex-wrap: wrap; align-items: center;
-    gap: clamp(4px, 1cqw, 10px);
+    position: absolute; inset: 0;
+    font-family: 'Poppins', 'Baloo 2', sans-serif;
   }
   #pna-hud.hidden { display: none; }
-  .pna-hud-block {
-    background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border);
-    border-radius: clamp(6px, 1cqw, 10px);
-    padding: clamp(4px, 0.9cqw, 8px) clamp(6px, 1.4cqw, 14px);
-    font-family: 'Baloo 2', sans-serif;
-    white-space: nowrap;
-  }
-  .pna-hud-label { font-size: clamp(7px, 1cqw, 9.5px); letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 2px; }
-  .pna-hud-value { font-size: clamp(11px, 1.8cqw, 17px); font-weight: 700; color: var(--moon); }
-  .pna-hud-timer-value { font-variant-numeric: tabular-nums; }
-  #pna-hud-lives { font-size: clamp(9px, 1.6cqw, 15px); letter-spacing: 2px; color: #ff4d5e; text-shadow: 0 0 6px rgba(255,77,94,0.5); }
-  #pna-hud-level { font-size: clamp(8px, 1.2cqw, 12px) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22cqw; }
 
-  /* ---- toolbar controls — icon buttons, always visible (mute/pause/
-     fullscreen live in the gated #pna-hud above since they only make
-     sense mid-level; Music/Sound stay reachable from every screen,
-     including the title screen, so they live here instead). ---- */
-  .pna-toolbar-controls { display: flex; gap: clamp(3px, 0.8cqw, 8px); align-items: center; }
-  .pna-icon-btn {
-    background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-main);
-    border-radius: clamp(6px, 1cqw, 10px);
-    width: clamp(24px, 4cqw, 38px); height: clamp(24px, 4cqw, 38px);
-    font-size: clamp(11px, 1.8cqw, 17px); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
+  /* Percentages below were measured directly from the source PNG's own
+     pixels (2172x724): each box's left/width as a fraction of the
+     FULL image width, and the shared top/height as a fraction of the
+     full image height — not eyeballed, so they land exactly inside
+     the artwork's own drawn boxes at every render size. */
+  .pna-hud-col {
+    position: absolute;
+    top: 46.96%; height: 9.53%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1.15;
+    color: var(--text-main);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+    overflow: hidden;
+  }
+  #pna-hud-col-score { left: 8.47%; width: 18.14%; }
+  #pna-hud-col-bones  { left: 29.33%; width: 19.38%; }
+  #pna-hud-col-time   { left: 51.43%; width: 19.25%; }
+  /* container-type here (not on #pna-hud-lives itself, which shrinks
+     to fit its own content — a circular size dependency) — the hearts
+     size themselves in cqw against THIS column's own width, not the
+     whole toolbar's, which is what guarantees they actually fit this
+     one narrow box instead of just scaling with the toolbar overall. */
+  #pna-hud-col-lives  { left: 73.44%; width: 18.09%; container-type: inline-size; }
+
+  #pna-hud-score, #pna-hud-bones, #pna-hud-timer {
+    font-weight: 700;
+    font-size: clamp(9px, 4.6cqw, 22px);
+    color: #fff6e0;
+  }
+  .pna-hud-timer-value { font-variant-numeric: tabular-nums; }
+  #pna-hud-level {
+    font-weight: 500;
+    font-size: clamp(6px, 2.1cqw, 10px);
+    color: var(--text-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96%;
+  }
+  /* Lives — the 3 supplied heart PNGs (red/black/gold), never emoji or
+     CSS shapes. --pna-heart-extra is set by JS (updateHud() in
+     pup-n-away-ui.js) to the count of bonus hearts beyond the normal
+     3 slots, so the row shrinks slightly rather than ever overflowing
+     the Lives box or wrapping to a second line. */
+  #pna-hud-lives {
+    --pna-heart-extra: 0;
+    display: flex; flex-wrap: nowrap; align-items: center; justify-content: center;
+    width: 100%;
+    gap: calc(4cqw - (var(--pna-heart-extra) * 0.5cqw));
+  }
+  .pna-heart-slot, .pna-heart-icon.pna-heart-gold-slot {
+    /* cqw here is against #pna-hud-col-lives's own (narrow) width, not
+       the whole toolbar's — see the container-type on that column
+       above — so 3 hearts fill the box neatly and each extra bonus
+       heart shrinks the row by a fixed, tuned amount, always landing
+       comfortably inside the box instead of merely scaling with it. */
+    width: clamp(5px, calc(26cqw - (var(--pna-heart-extra) * 5cqw)), 20px);
+    aspect-ratio: 1 / 1;
     flex: none;
   }
-  .pna-icon-btn:active { transform: translateY(1px); }
+  /* Each of the 3 normal slots stacks its red/black PNG on top of each
+     other (both always present in the DOM, so both are preloaded from
+     first paint — no fetch/decode flicker the first time a life is
+     lost) and crossfades between them via opacity/scale. */
+  .pna-heart-slot { position: relative; }
+  .pna-heart-slot .pna-heart-icon {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; display: block;
+    opacity: 0; transform: scale(0.82);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .pna-heart-slot .pna-heart-icon.active { opacity: 1; transform: scale(1); }
+  /* Bonus gold hearts are plain (no red/black toggle) — appended/
+     removed by JS as the live count crosses 3, fading in on entry. */
+  .pna-heart-icon.pna-heart-gold-slot {
+    object-fit: contain; display: block;
+    opacity: 0; transform: scale(0.82);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .pna-heart-icon.pna-heart-gold-slot.active { opacity: 1; transform: scale(1); }
 
-  /* ---- Music/Sound volume controls — see .pna-toolbar-controls above
-     for where these buttons now live. Each opens the shared popover
-     below with a 0-100% slider, same pattern as Anagram Quest's audio
-     controls — see wireAudioControls() in pup-n-away.js. */
+  /* ---- audio control group — the game's two existing Music/Sound
+     buttons (each opens the shared popover below with its own 0-100%
+     slider), just relocated and restyled to sit beside the toolbar
+     instead of inside it. ---- */
+  .pna-toolbar-controls {
+    grid-column: 3; justify-self: start;
+    display: flex; gap: 8px; align-items: center;
+  }
   .pna-audio-icon-btn {
-    width: clamp(24px, 4cqw, 38px); height: clamp(24px, 4cqw, 38px); flex: none;
-    border-radius: clamp(6px, 1cqw, 10px);
-    border: 1.5px solid var(--panel-border); background: rgba(255,255,255,0.05);
+    width: clamp(28px, 4vw, 38px); height: clamp(28px, 4vw, 38px); flex: none;
+    border-radius: 10px;
+    border: 1.5px solid var(--panel-border); background: rgba(10,20,50,0.55);
     color: var(--moon); display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: box-shadow 0.15s ease, border-color 0.15s ease;
   }
-  .pna-audio-icon-btn svg { width: 60%; height: 60%; }
-  .pna-audio-icon-btn:hover { border-color: var(--moon); box-shadow: 0 0 12px rgba(255,220,140,0.4); }
+  .pna-audio-icon-btn svg { width: 55%; height: 55%; }
+  .pna-audio-icon-btn:hover { border-color: var(--moon); box-shadow: 0 0 10px rgba(255,220,140,0.35); }
+
+  /* Below the mobile breakpoint there's no 3rd grid column to spare —
+     stack the audio buttons under the toolbar's own right edge instead
+     (still clear of the toolbar artwork and the stage, never on top of
+     either). */
+  @media (max-width: 720px) {
+    #pna-hud-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    #pna-toolbar-crop { grid-column: auto; width: min(94vw, calc((100vh - 230px) * (1920 / 1080))); }
+    .pna-toolbar-controls {
+      grid-column: auto; justify-self: auto;
+      width: min(94vw, calc((100vh - 230px) * (1920 / 1080)));
+      justify-content: flex-end;
+    }
+  }
 
   /* ---- mobile move buttons — the game is keyboard-only by design (see
      pup-n-away-input.js), which leaves touch devices with no way to
@@ -276,9 +398,9 @@
   <a class="back" href="../../index.html"><img src="../../assets/img/logo.png" alt="Quest Zone"></a>
 </div>
 
-<!-- Shared popover for the Music/Sound buttons below (now inside
-     #pna-toolbar, not page-fixed) — JS repositions it under whichever
-     button was clicked. See wireAudioControls() in pup-n-away.js. -->
+<!-- Shared popover for the Music/Sound buttons in the toolbar's audio
+     group below — JS repositions it under whichever button was
+     clicked. See wireAudioControls() in pup-n-away.js. -->
 <div id="pna-audio-popover" class="pna-audio-popover" role="dialog" aria-hidden="true">
   <div class="pna-audio-popover-title" id="pna-audio-popover-title">SOUND</div>
   <div class="pna-audio-popover-row">
@@ -357,33 +479,56 @@
     </div>
   </div>
 
-  <!-- Toolbar — every readout and control lives here, entirely OUTSIDE
-       the playable 16:9 stage above, so nothing in a level is ever
-       covered up. #pna-hud (gameplay stats + mute/pause/fullscreen) is
-       only shown mid-level; the Music/Sound buttons next to it stay
-       reachable from every screen. -->
-  <div id="pna-toolbar">
-    <div id="pna-hud" class="hidden">
-      <div class="pna-hud-block">
-        <div class="pna-hud-label">Score</div>
-        <div class="pna-hud-value" id="pna-hud-score">0</div>
+  <!-- HUD toolbar — the supplied transparent PNG is the entire visual
+       design; every live value is real HTML absolutely positioned over
+       its own empty box in the artwork (see the CSS above for how the
+       percentages were measured). Entirely outside the playable 16:9
+       stage above, so nothing in a level is ever covered up. -->
+  <div id="pna-hud-wrapper">
+    <div id="pna-toolbar-crop">
+      <div id="pna-toolbar-frame">
+        <img id="pna-toolbar-art" src="../../assets/img/pup-n-away/hud/toolbar.png" alt="">
+        <div id="pna-hud" class="hidden">
+          <div class="pna-hud-col" id="pna-hud-col-score">
+            <div id="pna-hud-score">0</div>
+          </div>
+          <div class="pna-hud-col" id="pna-hud-col-bones">
+            <div id="pna-hud-bones">0 / 0</div>
+            <div id="pna-hud-level"></div>
+          </div>
+          <div class="pna-hud-col" id="pna-hud-col-time">
+            <div id="pna-hud-timer" class="pna-hud-timer-value">0:00.0</div>
+          </div>
+          <div class="pna-hud-col" id="pna-hud-col-lives">
+            <!-- 3 fixed normal-life slots — both the red and black PNG
+                 for each slot are always in the DOM (just one made
+                 .active at a time) so both are preloaded from first
+                 paint, never fetched/decoded for the first time at the
+                 exact moment a life is lost. Bonus gold hearts (life 4+)
+                 are inserted/removed here by JS — see updateHud() in
+                 pup-n-away-ui.js. -->
+            <div id="pna-hud-lives">
+              <div class="pna-heart-slot" data-life-slot="1">
+                <img class="pna-heart-icon" data-heart-color="red" src="../../assets/img/pup-n-away/hud/hearts/red.png" alt="">
+                <img class="pna-heart-icon" data-heart-color="black" src="../../assets/img/pup-n-away/hud/hearts/black.png" alt="">
+              </div>
+              <div class="pna-heart-slot" data-life-slot="2">
+                <img class="pna-heart-icon" data-heart-color="red" src="../../assets/img/pup-n-away/hud/hearts/red.png" alt="">
+                <img class="pna-heart-icon" data-heart-color="black" src="../../assets/img/pup-n-away/hud/hearts/black.png" alt="">
+              </div>
+              <div class="pna-heart-slot" data-life-slot="3">
+                <img class="pna-heart-icon" data-heart-color="red" src="../../assets/img/pup-n-away/hud/hearts/red.png" alt="">
+                <img class="pna-heart-icon" data-heart-color="black" src="../../assets/img/pup-n-away/hud/hearts/black.png" alt="">
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="pna-hud-block">
-        <div class="pna-hud-label" id="pna-hud-level-label">Bones: <span id="pna-hud-bones">0 / 0</span></div>
-        <div class="pna-hud-value" id="pna-hud-level" style="font-size:12px;color:var(--text-dim);"></div>
-      </div>
-      <div class="pna-hud-block">
-        <div class="pna-hud-label">Time</div>
-        <div class="pna-hud-value pna-hud-timer-value" id="pna-hud-timer">0:00.0</div>
-      </div>
-      <div class="pna-hud-block">
-        <div class="pna-hud-label">Lives</div>
-        <div id="pna-hud-lives">❤❤❤</div>
-      </div>
-      <button type="button" class="pna-icon-btn" id="pna-btn-mute" title="Mute">🔊</button>
-      <button type="button" class="pna-icon-btn" id="pna-btn-pause" title="Pause">⏸</button>
-      <button type="button" class="pna-icon-btn" id="pna-btn-fullscreen" title="Fullscreen">⛶</button>
     </div>
+    <!-- The game's two existing audio controls (each opens the shared
+         popover below with its own 0-100% slider) — relocated here,
+         restyled, functionally unchanged. See wireAudioControls() in
+         pup-n-away.js. -->
     <div class="pna-toolbar-controls">
       <button class="pna-audio-icon-btn" type="button" data-audio-popover="music" title="Music" aria-haspopup="true" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>

@@ -19,6 +19,62 @@
     return minutes + ':' + String(seconds).padStart(2, '0') + '.' + tenths;
   }
 
+  // ---- Lives display — 3 real supplied PNGs (red/black/gold), never
+  // emoji or CSS shapes. The first 3 positions are the normal-life
+  // slots (red = active, black = lost, right-to-left); every life
+  // above 3 shows as an additional gold heart appended to the right.
+  // See updateLivesDisplay() below for the full rendering rule.
+  const NORMAL_LIFE_SLOTS = 3;
+  const GOLD_HEART_SRC = '../../assets/img/pup-n-away/hud/hearts/gold.png';
+
+  function updateLivesDisplay(livesEl, lives) {
+    if (!livesEl) return;
+    const safeLives = Math.max(0, lives);
+    const activeNormalLives = Math.min(safeLives, NORMAL_LIFE_SLOTS);
+    const bonusLives = Math.max(safeLives - NORMAL_LIFE_SLOTS, 0);
+
+    // Normal slots 1-3: both the red and black PNG are always present
+    // (preloaded from first paint) — just toggle which one is .active.
+    for (let slot = 1; slot <= NORMAL_LIFE_SLOTS; slot++) {
+      const slotEl = livesEl.querySelector('[data-life-slot="' + slot + '"]');
+      if (!slotEl) continue;
+      const isActive = slot <= activeNormalLives;
+      const redImg = slotEl.querySelector('[data-heart-color="red"]');
+      const blackImg = slotEl.querySelector('[data-heart-color="black"]');
+      if (redImg) redImg.classList.toggle('active', isActive);
+      if (blackImg) blackImg.classList.toggle('active', !isActive);
+    }
+
+    // Bonus gold hearts (life 4+) — added/removed to exactly match
+    // bonusLives, keyed by a stable data-bonus-index so an already-
+    // shown gold heart is never torn down and rebuilt (which would
+    // restart its fade-in for no reason) when the count changes.
+    livesEl.querySelectorAll('.pna-heart-gold-slot').forEach((el) => {
+      const idx = parseInt(el.getAttribute('data-bonus-index'), 10);
+      if (idx > bonusLives) el.remove();
+    });
+    for (let i = 1; i <= bonusLives; i++) {
+      if (livesEl.querySelector('.pna-heart-gold-slot[data-bonus-index="' + i + '"]')) continue;
+      const img = document.createElement('img');
+      img.className = 'pna-heart-icon pna-heart-gold-slot';
+      img.setAttribute('data-bonus-index', String(i));
+      img.alt = '';
+      img.src = GOLD_HEART_SRC;
+      livesEl.appendChild(img);
+      // Force a style flush before adding .active, a beat later, so
+      // the opacity/scale transition actually plays instead of
+      // starting already at its end state (the browser would otherwise
+      // coalesce "append + immediately add .active" into one paint).
+      void img.offsetWidth;
+      setTimeout(() => img.classList.add('active'), 20);
+    }
+
+    // Once bonus hearts push the row past 3, shrink every heart
+    // slightly (see the --pna-heart-extra-driven clamp() in the CSS)
+    // so the row can never overflow or wrap out of the Lives box.
+    livesEl.style.setProperty('--pna-heart-extra', String(bonusLives));
+  }
+
   function createUIManager() {
     const screens = {
       LOADING: $('pna-screen-loading'),
@@ -44,15 +100,11 @@
     function updateHud({ score, bonesCollected, bonesTotal, lives, levelName }) {
       const scoreEl = $('pna-hud-score');
       const bonesEl = $('pna-hud-bones');
-      const livesEl = $('pna-hud-lives');
       const levelEl = $('pna-hud-level');
       if (scoreEl) scoreEl.textContent = String(score);
       if (bonesEl) bonesEl.textContent = bonesCollected + ' / ' + bonesTotal;
-      // A plain text heart glyph (not the ❤️ emoji) so the CSS color
-      // below is what actually renders it red on every platform/font,
-      // instead of leaving it to whatever color an emoji font ships.
-      if (livesEl) livesEl.textContent = '♥'.repeat(Math.max(0, lives));
       if (levelEl) levelEl.textContent = levelName;
+      updateLivesDisplay($('pna-hud-lives'), lives);
     }
 
     function flashMissBanner() {
@@ -104,15 +156,9 @@
       el.addEventListener('click', handler);
     }
 
-    function setMuteButtonState(muted) {
-      const btn = $('pna-btn-mute');
-      if (btn) btn.textContent = muted ? '🔇' : '🔊';
-    }
-
     return {
       showScreen, setHudVisible, updateHud, flashMissBanner, setLoadingProgress,
-      setCountdownText, setTimerText, setLevelCompletePanel, setGameOverPanel, bindButton,
-      setMuteButtonState
+      setCountdownText, setTimerText, setLevelCompletePanel, setGameOverPanel, bindButton
     };
   }
 

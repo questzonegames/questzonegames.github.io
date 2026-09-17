@@ -502,19 +502,15 @@
       startCountdown();
     });
     ui.bindButton('pna-btn-return-go', () => { window.location.href = '../../index.html'; });
-    ui.bindButton('pna-btn-pause', () => { audio.play('buttonClick'); pauseGame(); });
+    // Manual pause/fullscreen buttons were removed from the toolbar
+    // (redesigned around the supplied artwork, which has no room for
+    // them) and are being reintroduced elsewhere separately later —
+    // auto-pause on tab-hidden/window-blur (see pauseGame() below)
+    // still works, and the Paused screen's own Resume/Restart/Return
+    // buttons stay fully functional for whenever that screen is up.
     ui.bindButton('pna-btn-resume', () => { audio.play('buttonClick'); resumeGame(); });
     ui.bindButton('pna-btn-restart-paused', () => { audio.play('buttonClick'); setupLevel(levels.current()); startCountdown(); });
     ui.bindButton('pna-btn-return-paused', () => { window.location.href = '../../index.html'; });
-    ui.bindButton('pna-btn-mute', () => {
-      const muted = audio.toggleMuted();
-      ui.setMuteButtonState(muted);
-    });
-    ui.bindButton('pna-btn-fullscreen', () => {
-      const wrap = document.getElementById('pna-stage-wrap');
-      if (!document.fullscreenElement) wrap.requestFullscreen && wrap.requestFullscreen();
-      else document.exitFullscreen && document.exitFullscreen();
-    });
 
     // Listen as widely as possible for the very first gesture — the
     // title screen's own overlay sits on top of the canvas, so a click
