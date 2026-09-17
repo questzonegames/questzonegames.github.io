@@ -248,7 +248,7 @@
       // Select's own comment above).
       // Read off a fine (1%-step) percentage-gridline overlay (see
       // Level Select's own comment above).
-      returnToLobby: { left: 37.0, width: 25.2, top: 85.1, height: 6.7 }
+      returnToLobby: { left: 37.0, width: 25.2, top: 86.2, height: 6.7 }
     },
     equipment: {
       tabs: {
