@@ -22,6 +22,7 @@
     gameOver: '../../assets/audio/pup-n-away/game-over.mp3',
     buttonHover: '../../assets/audio/pup-n-away/button-hover.mp3',
     buttonClick: '../../assets/audio/pup-n-away/button-click.mp3',
+    buttonUnavailable: '../../assets/audio/pup-n-away/button-unavailable.mp3',
     snoring: '../../assets/audio/pup-n-away/snoring.mp3',
     dreamTransition: '../../assets/audio/pup-n-away/dream-transition.mp3'
   };

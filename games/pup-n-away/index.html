@@ -254,6 +254,13 @@
   }
   .pna-audio-icon-btn svg { width: 55%; height: 55%; }
   .pna-audio-icon-btn:hover { border-color: var(--moon); box-shadow: 0 0 10px rgba(255,220,140,0.35); }
+  /* Admin-only hitbox debug toggle — a plain unfilled outline like the
+     other two toolbar icons when off; a solid red fill + glow when
+     debug mode is on, so it's obvious at a glance it's active. */
+  .pna-admin-debug-btn[aria-pressed="true"] {
+    background: rgba(255,40,40,0.85); border-color: #ff6a6a; color: #fff;
+    box-shadow: 0 0 10px rgba(255,60,60,0.6);
+  }
 
   /* Below the mobile breakpoint there's no 3rd grid column to spare —
      stack the audio buttons under the toolbar's own right edge instead
@@ -434,6 +441,327 @@
   #pna-btn-restart-act { left: 13.93%; width: 31.58%; top: 73.24%; height: 10.55%; }
   #pna-btn-return-go   { left: 54.49%; width: 31.77%; top: 73.24%; height: 10.55%; }
 
+  /* =================================================================
+     Lobby / Level Select / Challenges / Equipment — generic pattern for
+     "supplied PNG is the whole design, every control is a real overlay
+     positioned as a percentage of the image", shared by all 4 screens.
+     Mirrors the .pna-result-* pattern above exactly, just under its own
+     class names since these screens are wider (level-select/challenges/
+     equipment are 1672x941) than the lobby (1024x1536) or the result
+     panels (1536x1024) — .pna-ui-frame's aspect-ratio is set per-screen
+     below rather than shared.
+     ================================================================= */
+  .pna-ui-screen { justify-content: center; }
+  .pna-ui-frame {
+    position: relative;
+    width: min(92%, 640px);
+    container-type: inline-size;
+    /* Guarantees nothing (a scrolled grid, a hitbox box-shadow) can ever
+       visually spill past this screen's own edge onto the dimmed scrim
+       behind it. */
+    overflow: hidden;
+    border-radius: 14px;
+  }
+  #pna-screen-lobby .pna-ui-frame { width: min(60%, 360px); aspect-ratio: 1024 / 1536; }
+  #pna-screen-level-select .pna-ui-frame,
+  #pna-screen-challenges .pna-ui-frame,
+  #pna-screen-equipment .pna-ui-frame { width: min(96%, 980px); aspect-ratio: 1672 / 941; }
+  .pna-ui-art { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+  .pna-ui-interactions { position: absolute; inset: 0; font-family: 'Poppins', 'Baloo 2', sans-serif; }
+  .pna-ui-hotspot {
+    position: absolute; appearance: none; -webkit-appearance: none; border: 0; padding: 0; margin: 0;
+    background: transparent; cursor: pointer; border-radius: 10px; font: inherit;
+    transition: filter 0.14s ease, transform 0.1s ease;
+    /* These 3 static hotspots (the Return to Lobby buttons) sit FIRST
+       in the DOM, before the dynamically-appended grid/list content —
+       without a z-index, a scrolled card could paint over them. */
+    z-index: 5;
+    /* Pill-shaped hitboxes (every lobby/Return-to-Lobby button) — clips
+       the CLICKABLE area itself to a rounded pill, not just its look, so
+       the box's square corners (unavoidable with plain left/top/width/
+       height) never extend past the visible rounded button. */
+    clip-path: inset(0 round 999px);
+  }
+  .pna-ui-hotspot:hover:not(:disabled) { filter: brightness(1.08); }
+  .pna-ui-hotspot:active:not(:disabled) { transform: scale(0.99); }
+  .pna-ui-hotspot:focus-visible { outline: 3px solid #fff6e0; outline-offset: 2px; }
+
+  /* Development-only alignment aid — never enabled in production.
+     Toggle with ?pnaUiDebug=1 in the URL (see the inline script at the
+     end of <body>). */
+  /* box-shadow (not outline) — several of these elements use clip-path
+     to match a rounded/pill hit area, and clip-path also clips an
+     outline, which made the debug indicator invisible on them. An
+     inset box-shadow is drawn inside the clip and stays visible, and
+     as a bonus shows the TRUE (already-rounded) hit area, not just its
+     rectangular bounding box. */
+  /* Only genuinely CLICKABLE elements are highlighted — .pna-ls-card
+     (the card's plain positioning wrapper) and .pna-ls-name-plate (a
+     static label, not a button) were removed from this list because
+     highlighting them made a non-interactive area look like a stray
+     extra hitbox. */
+  .pna-ui-debug .pna-ui-hotspot,
+  .pna-ui-debug .pna-ls-act-btn,
+  .pna-ui-debug .pna-ls-card-btn,
+  .pna-ui-debug .pna-tab-btn,
+  .pna-ui-debug .pna-image-select,
+  .pna-ui-debug .pna-image-search,
+  .pna-ui-debug .pna-image-scrollbar-track {
+    box-shadow: inset 0 0 0 3px #ff1a1a; background: rgba(0,255,140,0.45);
+  }
+
+  /* =================================================================
+     Shared modular-widget primitives — every button/card/tab/dropdown
+     on Level Select, Challenges and Equipment is now a small transparent
+     background image assembled from PNA_CONFIG.UI_HOTSPOTS boxes (never
+     a flattened screenshot), sized by ITS OWN real aspect ratio via
+     inline aspect-ratio (see styleAspectBox() in pup-n-away-menus.js) so
+     nothing is ever stretched. A decorative art <img> inside each widget
+     always carries pointer-events:none/user-select:none/no-drag — the
+     wrapping element (a real <button> where the widget IS clickable) is
+     what receives the click.
+     ================================================================= */
+  .pna-tab-btn, .pna-image-select, .pna-image-search, .pna-image-scrollbar-track,
+  .pna-ls-act-btn, .pna-ls-name-plate, .pna-ls-card, .pna-eq-card {
+    -webkit-user-drag: none;
+  }
+  .pna-tab-btn-art, .pna-image-select-art, .pna-image-search-art,
+  .pna-ls-act-btn-art, .pna-ls-name-plate-art, .pna-ls-card-art, .pna-eq-card-art, .pna-ch-card-art {
+    pointer-events: none; user-select: none; -webkit-user-drag: none;
+  }
+
+  /* ---- tab buttons (challenge tiers / equipment owned-unowned) ---- */
+  .pna-tab-btn {
+    position: absolute; background: transparent; border: 0; padding: 0; cursor: pointer;
+    clip-path: inset(0 round 999px);
+  }
+  .pna-tab-btn-art { display: block; width: 100%; height: 100%; }
+  .pna-tab-btn-label {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    /* Light cream by default (readable on the darker blue "normal" tab
+       art) — the .pna-tab-selected variant below switches to dark navy,
+       which is what reads clearly on the bright gold "selected" art. A
+       single fixed dark color read poorly on the blue state, which is
+       exactly what was hard to see before. */
+    color: #fff6e0; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-family: 'Baloo 2', sans-serif; font-weight: 800;
+    font-size: clamp(8px, 2.3cqw, 15px); pointer-events: none; white-space: nowrap;
+  }
+  .pna-tab-btn.pna-tab-selected .pna-tab-btn-label { color: #12275c; text-shadow: none; }
+  .pna-tab-btn:hover .pna-tab-btn-art { filter: brightness(1.1); }
+  .pna-tab-btn:focus-visible { outline: 3px solid #fff6e0; outline-offset: 2px; border-radius: 999px; }
+
+  /* ---- image-backed <select>/<input search> — the dropdown/search PNG
+     is the visible control; the real form element sits on top, fully
+     transparent except for its own text, so no native chrome (grey
+     box, white background, browser arrow) ever shows over the art. ---- */
+  .pna-image-select, .pna-image-search { position: absolute; clip-path: inset(0 round 999px); }
+  .pna-image-select-art, .pna-image-search-art { display: block; width: 100%; height: 100%; }
+  .pna-image-select-input, .pna-image-search-input {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    appearance: none; -webkit-appearance: none; background: transparent; border: 0; outline: none;
+    color: #fff6e0; font: inherit; font-size: clamp(8px, 2cqw, 13px); cursor: pointer;
+  }
+  /* Padding-left/right below clear each widget's own baked icon
+     (magnifying glass / dropdown arrow) — measured directly from each
+     PNG: the plain challenges widgets keep their icon near the very
+     edge, while the equipment widgets' moon/cloud flourish pushes their
+     icon further inward, so they need a wider clearance (see the
+     .pna-flourish modifier, applied only to equipment's search/selects
+     in pup-n-away-menus.js). Typed/selected text was landing ON TOP of
+     the icon before this was widened. */
+  .pna-image-select-input {
+    padding: 0 15% 0 5%; display: flex; align-items: center; text-align: left;
+    font-family: 'Poppins', sans-serif;
+  }
+  .pna-image-select-input:disabled { opacity: 0.55; cursor: default; }
+  .pna-image-select.pna-flourish .pna-image-select-input { padding: 0 27% 0 16%; }
+  .pna-image-select-value { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .pna-image-search-input { padding: 0 5% 0 22%; cursor: text; }
+  .pna-image-search.pna-flourish .pna-image-search-input { padding: 0 8% 0 31%; }
+
+  /* ---- custom themed dropdown panel (replaces the browser's native
+     <select> popup entirely — see buildImageSelect() in
+     pup-n-away-menus.js) — same visual language as the audio popover. ---- */
+  .pna-dropdown-panel {
+    position: fixed; z-index: 500;
+    background: rgba(10,14,26,0.98); border: 1.5px solid var(--panel-border);
+    border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,0.55);
+    overflow: hidden; padding: 4px; max-height: 240px; overflow-y: auto;
+  }
+  .pna-dropdown-panel.hidden { display: none; }
+  .pna-dropdown-option {
+    display: block; width: 100%; text-align: left; background: transparent; border: 0;
+    color: var(--text-main); font-family: 'Poppins', sans-serif; font-size: 13px;
+    padding: 8px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .pna-dropdown-option:hover { background: rgba(255,255,255,0.1); }
+  .pna-dropdown-option[aria-selected="true"] { color: var(--moon); font-weight: 700; }
+  .pna-image-search-input::placeholder { color: rgba(255,246,224,0.45); }
+  .pna-image-select-input:focus-visible, .pna-image-search-input:focus-visible {
+    outline: 2px solid #fff6e0; outline-offset: -2px; border-radius: 999px;
+  }
+
+  /* ---- scroll lists + image-backed custom scrollbar ---- */
+  .pna-scroll-list { position: absolute; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; }
+  .pna-scroll-list::-webkit-scrollbar { display: none; }
+  .pna-empty-msg {
+    color: var(--text-dim); font-size: clamp(9px, 1.8cqw, 13px);
+    text-align: center; padding: 4% 6%;
+  }
+  .pna-image-scrollbar-track { position: absolute; border-radius: 999px; overflow: hidden; }
+  .pna-image-scrollbar-track-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .pna-image-scrollbar-thumb { position: absolute; left: 6%; width: 88%; border-radius: 999px; cursor: grab; }
+  .pna-image-scrollbar-thumb:active { cursor: grabbing; }
+
+  /* ---- Level Select: act buttons, act-name plate, level cards ---- */
+  .pna-ls-act-btn {
+    position: absolute; background: transparent; border: 0; padding: 0; cursor: pointer;
+    clip-path: inset(0 round 999px);
+  }
+  .pna-ls-act-btn-art { display: block; width: 100%; height: 100%; }
+  .pna-ls-act-btn-label {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #fff6e0; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-family: 'Baloo 2', sans-serif; font-weight: 800;
+    font-size: clamp(7px, 1.9cqw, 13px); pointer-events: none;
+  }
+  #pna-ls-act-1 .pna-ls-act-btn-label { color: #12275c; text-shadow: none; }
+  .pna-ls-act-btn:hover .pna-ls-act-btn-art { filter: brightness(1.1); }
+  .pna-ls-act-btn:focus-visible { outline: 3px solid #fff6e0; outline-offset: 2px; border-radius: 999px; }
+  .pna-ls-act-lock {
+    position: absolute; right: 5%; top: 50%; width: 16%; transform: translateY(-50%);
+    pointer-events: none; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+  }
+  .pna-locked-hint {
+    position: absolute; z-index: 40; transform: translateY(-50%);
+    background: rgba(10,14,26,0.96); color: #fff6e0; border: 1.5px solid var(--panel-border);
+    border-radius: 8px; padding: 6px 12px; font-size: clamp(8px, 1.6cqw, 12px);
+    white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,0.45); pointer-events: none;
+  }
+  .pna-locked-hint.hidden { display: none; }
+
+  .pna-ls-name-plate { position: absolute; }
+  .pna-ls-name-plate-art { display: block; width: 100%; height: 100%; }
+  .pna-ls-name-plate-label {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #fff6e0; font-family: 'Baloo 2', sans-serif; font-weight: 800; letter-spacing: 0.05em;
+    font-size: clamp(10px, 3cqw, 20px);
+  }
+
+  .pna-ls-card { position: absolute; }
+  .pna-ls-card-art { display: block; width: 100%; height: 100%; }
+  .pna-ls-thumb-box {
+    position: absolute; border-radius: 6px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pna-ls-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .pna-ls-lock-overlay { position: relative; width: 32%; aspect-ratio: 199 / 250; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.6)); }
+  .pna-ls-lock-overlay.hidden { display: none; }
+  .pna-ls-complete-badge {
+    position: absolute; top: 4%; right: 4%; width: 16%; aspect-ratio: 1/1;
+    background: #3fae5a; border-radius: 50%; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .pna-ls-complete-badge svg { width: 62%; height: 62%; }
+  .pna-ls-complete-badge.hidden { display: none; }
+  .pna-ls-card-name {
+    position: absolute; display: flex; align-items: center; justify-content: center;
+    color: #fff6e0; font-family: 'Poppins', sans-serif; font-weight: 700;
+    font-size: clamp(8px, 2.4cqw, 14px); padding: 0 4%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pna-ls-card-btn {
+    position: absolute; inset: 0; background: transparent; border: 0; padding: 0; cursor: pointer; border-radius: 8px;
+    /* A small inset plus a bigger corner radius than before — the flat
+       6% radius still read as "a square stamped over a rounded card";
+       this hugs the card art's own rounded corners much more closely. */
+    clip-path: inset(1.5% round 10%);
+  }
+  .pna-ls-card-btn:hover { background: rgba(255,255,255,0.06); }
+  .pna-ls-card-btn:focus-visible { outline: 3px solid #fff6e0; outline-offset: 2px; }
+
+  /* ---- Challenges cards ---- */
+  .pna-challenge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5%; padding: 0.5% 1% 3%; }
+  @media (max-width: 820px) { .pna-challenge-grid { grid-template-columns: 1fr; } }
+  .pna-ch-card { position: relative; width: 100%; }
+  .pna-ch-card-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pna-ch-card-icon { position: absolute; display: flex; align-items: center; justify-content: center; font-size: clamp(16px, 5cqw, 26px); }
+  .pna-ch-card-title {
+    position: absolute; display: flex; align-items: center; padding: 0 4%;
+    color: #fff6e0; font-family: 'Poppins', sans-serif; font-weight: 700;
+    font-size: clamp(9px, 2.3cqw, 14px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pna-ch-card-desc {
+    position: absolute; display: flex; align-items: center; padding: 2% 4%;
+    color: var(--text-dim); font-size: clamp(8px, 1.7cqw, 12px); line-height: 1.3;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  }
+
+  /* ---- Equipment grid + cards (no side preview panel — clicking an
+     owned card equips it directly; see pup-n-away-menus.js) ---- */
+  .pna-equipment-grid {
+    display: grid; grid-auto-rows: min-content;
+    grid-template-columns: repeat(var(--pna-eq-cols, 5), 1fr);
+    gap: 2%; padding: 1%; align-content: start;
+  }
+  @media (max-width: 900px) { .pna-equipment-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { .pna-equipment-grid { grid-template-columns: repeat(2, 1fr); } }
+  .pna-eq-card { position: relative; width: 100%; background: transparent; border: 0; padding: 0; }
+  button.pna-eq-card { cursor: pointer; }
+  .pna-eq-card-art { display: block; width: 100%; height: 100%; }
+  .pna-eq-card-image { position: absolute; object-fit: contain; pointer-events: none; }
+  .pna-eq-card-name {
+    position: absolute; display: flex; align-items: center; justify-content: center;
+    color: #fff6e0; font-family: 'Poppins', sans-serif; font-weight: 700;
+    font-size: clamp(7px, 1.7cqw, 12px); padding: 0 6%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  button.pna-eq-card:hover .pna-eq-card-art { filter: brightness(1.1); }
+  .pna-eq-card:focus-visible { outline: 3px solid #fff6e0; outline-offset: 2px; border-radius: 8px; }
+  .pna-eq-equipped-badge {
+    position: absolute; top: 4%; right: 4%; width: 15%; aspect-ratio: 1/1;
+    background: #3fae5a; border-radius: 50%; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .pna-eq-equipped-badge svg { width: 60%; height: 60%; }
+  /* Explicitly-marked empty skeleton slots (see renderEquipmentGrid() in
+     pup-n-away-menus.js) — only shown while EQUIPMENT_CATALOG is empty,
+     purely so the scroll area/custom scrollbar stay testable; dimmed so
+     they read as placeholders, never mistaken for real items. */
+  .pna-eq-card-placeholder { opacity: 0.35; }
+  /* Same purpose as .pna-eq-card-placeholder above, for the Challenges
+     card list (see renderChallengeCards() in pup-n-away-menus.js). */
+  .pna-ch-card-placeholder { opacity: 0.35; }
+
+  .pna-eq-context-menu {
+    position: fixed; z-index: 400; background: rgba(10,14,26,0.97);
+    border: 1.5px solid var(--panel-border); border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.55); overflow: hidden;
+  }
+  .pna-eq-context-menu.hidden { display: none; }
+  .pna-eq-context-menu button {
+    display: block; width: 100%; padding: 8px 18px; background: transparent; border: none;
+    color: var(--text-main); font-family: 'Baloo 2', sans-serif; font-weight: 700; cursor: pointer;
+  }
+  .pna-eq-context-menu button:hover { background: rgba(255,255,255,0.08); }
+
+  /* ---- lobby-fade-into-gameplay transition (Start Game / picking a
+     level from Level Select) — see transitionToLevel() in
+     pup-n-away.js. Reduced to an instant cut under prefers-reduced-
+     motion via the existing rule at the bottom of this stylesheet. */
+  .pna-overlay { transition: opacity 0.35s ease; }
+  .pna-overlay.pna-fading-out { opacity: 0; }
+
+  /* ---- lobby-fade-into-gameplay transition (Start Game / picking a
+     level from Level Select) — see transitionToLevel() in
+     pup-n-away.js. Reduced to an instant cut under prefers-reduced-
+     motion via the existing rule at the bottom of this stylesheet. */
+  .pna-overlay { transition: opacity 0.35s ease; }
+  .pna-overlay.pna-fading-out { opacity: 0; }
+
   /* ---- loading ---- */
   #pna-screen-loading { z-index: 25; background: #04060c; }
   .pna-loading-track { width: min(70%, 360px); height: 10px; border-radius: 6px; background: rgba(255,255,255,0.1); overflow: hidden; }
@@ -450,6 +778,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     #pna-miss-banner { transition: none; }
+    .pna-overlay { transition: none; }
   }
 </style>
 </head>
@@ -487,19 +816,72 @@
       <div class="pna-overlay-sub" id="pna-loading-label">Loading… 0%</div>
     </div>
 
-    <!-- ============== TITLE ============== -->
-    <div id="pna-screen-title" class="pna-overlay hidden">
-      <img class="pna-logo" src="../../assets/img/pup-n-away/logo/logo.png" alt="Pup N Away">
-      <button type="button" class="pna-btn" id="pna-btn-start">Play</button>
+    <!-- ============== LOBBY ==============
+         The supplied 5-button PNG is the entire visual design — every
+         hitbox below is a real <button> positioned as a percentage of
+         the art (see PNA_CONFIG.UI_HOTSPOTS.lobby and the .pna-ui-*
+         CSS). There is no intro/"Skip Intro" screen anymore: Start Game
+         fades straight into gameplay (see transitionToLevel() in
+         pup-n-away.js). -->
+    <div id="pna-screen-lobby" class="pna-overlay pna-ui-screen hidden">
+      <div class="pna-ui-frame">
+        <img class="pna-ui-art" src="../../assets/img/pup-n-away/ui/lobby.png" alt="Pup N Away" draggable="false">
+        <div class="pna-ui-interactions">
+          <button type="button" class="pna-ui-hotspot" id="pna-btn-start" aria-label="Start Game"></button>
+          <button type="button" class="pna-ui-hotspot" id="pna-lobby-btn-level-select" aria-label="Level Select"></button>
+          <button type="button" class="pna-ui-hotspot" id="pna-lobby-btn-challenges" aria-label="Challenges"></button>
+          <button type="button" class="pna-ui-hotspot" id="pna-lobby-btn-equipment" aria-label="Equipment"></button>
+          <button type="button" class="pna-ui-hotspot" id="pna-lobby-btn-return-home" aria-label="Return to Quest Zone Home Page"></button>
+        </div>
+      </div>
       <div class="pna-hint">A / D or ◀ ▶ to move the basket</div>
     </div>
 
-    <!-- ============== INTRO (dream transition) ============== -->
-    <div id="pna-screen-intro" class="pna-overlay hidden">
-      <img class="pna-logo" src="../../assets/img/pup-n-away/dog/misc/sit.png" alt="" style="max-width:min(40%,260px);filter:drop-shadow(0 0 20px rgba(140,170,255,0.4));">
-      <div class="pna-overlay-heading">Time for a dream…</div>
-      <div class="pna-overlay-sub">The pup drifts off to sleep, chasing dreams full of bones.</div>
-      <button type="button" class="pna-btn secondary" id="pna-btn-skip-intro">Skip Intro</button>
+    <!-- ============== LEVEL SELECT ==============
+         Rebuilt from modular assets: a blank frame TEMPLATE (fixed outer
+         panel + baked Return to Lobby button) plus separate act-button,
+         act-name-plate, level-card and padlock widget images, all built/
+         positioned by pup-n-away-menus.js from PNA_CONFIG.UI_HOTSPOTS.
+         Every label, thumbnail and lock is real HTML — nothing is baked
+         into a flattened screenshot anymore. -->
+    <div id="pna-screen-level-select" class="pna-overlay pna-ui-screen hidden">
+      <div class="pna-ui-frame">
+        <img class="pna-ui-art" src="../../assets/img/pup-n-away/ui/level-select/blank-template.png" alt="Level Select" draggable="false">
+        <div class="pna-ui-interactions" id="pna-ls-interactions">
+          <button type="button" class="pna-ui-hotspot" id="pna-ls-return" aria-label="Return to Lobby"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== CHALLENGES ==============
+         Rebuilt from modular assets: blank frame template + separate
+         tier-button/dropdown/search/card/scrollbar widgets. Challenge
+         cards are generated from PNA_CONFIG.CHALLENGE_CATALOG (empty
+         today — no real challenges exist yet), never invented data. See
+         pup-n-away-menus.js. -->
+    <div id="pna-screen-challenges" class="pna-overlay pna-ui-screen hidden">
+      <div class="pna-ui-frame">
+        <img class="pna-ui-art" src="../../assets/img/pup-n-away/ui/challenges/blank-template.png" alt="Challenges" draggable="false">
+        <div class="pna-ui-interactions" id="pna-ch-interactions">
+          <button type="button" class="pna-ui-hotspot" id="pna-ch-return" aria-label="Return to Lobby"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== EQUIPMENT ==============
+         Rebuilt from modular assets: blank frame template + separate
+         tab/dropdown/search/card/scrollbar widgets, a full-width 5-column
+         grid (no side preview panel — clicking an owned card equips it
+         directly). Reads PNA_CONFIG.EQUIPMENT_CATALOG (empty today) filtered
+         by real ownership via the EXISTING Quest Zone inventory system,
+         never invented data. See pup-n-away-menus.js. -->
+    <div id="pna-screen-equipment" class="pna-overlay pna-ui-screen hidden">
+      <div class="pna-ui-frame">
+        <img class="pna-ui-art" src="../../assets/img/pup-n-away/ui/equipment/blank-template.png" alt="Equipment" draggable="false">
+        <div class="pna-ui-interactions" id="pna-eq-interactions">
+          <button type="button" class="pna-ui-hotspot" id="pna-eq-return" aria-label="Return to Lobby"></button>
+        </div>
+      </div>
     </div>
 
     <!-- ============== COUNTDOWN ============== -->
@@ -600,6 +982,16 @@
          restyled, functionally unchanged. See wireAudioControls() in
          pup-n-away.js. -->
     <div class="pna-toolbar-controls">
+      <!-- Admin-only hitbox debug toggle — see wireAdminDebugToggle() in
+           pup-n-away.js. Hidden by default (and left out of tab order
+           via hidden) until confirmed the signed-in player is an admin;
+           a normal player never sees or can reach this button. One
+           click toggles pna-ui-debug (menu hitbox outlines, unchanged
+           from the existing ?pnaUiDebug=1 mode) together with a canvas
+           overlay showing gameplay hitboxes (dog/basket/collectible). -->
+      <button class="pna-audio-icon-btn pna-admin-debug-btn" type="button" id="pna-admin-debug-toggle" title="Toggle hitbox debug (admin only)" aria-pressed="false" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      </button>
       <button class="pna-audio-icon-btn" type="button" data-audio-popover="music" title="Music" aria-haspopup="true" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       </button>
@@ -622,17 +1014,33 @@
 <script src="../../assets/js/qz-config.js"></script>
 <script src="../../assets/js/qz-auth.js"></script>
 <script src="../../assets/js/starfield.js"></script>
-<script src="pup-n-away-config.js"></script>
-<script src="pup-n-away-assets.js"></script>
-<script src="pup-n-away-input.js"></script>
-<script src="pup-n-away-audio.js"></script>
-<script src="pup-n-away-physics.js"></script>
-<script src="pup-n-away-basket.js"></script>
-<script src="pup-n-away-dog.js"></script>
-<script src="pup-n-away-collectibles.js"></script>
-<script src="pup-n-away-levels.js"></script>
-<script src="pup-n-away-ui.js"></script>
-<script src="pup-n-away-integration.js"></script>
-<script src="pup-n-away.js"></script>
+<!-- ?v= cache-busting query param on every local script below — bump
+     it whenever any of these files change. Without it, a plain refresh
+     (not a hard refresh) can silently keep serving an old cached copy
+     of these files from a previous session, which is indistinguishable
+     from a real regression when testing — several past "still broken"
+     reports turned out to be this. -->
+<script src="pup-n-away-config.js?v=13"></script>
+<script src="pup-n-away-assets.js?v=13"></script>
+<script src="pup-n-away-input.js?v=13"></script>
+<script src="pup-n-away-audio.js?v=13"></script>
+<script src="pup-n-away-physics.js?v=13"></script>
+<script src="pup-n-away-basket.js?v=13"></script>
+<script src="pup-n-away-dog.js?v=13"></script>
+<script src="pup-n-away-collectibles.js?v=13"></script>
+<script src="pup-n-away-levels.js?v=13"></script>
+<script src="pup-n-away-ui.js?v=13"></script>
+<script src="pup-n-away-integration.js?v=13"></script>
+<script src="pup-n-away-menus.js?v=13"></script>
+<script src="pup-n-away.js?v=13"></script>
+<script>
+  // Development-only hotspot alignment aid (see the .pna-ui-debug CSS
+  // rule above) — never enabled unless explicitly requested via
+  // ?pnaUiDebug=1, so it can never accidentally ship visible in
+  // production.
+  if (new URLSearchParams(window.location.search).get('pnaUiDebug') === '1') {
+    document.body.classList.add('pna-ui-debug');
+  }
+</script>
 </body>
 </html>

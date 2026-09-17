@@ -42,9 +42,23 @@
       return current();
     }
 
+    // Used by Level Select (pick any unlocked level directly) and by
+    // the Lobby's "resume at next incomplete level" logic — both jump
+    // straight to a specific level rather than always starting/
+    // advancing sequentially.
+    function goToIndex(i) {
+      if (i >= 0 && i < LEVELS.length) index = i;
+      return current();
+    }
+    function goToLevelId(levelId) {
+      const i = LEVELS.findIndex((l) => l.id === levelId);
+      return goToIndex(i >= 0 ? i : 0);
+    }
+    function all() { return LEVELS; }
+
     return {
       current, currentNumber, totalLevels, isLastLevel, advance, reset, backgroundKey,
-      goToActStart,
+      goToActStart, goToIndex, goToLevelId, all,
       isFinalLevelOfAct: () => isFinalLevelOfAct(current()),
       nextActExists: () => LEVELS.some((l) => l.act === current().act + 1),
       highestAct

@@ -108,8 +108,99 @@
       } catch (err) { console.warn('[Pup N Away] could not save act completion', err); return null; }
     }
 
+    // Which levels (by id) this player has actually COMPLETED — powers
+    // Level Select's sequential unlock/replay logic. Deliberately a
+    // separate, stricter fact from pup_n_away_stats.highest_level_reached
+    // (see 20260918010000_pup_n_away_level_progress.sql) — reaching a
+    // level by dying in it does not count as completing it.
+    async function getLevelCompletions() {
+      if (!signedIn || !window.QZAuth.client) return [];
+      try {
+        const { data, error } = await window.QZAuth.client
+          .from('pup_n_away_level_completions').select('level_id')
+          .eq('user_id', profile.id);
+        if (error) { console.warn('[Pup N Away] could not load level completions', error); return []; }
+        return (data || []).map((r) => r.level_id);
+      } catch (err) {
+        console.warn('[Pup N Away] could not load level completions', err);
+        return [];
+      }
+    }
+
+    // Called once per level actually completed (see completeLevel() in
+    // pup-n-away.js) — independent of, and in addition to, the existing
+    // recordActComplete() call that only fires on an act's final level.
+    async function recordLevelComplete(levelId, score, timeMs) {
+      if (!signedIn || !window.QZAuth.client) return;
+      try {
+        const { error } = await window.QZAuth.client.rpc('record_pup_n_away_level_complete', {
+          p_level_id: levelId, p_score: Math.round(score || 0), p_time_ms: Math.round(timeMs || 0)
+        });
+        if (error) console.warn('[Pup N Away] could not save level completion', error);
+      } catch (err) { console.warn('[Pup N Away] could not save level completion', err); }
+    }
+
+    // ---------------------------------------------------------------
+    // Equipment (basket cosmetics) — reuses the EXISTING, already-secure
+    // Quest Zone inventory_items/equipped_items tables and equip_item()
+    // RPC (the same ones the avatar equipment screen uses), scoped to
+    // the 'pnaBasket' slot (see PNA_CONFIG.EQUIPMENT_SLOT). No separate
+    // ownership system. PNA_CONFIG.EQUIPMENT_CATALOG is empty today (no
+    // basket skins have been supplied yet), so both calls below
+    // correctly resolve to nothing owned/equipped rather than any
+    // invented item — see that catalog's own comment for how to add a
+    // real one later.
+    // ---------------------------------------------------------------
+    async function getOwnedEquipment() {
+      const catalog = window.PNA_CONFIG.EQUIPMENT_CATALOG;
+      if (!signedIn || !window.QZAuth.client || !catalog.length) return [];
+      try {
+        const ids = catalog.map((it) => it.id);
+        const { data, error } = await window.QZAuth.client
+          .from('inventory_items').select('item_id')
+          .eq('user_id', profile.id).in('item_id', ids);
+        if (error) { console.warn('[Pup N Away] could not load owned equipment', error); return []; }
+        const owned = new Set((data || []).map((r) => r.item_id));
+        return catalog.filter((it) => owned.has(it.id));
+      } catch (err) {
+        console.warn('[Pup N Away] could not load owned equipment', err);
+        return [];
+      }
+    }
+
+    async function getEquippedBasket() {
+      if (!signedIn || !window.QZAuth.client) return null;
+      try {
+        const { data, error } = await window.QZAuth.client
+          .from('equipped_items').select('item_id')
+          .eq('user_id', profile.id).eq('slot', window.PNA_CONFIG.EQUIPMENT_SLOT).maybeSingle();
+        if (error) { console.warn('[Pup N Away] could not load equipped basket', error); return null; }
+        return data ? data.item_id : null;
+      } catch (err) {
+        console.warn('[Pup N Away] could not load equipped basket', err);
+        return null;
+      }
+    }
+
+    // Server-side equip_item() re-validates ownership and slot itself
+    // (see supabase/migrations/20260909050100_item_economy_rpcs.sql) —
+    // this call can never equip an item the player doesn't actually own,
+    // regardless of what the client sends.
+    async function equipBasket(itemId) {
+      if (!signedIn || !window.QZAuth.client) return false;
+      try {
+        const { error } = await window.QZAuth.client.rpc('equip_item', {
+          p_slot: window.PNA_CONFIG.EQUIPMENT_SLOT, p_item_id: itemId
+        });
+        if (error) { console.warn('[Pup N Away] could not equip item', error); return false; }
+        return true;
+      } catch (err) { console.warn('[Pup N Away] could not equip item', err); return false; }
+    }
+
     return {
       init, gameStarted, saveScoreResult, recordProgress, getProgression, recordActComplete,
+      getLevelCompletions, recordLevelComplete,
+      getOwnedEquipment, getEquippedBasket, equipBasket,
       get signedIn() { return signedIn; }, get profile() { return profile; }
     };
   }

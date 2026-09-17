@@ -7,10 +7,15 @@
 (function () {
   const CFG = window.PNA_CONFIG;
   const STATES = Object.freeze({
-    LOADING: 'LOADING', TITLE: 'TITLE', INTRO: 'INTRO', COUNTDOWN: 'COUNTDOWN',
+    LOADING: 'LOADING', LOBBY: 'LOBBY', LEVEL_SELECT: 'LEVEL_SELECT',
+    CHALLENGES: 'CHALLENGES', EQUIPMENT: 'EQUIPMENT', COUNTDOWN: 'COUNTDOWN',
     PLAYING: 'PLAYING', LIFE_LOST: 'LIFE_LOST', LEVEL_COMPLETE: 'LEVEL_COMPLETE',
     GAME_OVER: 'GAME_OVER', PAUSED: 'PAUSED'
   });
+  // Lobby music plays across every menu screen (not just the literal
+  // Lobby) and stops the instant PLAYING/COUNTDOWN/etc. begins — see
+  // goTo() below.
+  const MENU_STATES = new Set([STATES.LOBBY, STATES.LEVEL_SELECT, STATES.CHALLENGES, STATES.EQUIPMENT]);
 
   const canvas = document.getElementById('pna-canvas');
   const ctx = canvas.getContext('2d');
@@ -19,6 +24,11 @@
   const integration = window.PNA_Integration.createIntegration();
   const levels = window.PNA_Levels.createLevelManager();
   const input = window.PNA_Input.createInputManager(canvas, CFG.DESIGN_W, CFG.DESIGN_H);
+  const menus = window.PNA_Menus.createMenuManager({
+    levels, integration, audio,
+    onSelectLevel: (levelId) => { transitionToLevel(levelId); },
+    onReturnToLobby: () => { goTo(STATES.LOBBY); }
+  });
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Coarse-pointer (touch) devices are treated as "mobile" for perf
   // purposes — a lower canvas backing-store resolution and cheaper
@@ -114,7 +124,7 @@
 
   let images = {};
   let state = STATES.LOADING;
-  let stateBeforePause = STATES.TITLE;
+  let stateBeforePause = STATES.LOBBY;
   let basket = null;
   let dog = null;
   let collectibles = null;
@@ -125,8 +135,7 @@
     lives: CFG.PHYSICS.startingLives,
     bounces: 0,
     bonesThisRun: 0,
-    playtimeStart: 0,
-    introSeen: false
+    playtimeStart: 0
   };
 
   let countdownValue = 3;
@@ -216,11 +225,22 @@
     ui.showScreen(noOverlay ? null : next);
     ui.setHudVisible(next === STATES.PLAYING || next === STATES.LIFE_LOST || next === STATES.PAUSED);
 
-    // Lobby music plays only on the title screen — starts the moment
-    // it's allowed to (an unlocked gesture) if we're there, stops the
-    // instant we leave it.
-    if (next === STATES.TITLE && prev !== STATES.TITLE) audio.startLobbyMusic();
-    else if (prev === STATES.TITLE && next !== STATES.TITLE) audio.stopLobbyMusic();
+    // Lobby music plays across every menu screen (Lobby/Level Select/
+    // Challenges/Equipment) — starts the moment it's allowed to (an
+    // unlocked gesture) on entering any of them, stops the instant
+    // gameplay (or anything else) begins.
+    const wasMenu = MENU_STATES.has(prev);
+    const isMenu = MENU_STATES.has(next);
+    if (isMenu && !wasMenu) audio.startLobbyMusic();
+    else if (wasMenu && !isMenu) audio.stopLobbyMusic();
+
+    // pna-btn-start uses bindButtonOnce() (see wireButtons()) so a rapid
+    // double-tap can never fire startGame() twice — re-enable it every
+    // time the player is actually back on the Lobby screen to see it.
+    if (next === STATES.LOBBY) {
+      const startBtn = document.getElementById('pna-btn-start');
+      if (startBtn) startBtn.disabled = false;
+    }
   }
 
   function startCountdown() {
@@ -230,18 +250,47 @@
     goTo(STATES.COUNTDOWN);
   }
 
-  function beginRun() {
-    run.score = 0;
-    run.bounces = 0;
-    run.playtimeStart = performance.now();
-    levels.reset();
-    setupLevel(levels.current());
-    integration.gameStarted();
-    if (run.introSeen || reduceMotion) {
+  // Finds the furthest unlocked-but-not-yet-completed level for a
+  // returning signed-in player (a brand new/signed-out player has no
+  // completions, so this naturally resolves to Act 1 Level 1). If every
+  // level is already completed, resumes at the last one (today's
+  // "replay the latest content" behavior — there is no further act to
+  // send them to yet).
+  async function computeStartingLevelIndex() {
+    const all = levels.all();
+    const completedIds = new Set(await integration.getLevelCompletions());
+    const firstIncomplete = all.findIndex((l) => !completedIds.has(l.id));
+    return firstIncomplete >= 0 ? firstIncomplete : all.length - 1;
+  }
+
+  // Shared by both "Start Game" (Lobby) and picking a level directly
+  // (Level Select) — fades the currently visible menu screen out, then
+  // jumps straight to the chosen level and runs the normal countdown.
+  // There is no intro/"Skip Intro" screen in this flow at all anymore.
+  let levelTransitionInFlight = false;
+  function transitionToLevel(levelIndexOrId) {
+    if (levelTransitionInFlight) return; // guards against a level-select card double-click, or Start Game racing a card pick
+    levelTransitionInFlight = true;
+    function doStart() {
+      levelTransitionInFlight = false;
+      if (typeof levelIndexOrId === 'number') levels.goToIndex(levelIndexOrId);
+      else levels.goToLevelId(levelIndexOrId);
+      run.score = 0;
+      run.bounces = 0;
+      run.playtimeStart = performance.now();
+      setupLevel(levels.current());
+      integration.gameStarted();
       startCountdown();
-    } else {
-      goTo(STATES.INTRO);
     }
+    const activeScreen = document.querySelector('.pna-overlay:not(.hidden)');
+    if (reduceMotion || !activeScreen) { doStart(); return; }
+    activeScreen.classList.add('pna-fading-out');
+    setTimeout(() => { activeScreen.classList.remove('pna-fading-out'); doStart(); }, 350);
+  }
+
+  async function startGame() {
+    const startIndex = await computeStartingLevelIndex();
+    transitionToLevel(startIndex);
   }
 
   function launchDogFromBasket() {
@@ -315,6 +364,10 @@
     });
     goTo(STATES.LEVEL_COMPLETE);
     await saveRunResults(isFinalOfAct);
+    // Powers Level Select's sequential unlock/replay logic — a stricter,
+    // separate fact from the "reached" stat saveRunResults() above just
+    // recorded (see 20260918010000_pup_n_away_level_progress.sql).
+    await integration.recordLevelComplete(currentLevel.id, run.score, levelElapsedMs);
     if (isFinalOfAct) {
       // Recorded as soon as the act is genuinely finished, independent
       // of whether/when the player clicks Continue — the server is
@@ -472,7 +525,7 @@
   // it's a live physics arcade game, not a timed word round.
   // ---------------------------------------------------------------
   function pauseGame() {
-    if (state === STATES.PAUSED || state === STATES.LOADING || state === STATES.TITLE
+    if (state === STATES.PAUSED || state === STATES.LOADING || MENU_STATES.has(state)
       || state === STATES.LEVEL_COMPLETE || state === STATES.GAME_OVER) return;
     stateBeforePause = state;
     goTo(STATES.PAUSED);
@@ -491,8 +544,24 @@
   // Buttons
   // ---------------------------------------------------------------
   function wireButtons() {
-    ui.bindButton('pna-btn-start', () => { audio.unlockOnFirstGesture(); audio.play('buttonClick'); beginRun(); });
-    ui.bindButton('pna-btn-skip-intro', () => { audio.play('buttonClick'); run.introSeen = true; startCountdown(); });
+    menus.positionLobbyHotspots();
+
+    // ---- Lobby's 5 buttons — real hitboxes over the supplied art's own
+    // baked button labels (see the .pna-ui-hotspot rules in index.html
+    // and PNA_CONFIG.UI_HOTSPOTS.lobby for their measured positions). No
+    // intro/"Skip Intro" screen exists anymore — Start Game fades
+    // straight into gameplay. bindButtonOnce() so a rapid double-tap on
+    // Start Game (or a level card) can never load two levels/countdowns
+    // at once.
+    ui.bindButtonOnce('pna-btn-start', () => { audio.unlockOnFirstGesture(); audio.play('buttonClick'); startGame(); });
+    ui.bindButton('pna-lobby-btn-level-select', () => { audio.play('buttonClick'); menus.refreshLevelSelect(); goTo(STATES.LEVEL_SELECT); });
+    ui.bindButton('pna-lobby-btn-challenges', () => { audio.play('buttonClick'); menus.refreshChallenges(); goTo(STATES.CHALLENGES); });
+    ui.bindButton('pna-lobby-btn-equipment', () => { audio.play('buttonClick'); menus.refreshEquipment(); goTo(STATES.EQUIPMENT); });
+    ui.bindButton('pna-lobby-btn-return-home', () => {
+      audio.play('buttonClick');
+      audio.stopLobbyMusic();
+      window.location.href = '../../index.html';
+    });
 
     // Result-panel buttons use bindButtonOnce() — disabled the instant
     // they're clicked (re-enabled next time that panel is freshly
@@ -508,7 +577,7 @@
       // what "return to lobby" means until a real act-select screen has
       // something to select.
       if (levels.isFinalLevelOfAct()) {
-        goTo(STATES.TITLE);
+        goTo(STATES.LOBBY);
       } else {
         setupLevel(levels.advance());
         startCountdown();
@@ -517,7 +586,7 @@
     ui.bindButtonOnce('pna-btn-return-lc', () => {
       audio.play('buttonClick');
       audio.stopMusic();
-      goTo(STATES.TITLE);
+      goTo(STATES.LOBBY);
     });
     ui.bindButtonOnce('pna-btn-restart-act', () => {
       audio.play('buttonClick');
@@ -538,7 +607,7 @@
     ui.bindButtonOnce('pna-btn-return-go', () => {
       audio.play('buttonClick');
       audio.stopMusic();
-      goTo(STATES.TITLE);
+      goTo(STATES.LOBBY);
     });
     // Manual pause/fullscreen buttons were removed from the toolbar
     // (redesigned around the supplied artwork, which has no room for
@@ -597,10 +666,10 @@
 
   function unlockAudioAndMaybeStartLobbyMusic() {
     // any gesture counts toward unlocking audio autoplay — if it
-    // happens while we're still sitting on the title screen, the
-    // lobby music that couldn't play before now can.
+    // happens while we're still sitting on a menu screen, the lobby
+    // music that couldn't play before now can.
     audio.unlockOnFirstGesture();
-    if (state === STATES.TITLE) audio.startLobbyMusic();
+    if (MENU_STATES.has(state)) audio.startLobbyMusic();
   }
 
   // ---------------------------------------------------------------
@@ -714,9 +783,47 @@
 
     await integration.init();
     PNAAudioPrefs.loadFromAccount(); // not awaited — applies live volume as soon as it resolves, doesn't block anything else here
+    wireAdminDebugToggle();
 
-    goTo(STATES.TITLE);
+    goTo(STATES.LOBBY);
     requestAnimationFrame(loop);
+  }
+
+  // ---------------------------------------------------------------
+  // Admin-only hitbox debug toggle — a single button, visible only to
+  // signed-in admins (integration.profile.is_admin, the same flag every
+  // other admin-only Quest Zone UI already gates on), that turns on
+  // BOTH the existing menu-hitbox outline mode (the same one
+  // ?pnaUiDebug=1 in the URL enables — see index.html) and the
+  // existing-but-previously-unreachable in-game collision debug draw
+  // (window.PNA_DEBUG_COLLISION, already wired into the dog/basket/
+  // collectible draw() calls; PNA_DEV_MODE is the same flag
+  // pup-n-away-assets.js already checks for missing-asset logging).
+  // A non-admin never sees this button at all — it stays `hidden`.
+  // ---------------------------------------------------------------
+  function wireAdminDebugToggle() {
+    const btn = document.getElementById('pna-admin-debug-toggle');
+    if (!btn) return;
+    const isAdmin = !!(integration.profile && integration.profile.is_admin);
+    if (!isAdmin) return; // stays hidden — never shown, never wired, for anyone else
+
+    btn.hidden = false;
+    // ?pnaUiDebug=1 (see the bottom of index.html) may have already
+    // turned on the menu-hitbox class before this ever runs — reflect
+    // that starting state rather than fighting it.
+    let debugOn = document.body.classList.contains('pna-ui-debug');
+    function applyState() {
+      document.body.classList.toggle('pna-ui-debug', debugOn);
+      window.PNA_DEV_MODE = debugOn;
+      window.PNA_DEBUG_COLLISION = debugOn;
+      btn.setAttribute('aria-pressed', String(debugOn));
+    }
+    applyState();
+    btn.addEventListener('click', () => {
+      debugOn = !debugOn;
+      applyState();
+      audio.play('buttonClick');
+    });
   }
 
   boot();
@@ -727,7 +834,7 @@
   window.PNA_DEBUG = {
     get state() { return state; }, STATES, run,
     pump(dtSeconds) { resizeCanvasForDPR(); update(dtSeconds); render(); },
-    goTo, ui, audio,
+    goTo, ui, audio, menus, levels, integration, startGame, transitionToLevel, wireAdminDebugToggle,
     get dog() { return dog; }, get basket() { return basket; }, get collectibles() { return collectibles; }
   };
 })();

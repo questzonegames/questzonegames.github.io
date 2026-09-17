@@ -92,6 +92,14 @@
         }
       }
       ctx.restore();
+
+      if (window.PNA_DEV_MODE && window.PNA_DEBUG_COLLISION) {
+        ctx.save();
+        ctx.strokeStyle = '#2dff8f';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(state.x - half, state.y, state.width, state.height);
+        ctx.restore();
+      }
     }
 
     return { state, update, squash, draw };

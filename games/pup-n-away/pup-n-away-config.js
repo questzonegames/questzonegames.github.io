@@ -79,6 +79,210 @@
       dreamBedroom: IMG + 'backgrounds/act1/dream-bedroom.png',
       backGarden: IMG + 'backgrounds/act1/back-garden.png',
       houseRooftop: IMG + 'backgrounds/act1/house-rooftop.png'
+    },
+
+    // Lobby (still one flattened PNG — untouched by the modular-asset
+    // rebuild) + the three wide menu screens, each now assembled from a
+    // blank frame TEMPLATE plus separate modular widget PNGs (buttons,
+    // cards, dropdowns, scrollbars) rather than one flattened background.
+    // Every live control/thumbnail/label is real HTML — see
+    // pup-n-away-menus.js and the .pna-ui-*/.pna-ls-*/.pna-ch-*/.pna-eq-*
+    // CSS in index.html. Act 1's own level backgrounds (above) double as
+    // the Level Select thumbnails — no separate thumbnail images exist.
+    ui: {
+      lobby: IMG + 'ui/lobby.png',
+      levelSelect: {
+        template: IMG + 'ui/level-select/blank-template.png',
+        actButtonNormal: IMG + 'ui/level-select/act-button-normal.png',
+        actButtonSelected: IMG + 'ui/level-select/act-button-selected.png',
+        actNamePlate: IMG + 'ui/level-select/act-name-plate.png',
+        levelCard: IMG + 'ui/level-select/level-card.png',
+        lockedPadlock: IMG + 'ui/level-select/locked-padlock.png',
+        scrollbarTrack: IMG + 'ui/level-select/scrollbar-track.png',
+        scrollbarThumb: IMG + 'ui/level-select/scrollbar-thumb.png'
+      },
+      challenges: {
+        template: IMG + 'ui/challenges/blank-template.png',
+        tierButtonNormal: IMG + 'ui/challenges/tier-button-normal.png',
+        tierButtonSelected: IMG + 'ui/challenges/tier-button-selected.png',
+        filterDropdown: IMG + 'ui/challenges/filter-dropdown.png',
+        searchField: IMG + 'ui/challenges/search-field.png',
+        challengeCard: IMG + 'ui/challenges/challenge-card.png',
+        scrollbarTrack: IMG + 'ui/challenges/scrollbar-track.png',
+        scrollbarThumb: IMG + 'ui/challenges/scrollbar-thumb.png'
+      },
+      equipment: {
+        template: IMG + 'ui/equipment/blank-template.png',
+        tabButtonNormal: IMG + 'ui/equipment/tab-button-normal.png',
+        tabButtonSelected: IMG + 'ui/equipment/tab-button-selected.png',
+        filterDropdown: IMG + 'ui/equipment/filter-dropdown.png',
+        searchField: IMG + 'ui/equipment/search-field.png',
+        itemCard: IMG + 'ui/equipment/equipment-item-card.png',
+        scrollbarTrack: IMG + 'ui/equipment/scrollbar-track.png',
+        scrollbarThumb: IMG + 'ui/equipment/scrollbar-thumb.png'
+      }
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // UI hotspot geometry — every interactive region on the four menu
+  // screens, as a PERCENTAGE of its own source PNG's full canvas
+  // (matching the convention already used for the HUD toolbar and the
+  // result panels). Measured directly from the supplied assets' own
+  // pixels (alpha/color-boundary scans) where the art gave a clean
+  // signal; the busier, text-heavy regions (the lobby's 5 stacked
+  // buttons, the challenge tier tabs, the equipment grid) combine a
+  // precise measured anchor with even-spacing math, since the artwork
+  // itself lays those out as a regular grid. Nudge any of these directly
+  // if the debug outline mode (?pnaUiDebug=1, see index.html) shows a
+  // hitbox drifting from its baked button.
+  // ---------------------------------------------------------------
+  const UI_HOTSPOTS = {
+    lobby: {
+      // Re-measured a third time with a per-row majority-color-vote scan
+      // (gold for Start Game, blue for the other 4) instead of a single
+      // pixel column — the earlier two passes were both contaminated by
+      // the decorative moon/star header art sitting directly above the
+      // button stack, which is why they read too high. This pass
+      // isolates each button's own large contiguous color band and
+      // ignores small star/text-glyph interruptions.
+      left: 13.3, width: 73.4,
+      buttons: {
+        start:        { top: 44.66, height: 8.07 },
+        levelSelect:  { top: 55.27, height: 6.84 },
+        challenges:   { top: 64.65, height: 6.84 },
+        equipment:    { top: 73.89, height: 6.58 },
+        returnHome:   { top: 82.5, height: 7.0 }
+      }
+    },
+    // levelSelect/challenges/equipment below are laid out against each
+    // screen's blank TEMPLATE (still 1672x941, same frame family as the
+    // old flattened images, so the outer frame/Return-to-Lobby geometry
+    // carries over) — every button/card/tab is now a separate widget
+    // image sized by its own real aspect ratio (via CSS aspect-ratio, so
+    // it can never be stretched) and positioned by left/top/width alone.
+    levelSelect: {
+      // measured directly from references/level select ref.png: the
+      // act-button column's gold-bordered strip spans x=44..380 of 1672,
+      // y=152..916 of 941, divided evenly into 10 rows.
+      actList: {
+        left: 2.63, width: 20.10,
+        rowTop: 16.15, rowHeight: 8.12,
+        count: 10,
+        buttonAspect: 694 / 180 // act-button-normal.png / act-button-selected.png
+      },
+      // Pushed down a second time — 21% still clipped under the "LEVEL
+      // SELECT" banner's lower decoration in practice. 25% gives real
+      // clearance.
+      actNamePlate: {
+        left: 26.0, width: 69.0, top: 25.0,
+        aspect: 1596 / 204 // act-name-plate.png
+      },
+      // 3 level cards, evenly spaced across the same span the name
+      // plate occupies, sized by level-card.png's own aspect ratio.
+      // Pushed down below the (now lower) name plate — plate bottom is
+      // 25 + 69%*(1672/941)/7.82 ≈ 25 + 15.7 ≈ 40.7%, so cards start at 43%.
+      cards: {
+        left: [27.0, 50.2, 73.4], width: 21.5, top: 43.0,
+        aspect: 680 / 488, // level-card.png
+        // Sub-regions below are percentages of the CARD's OWN rendered
+        // box (not the full screen) — measured directly from
+        // level-card.png's pixels (its gold-bordered thumbnail window
+        // and nameplate pill).
+        thumb: { left: 6.18, width: 87.4, top: 22.1, height: 45.9 },
+        nameplate: { left: 7.06, width: 85.6, top: 72.5, height: 18.9 },
+        // Padlock size/position as a fraction of the card box, centered
+        // over the thumbnail window.
+        padlock: { widthOfCard: 24.0, aspect: 199 / 250 }
+      },
+      // NOT the same geometry as Challenges/Equipment's Return to Lobby
+      // (an earlier pass wrongly assumed all three shared one position) —
+      // this screen's act-list column occupies the left ~23% of the
+      // panel, so its own Return to Lobby pill sits further left/lower,
+      // not centered on the full panel width. Re-measured directly
+      // against this template.
+      // Read directly off a percentage-gridline overlay rendered onto
+      // this template (the most reliable method after several rounds of
+      // color-threshold pixel scanning kept getting fooled by the
+      // frame's own connected gold border/decoration) — see the
+      // implementation notes for how this was generated.
+      // Read off a FINE (1%-step) percentage-gridline overlay, zoomed
+      // into just this region — the previous 5%-step overlay wasn't
+      // precise enough and left the box shifted noticeably right
+      // (clipping "RET" off the front of the button in practice).
+      returnToLobby: { left: 24.3, width: 26.4, top: 84.6, height: 7.5 }
+    },
+    challenges: {
+      // The tier tabs' own box (left/width/top/height, size, hitbox fit)
+      // is confirmed correct as-is — DO NOT adjust these four numbers.
+      tiers: {
+        left: 3.59, width: 93.18, top: 24.0, height: 9.5,
+        count: 6,
+        buttonAspect: 585 / 177 // tier-button-normal.png / -selected.png
+      },
+      // Tightened up against the tiers row and each other — the previous
+      // pass left a large empty blue gap between the filter row and the
+      // card list (and between the card list and the Return button) that
+      // read as unused/broken space rather than a deliberately laid-out
+      // screen.
+      filterByAct: { left: 3.6, width: 30.0, top: 34.5, height: 6.5, aspect: 718 / 147 },
+      secondaryFilter: { left: 36.5, width: 28.0, top: 34.5, height: 6.5, aspect: 718 / 147 },
+      search: { left: 67.5, width: 29.0, top: 34.5, height: 6.5, aspect: 719 / 147 },
+      cardList: { left: 3.6, width: 88.0, top: 42.5, height: 46.0 },
+      scrollbar: {
+        left: 93.5, width: 2.8, top: 42.5, height: 46.0,
+        trackAspect: 84 / 411, thumbAspect: 71 / 165
+      },
+      // challenge-card.png sub-regions, as a percentage of the CARD's
+      // own box — icon square, title bar, description box.
+      card: {
+        aspect: 1286 / 353,
+        icon: { left: 1.87, width: 15.85, top: 21.5, height: 50.4 },
+        title: { left: 21.8, width: 70.6, top: 17.0, height: 19.3 },
+        description: { left: 21.8, width: 70.6, top: 41.4, height: 42.5 }
+      },
+      // Same shared Return-to-Lobby geometry as Level Select (see its
+      // own comment) — re-measured directly, all three templates share
+      // this exact pill position.
+      // Read directly off a percentage-gridline overlay (see Level
+      // Select's own comment above).
+      // Read off a fine (1%-step) percentage-gridline overlay (see
+      // Level Select's own comment above).
+      returnToLobby: { left: 37.2, width: 24.6, top: 85.3, height: 6.3 }
+    },
+    equipment: {
+      tabs: {
+        owned:   { left: 31.5, width: 17.0, top: 25.0, height: 7.5 },
+        unowned: { left: 49.5, width: 17.0, top: 25.0, height: 7.5 },
+        aspect: 805 / 180 // tab-button-normal.png / -selected.png
+      },
+      // Row of 5 controls: 4 filter dropdowns + 1 search field, spanning
+      // the full content width (no side preview panel in this design —
+      // clicking an owned card equips it directly, see
+      // pup-n-away-menus.js). Tightened against the tabs row and the
+      // grid below, same reasoning as Challenges above.
+      filters: { left: 3.6, width: 74.0, top: 33.5, height: 6.0, count: 4, aspect: 795 / 152 },
+      search: { left: 79.0, width: 17.5, top: 33.5, height: 6.0, aspect: 798 / 149 },
+      grid: { left: 3.6, width: 92.8, top: 41.0, height: 47.5, columns: 5 },
+      scrollbar: {
+        left: 97.0, width: 2.0, top: 41.0, height: 47.5,
+        trackAspect: 84 / 451, thumbAspect: 83 / 224
+      },
+      // equipment-item-card.png sub-regions, as a percentage of the
+      // CARD's own box — image window + nameplate pill.
+      card: {
+        aspect: 510 / 470,
+        image: { left: 14.7, width: 70.0, top: 13.2, height: 56.2 },
+        nameplate: { left: 14.7, width: 70.0, top: 74.9, height: 14.5 }
+      },
+      // Same left/width as Challenges' Return to Lobby (confirmed correct
+      // there) — height trimmed slightly, since a live corner-pixel
+      // check found this template's own pill sits marginally shorter.
+      // Read directly off a percentage-gridline overlay (see Level
+      // Select's own comment above).
+      // Read off a fine (1%-step) percentage-gridline overlay (see
+      // Level Select's own comment above).
+      returnToLobby: { left: 36.9, width: 24.9, top: 84.8, height: 7.1 }
     }
   };
 
@@ -251,9 +455,38 @@
     }
   ];
 
+  // ---------------------------------------------------------------
+  // Pup N Away basket-cosmetic equipment catalog — deliberately EMPTY
+  // today. No basket skins have been supplied yet, so there is nothing
+  // real to sell/own/equip; the Equipment screen (see
+  // pup-n-away-menus.js) reads this exact array, so it correctly shows
+  // an empty grid rather than any invented item. Ownership, once real
+  // entries exist here, is validated against the EXISTING Quest Zone
+  // inventory_items/equipped_items tables (slot 'pnaBasket') and the
+  // existing equip_item() RPC — see getOwnedEquipment()/equipBasket() in
+  // pup-n-away-integration.js — not a new, separate ownership system.
+  // Add entries here (each server-side in item_definitions with
+  // equipment_slot='pnaBasket') once real basket cosmetics are supplied;
+  // nothing else in the Equipment screen needs to change.
+  const EQUIPMENT_SLOT = 'pnaBasket';
+  const EQUIPMENT_CATALOG = [];
+
+  // ---------------------------------------------------------------
+  // Challenge catalog — deliberately EMPTY today, same reasoning as
+  // EQUIPMENT_CATALOG above: no real Pup N Away challenges have been
+  // designed yet, so the Challenges screen (see pup-n-away-menus.js)
+  // generates its cards directly from this array and correctly shows
+  // none rather than inventing fake progress. Each future entry:
+  // { id, tier ('bronze'|'silver'|'gold'|'platinum'|'diamond'|'mythic'),
+  //   act, icon, title, description }. The screen already reads
+  // tier/act to drive its tier-tab and Filter By Act controls, so
+  // adding real challenges here needs no other code change.
+  const CHALLENGE_CATALOG = [];
+
   window.PNA_CONFIG = {
     DESIGN_W, DESIGN_H,
     ASSETS, SPRITE_ANCHORS, COLLECTIBLE_TYPES, PHYSICS, LEVELS,
+    UI_HOTSPOTS, EQUIPMENT_SLOT, EQUIPMENT_CATALOG, CHALLENGE_CATALOG,
     GAME_KEY: 'pup-n-away'
   };
 })();

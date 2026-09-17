@@ -78,8 +78,10 @@
   function createUIManager() {
     const screens = {
       LOADING: $('pna-screen-loading'),
-      TITLE: $('pna-screen-title'),
-      INTRO: $('pna-screen-intro'),
+      LOBBY: $('pna-screen-lobby'),
+      LEVEL_SELECT: $('pna-screen-level-select'),
+      CHALLENGES: $('pna-screen-challenges'),
+      EQUIPMENT: $('pna-screen-equipment'),
       COUNTDOWN: $('pna-screen-countdown'),
       LEVEL_COMPLETE: $('pna-screen-level-complete'),
       GAME_OVER: $('pna-screen-game-over'),
