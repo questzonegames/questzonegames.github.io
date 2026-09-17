@@ -152,7 +152,7 @@
         levelSelect:  { top: 55.27, height: 6.84 },
         challenges:   { top: 64.65, height: 6.84 },
         equipment:    { top: 73.89, height: 6.58 },
-        returnHome:   { top: 82.5, height: 7.0 }
+        returnHome:   { top: 82.1, height: 7.4 }
       }
     },
     // levelSelect/challenges/equipment below are laid out against each
@@ -210,7 +210,7 @@
       // into just this region — the previous 5%-step overlay wasn't
       // precise enough and left the box shifted noticeably right
       // (clipping "RET" off the front of the button in practice).
-      returnToLobby: { left: 24.3, width: 26.4, top: 84.6, height: 7.5 }
+      returnToLobby: { left: 24.3, width: 26.4, top: 85.5, height: 7.5 }
     },
     challenges: {
       // The tier tabs' own box (left/width/top/height, size, hitbox fit)
@@ -228,9 +228,9 @@
       filterByAct: { left: 3.6, width: 30.0, top: 34.5, height: 6.5, aspect: 718 / 147 },
       secondaryFilter: { left: 36.5, width: 28.0, top: 34.5, height: 6.5, aspect: 718 / 147 },
       search: { left: 67.5, width: 29.0, top: 34.5, height: 6.5, aspect: 719 / 147 },
-      cardList: { left: 3.6, width: 88.0, top: 42.5, height: 46.0 },
+      cardList: { left: 3.6, width: 88.0, top: 46.9, height: 41.6 },
       scrollbar: {
-        left: 93.5, width: 2.8, top: 42.5, height: 46.0,
+        left: 93.5, width: 2.8, top: 46.9, height: 41.6,
         trackAspect: 84 / 411, thumbAspect: 71 / 165
       },
       // challenge-card.png sub-regions, as a percentage of the CARD's
@@ -248,7 +248,7 @@
       // Select's own comment above).
       // Read off a fine (1%-step) percentage-gridline overlay (see
       // Level Select's own comment above).
-      returnToLobby: { left: 37.2, width: 24.6, top: 85.3, height: 6.3 }
+      returnToLobby: { left: 37.0, width: 25.2, top: 85.1, height: 6.7 }
     },
     equipment: {
       tabs: {
@@ -282,7 +282,7 @@
       // Select's own comment above).
       // Read off a fine (1%-step) percentage-gridline overlay (see
       // Level Select's own comment above).
-      returnToLobby: { left: 36.9, width: 24.9, top: 84.8, height: 7.1 }
+      returnToLobby: { left: 36.9, width: 24.9, top: 85.7, height: 7.1 }
     }
   };
 

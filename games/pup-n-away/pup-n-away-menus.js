@@ -637,10 +637,6 @@
       }
 
       if (!items.length) {
-        const msg = document.createElement('div');
-        msg.className = 'pna-empty-msg';
-        msg.textContent = 'No challenges available yet.';
-        list.appendChild(msg);
         // No real challenges exist yet (see PNA_CONFIG.CHALLENGE_CATALOG),
         // so without this the scroll area/custom scrollbar would have
         // nothing to scroll and be untestable. Explicitly marked,
@@ -868,11 +864,6 @@
       const scrollBox = $('pna-eq-grid');
       const grid = $('pna-eq-grid-inner');
       if (!scrollBox || !grid) return;
-      // Remove any previous empty-state message (a plain sibling of the
-      // grid, not part of it — see buildEquipmentStatic()) before
-      // re-deciding whether one is needed.
-      const oldMsg = scrollBox.querySelector('.pna-empty-msg');
-      if (oldMsg) oldMsg.remove();
       grid.innerHTML = '';
       const catalog = CFG.EQUIPMENT_CATALOG;
       const ownedIds = new Set(ownedCache.map((it) => it.id));
@@ -884,12 +875,6 @@
       }
 
       if (!items.length) {
-        const msg = document.createElement('div');
-        msg.className = 'pna-empty-msg';
-        msg.textContent = selectedEquipmentView === 'owned'
-          ? 'No equipment owned yet.'
-          : 'No unowned equipment to show.';
-        scrollBox.insertBefore(msg, grid);
         // No real equipment exists yet (see PNA_CONFIG.EQUIPMENT_CATALOG),
         // so the grid would otherwise be completely empty and the custom
         // scrollbar untestable. These are explicitly marked, non-
