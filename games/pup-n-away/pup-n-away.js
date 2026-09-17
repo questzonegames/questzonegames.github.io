@@ -333,10 +333,22 @@
     transitionToLevel(startIndex);
   }
 
+  // Called both at the true start of a level (from beginLevel()) AND to
+  // respawn after a missed catch (from update()'s LIFE_LOST branch) —
+  // the SAME reset every time, on purpose: the basket is forced back to
+  // the level's real centred starting position (never wherever it
+  // happened to be drifted to when the dog was missed) before the dog
+  // launches from it, so a life lost while the basket is parked under a
+  // hard bone can never be used as a free respawn-and-catch shortcut.
   function launchDogFromBasket() {
+    basket.state.x = (currentLevel.basketStart && typeof currentLevel.basketStart.x === 'number')
+      ? currentLevel.basketStart.x : CFG.DESIGN_W / 2;
+    basket.state.vx = 0;
+    basket.state.squashTimer = 0;
+
     dog.state.grounded = false;
     const start = currentLevel.dogStart;
-    dog.launch(start.vx, start.vy);
+    dog.launch(start.vx, start.vy); // also zeroes bounceCharge/tuckRotation
     dog.state.x = basket.state.x;
     dog.state.y = basket.state.y - dog.state.radius - 2;
     dog.state.justBounced = true;
