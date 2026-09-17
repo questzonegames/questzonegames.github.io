@@ -72,7 +72,46 @@
       } catch (err) { console.warn('[Pup N Away] could not save progress', err); return null; }
     }
 
-    return { init, gameStarted, saveScoreResult, recordProgress, get signedIn() { return signedIn; }, get profile() { return profile; } };
+    // Signed-out players just don't have act progress saved anywhere
+    // (same as every other Pup N Away stat) — highestUnlockedAct stays
+    // at 1 for the session, matching a fresh account's starting state.
+    async function getProgression() {
+      if (!signedIn || !window.QZAuth.client) return { highestUnlockedAct: 1, completedActs: [] };
+      try {
+        const { data, error } = await window.QZAuth.client
+          .from('pup_n_away_progression').select('highest_unlocked_act,completed_acts')
+          .eq('user_id', profile.id).maybeSingle();
+        if (error) { console.warn('[Pup N Away] could not load act progression', error); return { highestUnlockedAct: 1, completedActs: [] }; }
+        if (!data) return { highestUnlockedAct: 1, completedActs: [] };
+        return { highestUnlockedAct: data.highest_unlocked_act, completedActs: data.completed_acts || [] };
+      } catch (err) {
+        console.warn('[Pup N Away] could not load act progression', err);
+        return { highestUnlockedAct: 1, completedActs: [] };
+      }
+    }
+
+    // Called once when the player finishes the FINAL level of their
+    // current act — see record_pup_n_away_act_complete() in
+    // 20260917010000_pup_n_away_progression.sql for why the server,
+    // not this call, is what actually decides whether the unlock is
+    // legitimate (it only ever advances by one, and only from the
+    // player's real current act).
+    async function recordActComplete(actNumber) {
+      if (!signedIn || !window.QZAuth.client) return null;
+      try {
+        const { data, error } = await window.QZAuth.client.rpc('record_pup_n_away_act_complete', {
+          p_completed_act: actNumber
+        });
+        if (error) { console.warn('[Pup N Away] could not save act completion', error); return null; }
+        const row = Array.isArray(data) ? data[0] : data;
+        return row ? { highestUnlockedAct: row.highest_unlocked_act, completedActs: row.completed_acts || [] } : null;
+      } catch (err) { console.warn('[Pup N Away] could not save act completion', err); return null; }
+    }
+
+    return {
+      init, gameStarted, saveScoreResult, recordProgress, getProgression, recordActComplete,
+      get signedIn() { return signedIn; }, get profile() { return profile; }
+    };
   }
 
   window.PNA_Integration = { createIntegration };

@@ -372,6 +372,68 @@
   .pna-btn.secondary:active { box-shadow: 0 4px 0 #16255c, 0 8px 16px rgba(0,0,0,0.4); }
   .pna-overlay-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
+  /* =================================================================
+     Result panels (Level Complete / Game Over) — the two supplied
+     transparent PNGs are the entire visual design, exactly like the
+     toolbar. Every live value and button hitbox is real HTML
+     positioned as a PERCENTAGE of the panel's own box (measured
+     directly from each PNG's pixels, both 1536x1024), so everything
+     stays locked to its drawn box as the panel scales. The panel sits
+     centered inside the existing .pna-overlay dimming scrim — nothing
+     new needed there, it already darkens the level behind it.
+     ================================================================= */
+  .pna-result-panel {
+    position: relative;
+    width: min(92%, 640px);
+    aspect-ratio: 1536 / 1024;
+    container-type: inline-size;
+  }
+  .pna-result-panel-art { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .pna-result-panel-content {
+    position: absolute; inset: 0;
+    font-family: 'Poppins', 'Baloo 2', sans-serif;
+  }
+  .pna-result-region {
+    position: absolute;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff6e0; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    font-weight: 700; line-height: 1.1;
+    overflow: hidden; padding: 0 2%;
+  }
+  .pna-result-value { font-size: clamp(9px, 6.6cqw, 28px); }
+  .pna-result-value.pna-hud-timer-value { font-variant-numeric: tabular-nums; }
+  #pna-lc-level-name-region .pna-result-value {
+    font-size: clamp(9px, 5.4cqw, 24px);
+    white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 100%;
+  }
+  /* Real, transparent, keyboard-focusable buttons sitting exactly over
+     each PNG's own baked-in gold button artwork — no visible label of
+     our own drawn on top of it. */
+  .pna-result-btn-hitbox {
+    position: absolute;
+    background: transparent; border: none; border-radius: 999px;
+    cursor: pointer; padding: 0;
+  }
+  .pna-result-btn-hitbox:hover { background: rgba(255,255,255,0.08); }
+  .pna-result-btn-hitbox:focus-visible { outline: 3px solid #fff6e0; outline-offset: 2px; }
+  .pna-result-btn-hitbox:active { background: rgba(255,255,255,0.14); }
+  .pna-result-btn-hitbox:disabled { cursor: default; }
+
+  /* ---- Level Complete panel regions (percentages measured from
+     assets/img/pup-n-away/hud/level-complete-panel.png, 1536x1024) ---- */
+  #pna-lc-level-name-region { left: 22.92%; width: 54.10%; top: 27.15%; height: 8.40%; }
+  #pna-lc-score-region      { left: 11.07%; width: 23.70%; top: 45.61%; height: 9.47%; }
+  #pna-lc-bones-region      { left: 38.09%; width: 23.70%; top: 45.61%; height: 9.47%; }
+  #pna-lc-time-region       { left: 65.10%; width: 24.09%; top: 45.61%; height: 9.47%; }
+  #pna-btn-continue    { left: 19.53%; width: 27.34%; top: 82.23%; height: 8.79%; }
+  #pna-btn-return-lc   { left: 53.06%; width: 27.54%; top: 82.23%; height: 8.79%; }
+
+  /* ---- Game Over panel regions (percentages measured from
+     assets/img/pup-n-away/hud/game-over-panel.png, 1536x1024) ---- */
+  #pna-go-score-region      { left: 16.21%; width: 67.58%; top: 50.98%; height: 16.21%; }
+  #pna-btn-restart-act { left: 13.93%; width: 31.58%; top: 73.24%; height: 10.55%; }
+  #pna-btn-return-go   { left: 54.49%; width: 31.77%; top: 73.24%; height: 10.55%; }
+
   /* ---- loading ---- */
   #pna-screen-loading { z-index: 25; background: #04060c; }
   .pna-loading-track { width: min(70%, 360px); height: 10px; border-radius: 6px; background: rgba(255,255,255,0.1); overflow: hidden; }
@@ -445,26 +507,34 @@
       <div id="pna-countdown-number">3</div>
     </div>
 
-    <!-- ============== LEVEL COMPLETE ============== -->
+    <!-- ============== LEVEL COMPLETE ==============
+         Real HTML overlay above the supplied transparent PNG — see the
+         .pna-result-* CSS above for how each region/button is aligned
+         to the artwork's own boxes via measured percentages. Rating
+         stars are deliberately left alone (no rating system yet). -->
     <div id="pna-screen-level-complete" class="pna-overlay hidden">
-      <div class="pna-overlay-heading" id="pna-lc-level-name">Level Complete!</div>
-      <div class="pna-stat-line">Score: <b id="pna-lc-score">0</b></div>
-      <div class="pna-stat-line">Bones collected: <b id="pna-lc-bones">0 / 0</b></div>
-      <div class="pna-stat-line">Time: <b id="pna-lc-time" style="font-variant-numeric: tabular-nums;">0:00.0</b></div>
-      <div class="pna-overlay-btns">
-        <button type="button" class="pna-btn" id="pna-btn-continue">Continue</button>
-        <button type="button" class="pna-btn secondary" id="pna-btn-replay-level">Replay</button>
-        <button type="button" class="pna-btn secondary" id="pna-btn-return-lc">Return to Quest Zone</button>
+      <div class="pna-result-panel">
+        <img class="pna-result-panel-art" src="../../assets/img/pup-n-away/hud/level-complete-panel.png" alt="Level Complete!">
+        <div class="pna-result-panel-content">
+          <div class="pna-result-region" id="pna-lc-level-name-region"><span class="pna-result-value" id="pna-lc-level-name"></span></div>
+          <div class="pna-result-region" id="pna-lc-score-region"><span class="pna-result-value" id="pna-lc-score">0</span></div>
+          <div class="pna-result-region" id="pna-lc-bones-region"><span class="pna-result-value" id="pna-lc-bones">0 / 0</span></div>
+          <div class="pna-result-region" id="pna-lc-time-region"><span class="pna-result-value pna-hud-timer-value" id="pna-lc-time">0:00.0</span></div>
+          <button type="button" class="pna-result-btn-hitbox" id="pna-btn-continue" aria-label="Continue"></button>
+          <button type="button" class="pna-result-btn-hitbox" id="pna-btn-return-lc" aria-label="Return to Lobby"></button>
+        </div>
       </div>
     </div>
 
     <!-- ============== GAME OVER ============== -->
     <div id="pna-screen-game-over" class="pna-overlay hidden">
-      <div class="pna-overlay-heading">Game Over</div>
-      <div class="pna-stat-line">Final score: <b id="pna-go-score">0</b></div>
-      <div class="pna-overlay-btns">
-        <button type="button" class="pna-btn" id="pna-btn-restart-level-go">Restart Level</button>
-        <button type="button" class="pna-btn secondary" id="pna-btn-return-go">Return to Quest Zone</button>
+      <div class="pna-result-panel">
+        <img class="pna-result-panel-art" src="../../assets/img/pup-n-away/hud/game-over-panel.png" alt="Game Over">
+        <div class="pna-result-panel-content">
+          <div class="pna-result-region" id="pna-go-score-region"><span class="pna-result-value" id="pna-go-score">0</span></div>
+          <button type="button" class="pna-result-btn-hitbox" id="pna-btn-restart-act" aria-label="Restart Act"></button>
+          <button type="button" class="pna-result-btn-hitbox" id="pna-btn-return-go" aria-label="Return to Lobby"></button>
+        </div>
       </div>
     </div>
 

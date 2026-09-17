@@ -195,10 +195,19 @@
     return points.map(([x, y]) => ({ x, y }));
   }
 
+  // Every level identifies its own act and position within it (act,
+  // positionInAct, 1-based) rather than the engine inferring that from
+  // array order — see pup-n-away-levels.js's isFinalLevelOfAct()/
+  // firstLevelIndexOfAct(), which read these fields instead of
+  // assuming "3 levels per act" as a hardcoded rule. Only Act 1 exists
+  // today (3 levels); adding Act 2 later is purely new LEVELS entries
+  // with act:2, positionInAct:1..3 — no engine change needed.
   const LEVELS = [
     {
       id: 'dream-bedroom',
       name: 'Dream Bedroom',
+      act: 1,
+      positionInAct: 1,
       background: 'dreamBedroom',
       basket: 'default',
       dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 },
@@ -212,6 +221,8 @@
     {
       id: 'back-garden',
       name: 'Back Garden',
+      act: 1,
+      positionInAct: 2,
       background: 'backGarden',
       basket: 'default',
       dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 },
@@ -225,6 +236,8 @@
     {
       id: 'house-rooftop',
       name: 'House Rooftop',
+      act: 1,
+      positionInAct: 3,
       background: 'houseRooftop',
       basket: 'default',
       dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -950 },

@@ -132,22 +132,28 @@
       if (el) el.textContent = formatTime(ms);
     }
 
-    function setLevelCompletePanel({ levelName, score, bonesCollected, bonesTotal, isFinalLevel, timeMs }) {
+    // The artwork itself already says "LEVEL COMPLETE!" (and, on the
+    // Continue button, "CONTINUE") — this only ever fills in the real
+    // per-run values, never duplicates baked-in label text. Also
+    // re-enables the panel's two buttons, since bindButtonOnce()
+    // disables a button the instant it's clicked (see below) and this
+    // is the one place a freshly (re)shown panel gets a clean slate.
+    function setLevelCompletePanel({ levelName, score, bonesCollected, bonesTotal, timeMs }) {
       const nameEl = $('pna-lc-level-name');
       const scoreEl = $('pna-lc-score');
       const bonesEl = $('pna-lc-bones');
       const timeEl = $('pna-lc-time');
-      const continueBtn = $('pna-btn-continue');
-      if (nameEl) nameEl.textContent = levelName + ' Complete!';
+      if (nameEl) nameEl.textContent = levelName;
       if (scoreEl) scoreEl.textContent = String(score);
       if (bonesEl) bonesEl.textContent = bonesCollected + ' / ' + bonesTotal;
       if (timeEl) timeEl.textContent = formatTime(timeMs);
-      if (continueBtn) continueBtn.textContent = isFinalLevel ? 'Finish' : 'Continue';
+      [$('pna-btn-continue'), $('pna-btn-return-lc')].forEach((btn) => { if (btn) btn.disabled = false; });
     }
 
     function setGameOverPanel({ score }) {
       const scoreEl = $('pna-go-score');
       if (scoreEl) scoreEl.textContent = String(score);
+      [$('pna-btn-restart-act'), $('pna-btn-return-go')].forEach((btn) => { if (btn) btn.disabled = false; });
     }
 
     function bindButton(id, handler) {
@@ -156,9 +162,25 @@
       el.addEventListener('click', handler);
     }
 
+    // Like bindButton(), but disables the element the instant it's
+    // clicked — used for the result-panel buttons (Continue/Restart
+    // Act/Return to Lobby) so a rapid double-tap can never fire the
+    // navigation/progression-saving handler twice. setLevelCompletePanel()/
+    // setGameOverPanel() re-enable these each time that panel is freshly
+    // populated, so a later replay isn't left permanently disabled.
+    function bindButtonOnce(id, handler) {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('click', (e) => {
+        if (el.disabled) return;
+        el.disabled = true;
+        handler(e);
+      });
+    }
+
     return {
       showScreen, setHudVisible, updateHud, flashMissBanner, setLoadingProgress,
-      setCountdownText, setTimerText, setLevelCompletePanel, setGameOverPanel, bindButton
+      setCountdownText, setTimerText, setLevelCompletePanel, setGameOverPanel, bindButton, bindButtonOnce
     };
   }
 

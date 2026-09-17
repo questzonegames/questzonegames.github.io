@@ -275,6 +275,11 @@
     }
   }
 
+  // The score shown here is already effectively "frozen" — run.score
+  // simply stops changing the instant state leaves PLAYING (update()'s
+  // gameplay branch, the only place it's ever incremented, early-
+  // returns for every other state) — so reading it here IS the
+  // snapshot, not a race against something still ticking.
   async function finishRunToGameOver() {
     goTo(STATES.GAME_OVER);
     audio.play('gameOver');
@@ -296,16 +301,27 @@
 
   async function completeLevel() {
     audio.play('levelComplete');
+    const isFinalOfAct = levels.isFinalLevelOfAct();
+    // Frozen once, here — nothing later can change what the panel
+    // shows, since setupLevel()/beginRun() (the only things that reset
+    // score/bones/timer) are never called again until the player picks
+    // Continue or Restart Act.
     ui.setLevelCompletePanel({
       levelName: currentLevel.name,
       score: run.score,
       bonesCollected: collectibles.collectedCount(),
       bonesTotal: collectibles.total,
-      isFinalLevel: levels.isLastLevel(),
       timeMs: levelElapsedMs
     });
     goTo(STATES.LEVEL_COMPLETE);
-    await saveRunResults(levels.isLastLevel());
+    await saveRunResults(isFinalOfAct);
+    if (isFinalOfAct) {
+      // Recorded as soon as the act is genuinely finished, independent
+      // of whether/when the player clicks Continue — the server is
+      // still the one deciding whether this unlock is legitimate (see
+      // record_pup_n_away_act_complete()), this just reports it.
+      await integration.recordActComplete(currentLevel.act);
+    }
   }
 
   function runDogOffscreen(dt) {
@@ -477,31 +493,53 @@
   function wireButtons() {
     ui.bindButton('pna-btn-start', () => { audio.unlockOnFirstGesture(); audio.play('buttonClick'); beginRun(); });
     ui.bindButton('pna-btn-skip-intro', () => { audio.play('buttonClick'); run.introSeen = true; startCountdown(); });
-    ui.bindButton('pna-btn-continue', () => {
+
+    // Result-panel buttons use bindButtonOnce() — disabled the instant
+    // they're clicked (re-enabled next time that panel is freshly
+    // populated) so a rapid double-tap can never fire the navigation/
+    // progression-saving handler twice.
+    ui.bindButtonOnce('pna-btn-continue', () => {
       audio.play('buttonClick');
-      if (levels.isLastLevel()) {
-        window.location.href = '../../index.html';
+      // The act-complete save already happened in completeLevel() the
+      // instant the level ended — this button only ever decides where
+      // to go next. "Pup N Away lobby" is the title screen: with only
+      // one act's worth of content today there's nothing yet to choose
+      // between, so returning there (never the Quest Zone homepage) is
+      // what "return to lobby" means until a real act-select screen has
+      // something to select.
+      if (levels.isFinalLevelOfAct()) {
+        goTo(STATES.TITLE);
       } else {
         setupLevel(levels.advance());
         startCountdown();
       }
     });
-    ui.bindButton('pna-btn-replay-level', () => { audio.play('buttonClick'); setupLevel(levels.current()); startCountdown(); });
-    ui.bindButton('pna-btn-return-lc', () => { window.location.href = '../../index.html'; });
-    ui.bindButton('pna-btn-restart-level-go', () => {
+    ui.bindButtonOnce('pna-btn-return-lc', () => {
       audio.play('buttonClick');
-      // Game Over already recorded the finished run — restarting here
-      // begins a genuinely fresh run (score/bounces reset; setupLevel()
-      // below always resets lives), not a continuation of the run that
-      // just ended.
+      audio.stopMusic();
+      goTo(STATES.TITLE);
+    });
+    ui.bindButtonOnce('pna-btn-restart-act', () => {
+      audio.play('buttonClick');
+      // Restarts the ACT the player died in, not just the level — find
+      // that act from the level they were actually on (frozen in
+      // currentLevel since Game Over), jump to its first level, and
+      // reset every per-run value a fresh attempt should start with.
+      // Permanently unlocked acts (recorded server-side already) are
+      // never touched here.
       run.score = 0;
       run.bounces = 0;
       run.playtimeStart = performance.now();
+      levels.goToActStart(currentLevel.act);
       setupLevel(levels.current());
       integration.gameStarted();
       startCountdown();
     });
-    ui.bindButton('pna-btn-return-go', () => { window.location.href = '../../index.html'; });
+    ui.bindButtonOnce('pna-btn-return-go', () => {
+      audio.play('buttonClick');
+      audio.stopMusic();
+      goTo(STATES.TITLE);
+    });
     // Manual pause/fullscreen buttons were removed from the toolbar
     // (redesigned around the supplied artwork, which has no room for
     // them) and are being reintroduced elsewhere separately later —
