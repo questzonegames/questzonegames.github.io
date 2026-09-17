@@ -34,6 +34,13 @@
     const BASKET_BASELINE_Y = DESIGN_H - 90;
     const DEFAULT_BASKET_POSITION = { x: DESIGN_W / 2, y: BASKET_BASELINE_Y };
     const DEFAULT_DOG_POSITION = { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 };
+    // Dog Start Position is vertical-movement-only, the mirror image of
+    // the basket's horizontal-only rule — its X is permanently pinned
+    // to the level's exact horizontal centre. Y bounds are padded by
+    // its own icon radius so it can never render half off-screen.
+    const DOG_FIXED_X = DESIGN_W / 2;
+    const DOG_MIN_Y = 56;
+    const DOG_MAX_Y = DESIGN_H - 56;
 
     const el = {
       topbar: document.getElementById('pna-editor-topbar'),
@@ -133,9 +140,9 @@
         x: DEFAULT_BASKET_POSITION.x, y: BASKET_BASELINE_Y,
         rotation: 0, scale: 1, layer: 5, enabled: true, locked: false, properties: {}
       });
-      out.unshift(dog ? clone(dog) : {
+      out.unshift(dog ? Object.assign({}, clone(dog), { x: DOG_FIXED_X, y: clampDogY(dog.y) }) : {
         instanceId: 'dog-spawn', assetType: 'dog_spawn',
-        x: DEFAULT_DOG_POSITION.x, y: DEFAULT_DOG_POSITION.y,
+        x: DOG_FIXED_X, y: DEFAULT_DOG_POSITION.y,
         rotation: 0, scale: 1, layer: 5, enabled: true, locked: false,
         properties: { vx: DEFAULT_DOG_POSITION.vx, vy: DEFAULT_DOG_POSITION.vy }
       });
@@ -355,6 +362,7 @@
     function iconRadiusFor(assetType) { return assetType === 'dream_bone' ? BONE_RADIUS : 56; }
     function clampX(x) { return Math.max(0, Math.min(DESIGN_W, x)); }
     function clampY(y) { return Math.max(0, Math.min(DESIGN_H, y)); }
+    function clampDogY(y) { return Math.max(DOG_MIN_Y, Math.min(DOG_MAX_Y, y)); }
 
     // ---------------------------------------------------------------
     // Drawing — editor layer order (background -> grid -> placed
@@ -362,6 +370,24 @@
     // the brief. The editor owns the canvas entirely while open (real
     // gameplay is fully paused — see pup-n-away.js's loop()).
     // ---------------------------------------------------------------
+    // Sets #pna-canvas's CSS width/height IN JS, in px, from #pna-
+    // stage-wrap's own measured box — deliberately not left to CSS
+    // aspect-ratio (see the long comment on body.pna-editor-mode
+    // #pna-canvas in index.html for the circular-dependency bug that
+    // caused). Safe to call every time draw() runs; a no-op cost when
+    // the box hasn't changed.
+    function layoutStage() {
+      const wrap = document.getElementById('pna-stage-wrap');
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      if (w <= 0 || h <= 0) return; // not laid out yet — try again next draw()
+      const targetRatio = DESIGN_W / DESIGN_H;
+      let cssW, cssH;
+      if (w / h > targetRatio) { cssH = h; cssW = h * targetRatio; }
+      else { cssW = w; cssH = w / targetRatio; }
+      canvas.style.width = Math.round(cssW) + 'px';
+      canvas.style.height = Math.round(cssH) + 'px';
+    }
+
     function draw() {
       // Synced HERE, not left to wait for the next requestAnimationFrame
       // tick — draw() can be called directly from loadLevel()/open()
@@ -370,6 +396,7 @@
       // canvas showing a stale, undersized bitmap (its CSS box was
       // already correctly 16:9, but its backing store/drawn pixels
       // were still whatever an earlier, smaller layout had produced).
+      layoutStage();
       // resizeCanvasForDPR() (in pup-n-away.js) already sets the
       // canvas's BASE transform to design-space scale via
       // ctx.setTransform(scaleX,0,0,scaleY,0,0) — the same convention
@@ -507,10 +534,18 @@
       const p = toDesignSpace(e.clientX, e.clientY);
       const nx = clampX(snap(p.x - dragState.offsetX));
       const ny = clampY(snap(p.y - dragState.offsetY));
-      o.x = Math.round(nx);
       // Basket is horizontal-only, permanently — vertical pointer
-      // movement is completely ignored while dragging it, per the brief.
-      o.y = o.assetType === 'basket_spawn' ? BASKET_BASELINE_Y : Math.round(ny);
+      // movement is completely ignored while dragging it. Dog Start
+      // Position is the mirror image: vertical-only, permanently
+      // pinned to the level's horizontal centre — horizontal pointer
+      // movement is completely ignored while dragging it.
+      if (o.assetType === 'dog_spawn') {
+        o.x = DOG_FIXED_X;
+        o.y = Math.round(clampDogY(snap(p.y - dragState.offsetY)));
+      } else {
+        o.x = Math.round(nx);
+        o.y = o.assetType === 'basket_spawn' ? BASKET_BASELINE_Y : Math.round(ny);
+      }
       dragState.moved = true;
       draw();
       el.dragReadout.style.display = 'block';
@@ -683,9 +718,10 @@
       if (!o) { el.propsBody.innerHTML = '<div class="pna-editor-props-empty">Select an object to edit its properties, or click a toolbar asset to place a new one.</div>'; return; }
       const locked = isLocked(o);
       const isBasket = o.assetType === 'basket_spawn';
-      const isProtected = o.assetType === 'dog_spawn' || isBasket;
+      const isDog = o.assetType === 'dog_spawn';
+      const isProtected = isDog || isBasket;
       let html = '<div class="pna-editor-props-id">' + labelFor(o.assetType) + '<br>' + o.instanceId + '</div>';
-      html += field('X', 'x', Math.round(o.x), locked);
+      html += field('X', 'x', Math.round(o.x), locked || isDog, isDog ? 'Permanently centred — never editable.' : '');
       html += field('Y', 'y', Math.round(o.y), locked || isBasket, isBasket ? 'Fixed to the gameplay baseline — never editable.' : '');
       if (o.assetType === 'dog_spawn') {
         html += field('Launch VX', 'vx', (o.properties && o.properties.vx) || 0, locked);
@@ -724,8 +760,8 @@
       const value = parseFloat(rawValue);
       if (!isFinite(value)) return;
       if (commit) pushHistory();
-      if (key === 'x') o.x = clampX(value);
-      else if (key === 'y') o.y = o.assetType === 'basket_spawn' ? BASKET_BASELINE_Y : clampY(value);
+      if (key === 'x') o.x = o.assetType === 'dog_spawn' ? DOG_FIXED_X : clampX(value);
+      else if (key === 'y') o.y = o.assetType === 'basket_spawn' ? BASKET_BASELINE_Y : o.assetType === 'dog_spawn' ? clampDogY(value) : clampY(value);
       else if (key === 'vx' || key === 'vy') { o.properties = o.properties || {}; o.properties[key] = value; }
       draw();
       if (commit) { markDirtyUI(); updateToolbarState(); renderSelectionStatus(); }
@@ -894,11 +930,20 @@
       if (sel && !isLocked(sel) && e.key.indexOf('Arrow') === 0) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
-        pushHistory();
-        if (e.key === 'ArrowLeft') sel.x = clampX(sel.x - step);
-        else if (e.key === 'ArrowRight') sel.x = clampX(sel.x + step);
-        else if (sel.assetType !== 'basket_spawn' && e.key === 'ArrowUp') sel.y = clampY(sel.y - step);
-        else if (sel.assetType !== 'basket_spawn' && e.key === 'ArrowDown') sel.y = clampY(sel.y + step);
+        // Basket: horizontal-only (Up/Down ignored). Dog: vertical-only
+        // (Left/Right ignored, permanently pinned to DOG_FIXED_X).
+        // Dream Bones: free movement on both axes.
+        const isDog = sel.assetType === 'dog_spawn';
+        const isBasket = sel.assetType === 'basket_spawn';
+        let moved = true;
+        if (isDog && e.key === 'ArrowUp') { pushHistory(); sel.y = clampDogY(sel.y - step); sel.x = DOG_FIXED_X; }
+        else if (isDog && e.key === 'ArrowDown') { pushHistory(); sel.y = clampDogY(sel.y + step); sel.x = DOG_FIXED_X; }
+        else if (!isDog && e.key === 'ArrowLeft') { pushHistory(); sel.x = clampX(sel.x - step); }
+        else if (!isDog && e.key === 'ArrowRight') { pushHistory(); sel.x = clampX(sel.x + step); }
+        else if (!isDog && !isBasket && e.key === 'ArrowUp') { pushHistory(); sel.y = clampY(sel.y - step); }
+        else if (!isDog && !isBasket && e.key === 'ArrowDown') { pushHistory(); sel.y = clampY(sel.y + step); }
+        else moved = false;
+        if (!moved) return;
         markDirtyUI(); renderProps(); renderSelectionStatus(); draw(); updateToolbarState();
       }
     }
