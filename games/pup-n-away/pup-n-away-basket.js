@@ -14,10 +14,10 @@
   const reduceMotionQuery = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
   function motionScale() { return reduceMotionQuery && reduceMotionQuery.matches ? 0.3 : 1; }
 
-  function createBasket(images) {
+  function createBasket(images, startY) {
     const state = {
       x: CFG.DESIGN_W / 2,       // center X
-      y: CFG.DESIGN_H - 90,      // top-surface Y (the bounce plane)
+      y: typeof startY === 'number' ? startY : P.basketDefaultSurfaceY, // top-surface Y (the bounce plane)
       vx: 0,
       width: P.basketWidth,
       height: P.basketHeight,

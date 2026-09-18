@@ -395,6 +395,15 @@
     basketHeight: 130,
     basketSpeed: 1300,             // px/s — constant speed the instant a direction key is held, no ramp-up
     basketSquashMs: 130,           // brief visual squash on impact
+    // Default top-surface Y (the bounce plane) — was DESIGN_H - 90,
+    // which put the basket's BOTTOM edge at (DESIGN_H-90)+basketHeight
+    // = DESIGN_H+40, i.e. 40px (31% of its own height) permanently
+    // below the visible canvas. Raised so the full basket renders
+    // on-screen with a small margin. The single source of truth for
+    // both the real physics default (pup-n-away-basket.js) and the
+    // Level Editor's own default/guideline (pup-n-away-editor.js) —
+    // never duplicated as a second hardcoded literal.
+    basketDefaultSurfaceY: DESIGN_H - 140,
 
     // ---- dog ----
     dogVisualSize: 190,            // on-screen diameter (design px) every pose is scaled to

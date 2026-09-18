@@ -67,7 +67,7 @@
       instanceId: 'basket-spawn',
       assetType: 'basket_spawn',
       x: (level.basketStart && typeof level.basketStart.x === 'number') ? level.basketStart.x : CFG.DESIGN_W / 2,
-      y: CFG.DESIGN_H - 90,
+      y: (level.basketStart && typeof level.basketStart.y === 'number') ? level.basketStart.y : CFG.PHYSICS.basketDefaultSurfaceY,
       rotation: 0, scale: 1, layer: 5, enabled: true,
       properties: {}
     });
@@ -109,7 +109,7 @@
       const p = dogObj.properties || {};
       fields.dogStart = { x: dogObj.x, y: dogObj.y, vx: p.vx || 0, vy: typeof p.vy === 'number' ? p.vy : -900 };
     }
-    if (basketObj) fields.basketStart = { x: basketObj.x };
+    if (basketObj) fields.basketStart = { x: basketObj.x, y: basketObj.y };
     return fields;
   }
 

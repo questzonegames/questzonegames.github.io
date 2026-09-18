@@ -26,21 +26,28 @@
     const DESIGN_W = CFG.DESIGN_W, DESIGN_H = CFG.DESIGN_H;
     const HISTORY_LIMIT = 60;
 
-    // Matches pup-n-away-basket.js's fixed bounce-plane Y (state.y =
-    // CFG.DESIGN_H - 90, never overridden per-level) and the dogStart Y
-    // every static PNA_CONFIG.LEVELS entry actually uses. These are
-    // deliberate, named defaults — never guessed from whatever the
-    // level happened to be edited to.
-    const BASKET_BASELINE_Y = DESIGN_H - 90;
-    const DEFAULT_BASKET_POSITION = { x: DESIGN_W / 2, y: BASKET_BASELINE_Y };
+    // Matches pup-n-away-basket.js's default bounce-plane Y (see
+    // PNA_CONFIG.PHYSICS.basketDefaultSurfaceY — a single shared
+    // constant, not a second hardcoded copy) and the dogStart Y every
+    // static PNA_CONFIG.LEVELS entry actually uses. These are
+    // deliberate, named DEFAULTS for "Set to Default" — never guessed
+    // from whatever the level happened to be edited to.
+    const DEFAULT_BASKET_POSITION = { x: DESIGN_W / 2, y: CFG.PHYSICS.basketDefaultSurfaceY };
     const DEFAULT_DOG_POSITION = { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 };
-    // Dog Start Position is vertical-movement-only, the mirror image of
-    // the basket's horizontal-only rule — its X is permanently pinned
-    // to the level's exact horizontal centre. Y bounds are padded by
-    // its own icon radius so it can never render half off-screen.
-    const DOG_FIXED_X = DESIGN_W / 2;
     const DOG_MIN_Y = 56;
     const DOG_MAX_Y = DESIGN_H - 56;
+
+    // Per-axis locking (lockX/lockY, independently toggleable on every
+    // object) replaced an earlier hardcoded rule that permanently
+    // pinned the dog's X and the basket's Y with no way to override
+    // it. These are just each type's DEFAULT lock state now — an
+    // admin can unlock either axis on any object, including the dog
+    // and basket, via the context menu/Properties panel.
+    const DEFAULT_LOCK_BY_TYPE = {
+      dog_spawn: { lockX: true, lockY: false },
+      basket_spawn: { lockX: false, lockY: true }
+    };
+    function defaultLockFor(assetType) { return DEFAULT_LOCK_BY_TYPE[assetType] || { lockX: false, lockY: false }; }
 
     const el = {
       topbar: document.getElementById('pna-editor-topbar'),
@@ -126,8 +133,16 @@
     function clone(v) { return JSON.parse(JSON.stringify(v)); }
     function isDirty() { return JSON.stringify(objects) !== JSON.stringify(baseline); }
     function newInstanceId(prefix) { return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
-    function isLocked(o) { return !!o.locked; }
+    function isLockedX(o) { return !!o.lockX; }
+    function isLockedY(o) { return !!o.lockY; }
+    function isLocked(o) { return isLockedX(o) && isLockedY(o); } // both axes — no movement possible at all
     function findObj(id) { return objects.find((o) => o.instanceId === id); }
+    // Y clamp for the basket when its Y axis is unlocked — keeps the
+    // full sprite on-screen (see PNA_CONFIG.PHYSICS.basketHeight).
+    function clampBasketY(y) {
+      const min = 100, max = DESIGN_H - CFG.PHYSICS.basketHeight - 10;
+      return Math.max(min, Math.min(max, y));
+    }
 
     function pushHistory() {
       history.push(clone(objects));
@@ -155,20 +170,53 @@
     // always clamped back onto its fixed baseline regardless of what
     // was saved. Called on every load, so it's impossible for the
     // editor to ever end up with zero or two of either.
+    // Migrates a legacy single `locked` boolean (from before per-axis
+    // locking existed) into lockX/lockY, preserving the OLD behavior
+    // exactly: the dog's X and the basket's Y used to be permanently
+    // fixed no matter what `locked` said, so old data maps to that
+    // axis staying locked plus `locked`'s value applying to the axis
+    // that used to be free. Anything already in the new lockX/lockY
+    // shape, or with neither field at all (brand new object), is left
+    // to its own values / this type's default.
+    function normalizeLockFields(o, assetType) {
+      if (typeof o.lockX === 'boolean' || typeof o.lockY === 'boolean') {
+        return { lockX: !!o.lockX, lockY: !!o.lockY };
+      }
+      if (typeof o.locked === 'boolean') {
+        if (assetType === 'dog_spawn') return { lockX: true, lockY: o.locked };
+        if (assetType === 'basket_spawn') return { lockX: o.locked, lockY: true };
+        return { lockX: o.locked, lockY: o.locked };
+      }
+      return defaultLockFor(assetType);
+    }
+
+    // Every level always has exactly one dog_spawn and one basket_spawn
+    // — inserted here (using the named defaults, never guessed) if a
+    // legacy/older saved layout doesn't have one. Their saved x/y is
+    // now respected as-is (no forced pin to a hardcoded axis — that
+    // restriction is expressed by their DEFAULT lockX/lockY instead,
+    // which an admin can unlock). Called on every load, so it's
+    // impossible for the editor to ever end up with zero or two of
+    // either, and every object's lock fields are always in the
+    // current lockX/lockY shape by the time this returns.
     function ensureRequiredObjects(list) {
-      const out = list.filter((o) => o.assetType !== 'dog_spawn' && o.assetType !== 'basket_spawn');
+      const out = list
+        .filter((o) => o.assetType !== 'dog_spawn' && o.assetType !== 'basket_spawn')
+        .map((o) => Object.assign({}, o, normalizeLockFields(o, o.assetType)));
       const dog = list.find((o) => o.assetType === 'dog_spawn');
       const basket = list.find((o) => o.assetType === 'basket_spawn');
-      out.unshift(basket ? Object.assign({}, basket, { y: BASKET_BASELINE_Y }) : {
+      out.unshift(basket ? Object.assign({}, basket, normalizeLockFields(basket, 'basket_spawn'), { y: clampBasketY(basket.y) }) : {
         instanceId: 'basket-spawn', assetType: 'basket_spawn',
-        x: DEFAULT_BASKET_POSITION.x, y: BASKET_BASELINE_Y,
-        rotation: 0, scale: 1, layer: 5, enabled: true, locked: false, properties: {}
+        x: DEFAULT_BASKET_POSITION.x, y: DEFAULT_BASKET_POSITION.y,
+        rotation: 0, scale: 1, layer: 5, enabled: true, properties: {},
+        lockX: defaultLockFor('basket_spawn').lockX, lockY: defaultLockFor('basket_spawn').lockY
       });
-      out.unshift(dog ? Object.assign({}, clone(dog), { x: DOG_FIXED_X, y: clampDogY(dog.y) }) : {
+      out.unshift(dog ? Object.assign({}, clone(dog), normalizeLockFields(dog, 'dog_spawn'), { y: clampDogY(dog.y) }) : {
         instanceId: 'dog-spawn', assetType: 'dog_spawn',
-        x: DOG_FIXED_X, y: DEFAULT_DOG_POSITION.y,
-        rotation: 0, scale: 1, layer: 5, enabled: true, locked: false,
-        properties: { vx: DEFAULT_DOG_POSITION.vx, vy: DEFAULT_DOG_POSITION.vy }
+        x: DEFAULT_DOG_POSITION.x, y: DEFAULT_DOG_POSITION.y,
+        rotation: 0, scale: 1, layer: 5, enabled: true,
+        properties: { vx: DEFAULT_DOG_POSITION.vx, vy: DEFAULT_DOG_POSITION.vy },
+        lockX: defaultLockFor('dog_spawn').lockX, lockY: defaultLockFor('dog_spawn').lockY
       });
       return out;
     }
@@ -373,7 +421,7 @@
         instanceId: newInstanceId(assetType),
         assetType,
         x: Math.round(clampX(snap(x))), y: Math.round(clampY(snap(y))),
-        rotation: 0, scale: 1, layer: 4, enabled: true, locked: false, properties: {}
+        rotation: 0, scale: 1, layer: 4, enabled: true, lockX: false, lockY: false, properties: {}
       };
       objects.push(obj);
       selectedId = obj.instanceId;
@@ -464,13 +512,18 @@
         for (let y = 0; y <= DESIGN_H; y += 20 * 5) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(DESIGN_W, y); ctx.stroke(); }
       }
 
-      // Editor-only guide showing the basket's fixed horizontal line —
-      // never drawn during normal gameplay (this whole module never
-      // runs then).
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255,214,107,0.35)'; ctx.lineWidth = 2; ctx.setLineDash([10, 8]);
-      ctx.beginPath(); ctx.moveTo(0, BASKET_BASELINE_Y); ctx.lineTo(DESIGN_W, BASKET_BASELINE_Y); ctx.stroke();
-      ctx.restore();
+      // Editor-only guide showing the basket's current horizontal line
+      // WHILE its Y axis is locked (a real constraint then) — never
+      // drawn during normal gameplay (this whole module never runs
+      // then), and not drawn once Y is unlocked since it's no longer
+      // a fixed line.
+      const basketObjForGuide = objects.find((o) => o.assetType === 'basket_spawn');
+      if (basketObjForGuide && isLockedY(basketObjForGuide)) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,214,107,0.35)'; ctx.lineWidth = 2; ctx.setLineDash([10, 8]);
+        ctx.beginPath(); ctx.moveTo(0, basketObjForGuide.y); ctx.lineTo(DESIGN_W, basketObjForGuide.y); ctx.stroke();
+        ctx.restore();
+      }
 
       const drawOrder = objects.slice().sort((a, b) => (a.layer || 0) - (b.layer || 0));
       drawOrder.forEach((o) => {
@@ -495,7 +548,7 @@
           ctx.strokeRect(o.x - r - 6, o.y - r - 6, (r + 6) * 2, (r + 6) * 2);
           ctx.restore();
         }
-        if (o.locked) {
+        if (isLockedX(o) || isLockedY(o)) {
           ctx.save();
           ctx.fillStyle = '#ffb84d'; ctx.font = 'bold ' + Math.round(r * 0.5) + 'px sans-serif';
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -571,26 +624,27 @@
         };
       }
     }
+    // Clamps a proposed Y to whatever range keeps this object's type
+    // safely on-screen — independent of locking, which is a separate,
+    // admin-toggleable restriction checked by the caller.
+    function clampYForType(assetType, y) {
+      if (assetType === 'dog_spawn') return clampDogY(y);
+      if (assetType === 'basket_spawn') return clampBasketY(y);
+      return clampY(y);
+    }
     function onPointerMove(e) {
       if (!isOpen || !dragState || dragState.pointerId !== e.pointerId) return;
       const o = findObj(dragState.id);
-      if (!o || isLocked(o)) return;
+      if (!o) return;
+      const lockedX = isLockedX(o), lockedY = isLockedY(o);
+      if (lockedX && lockedY) return; // both axes locked — nothing to drag
       if (!dragState.historyPushed) { pushHistory(); dragState.historyPushed = true; } // one drag = one undo entry
       const p = toDesignSpace(e.clientX, e.clientY);
-      const nx = clampX(snap(p.x - dragState.offsetX));
-      const ny = clampY(snap(p.y - dragState.offsetY));
-      // Basket is horizontal-only, permanently — vertical pointer
-      // movement is completely ignored while dragging it. Dog Start
-      // Position is the mirror image: vertical-only, permanently
-      // pinned to the level's horizontal centre — horizontal pointer
-      // movement is completely ignored while dragging it.
-      if (o.assetType === 'dog_spawn') {
-        o.x = DOG_FIXED_X;
-        o.y = Math.round(clampDogY(snap(p.y - dragState.offsetY)));
-      } else {
-        o.x = Math.round(nx);
-        o.y = o.assetType === 'basket_spawn' ? BASKET_BASELINE_Y : Math.round(ny);
-      }
+      // Each axis moves independently based on its OWN lock — never a
+      // per-type special case anymore: lock X to move only vertically,
+      // lock Y to move only horizontally, on ANY object.
+      if (!lockedX) o.x = Math.round(clampX(snap(p.x - dragState.offsetX)));
+      if (!lockedY) o.y = Math.round(clampYForType(o.assetType, snap(p.y - dragState.offsetY)));
       dragState.moved = true;
       draw();
       el.dragReadout.style.display = 'block';
@@ -627,7 +681,8 @@
       menu.style.left = clientX + 'px'; menu.style.top = clientY + 'px';
       const isProtected = obj.assetType === 'dog_spawn' || obj.assetType === 'basket_spawn';
 
-      addItem(!isLocked(obj) ? 'Lock Position' : 'Unlock Position', () => toggleLock(obj.instanceId));
+      addItem(isLockedX(obj) ? 'Unlock X' : 'Lock X', () => toggleLockAxis(obj.instanceId, 'lockX'));
+      addItem(isLockedY(obj) ? 'Unlock Y' : 'Lock Y', () => toggleLockAxis(obj.instanceId, 'lockY'));
       if (!isProtected) addItem('Duplicate Asset', () => duplicateObject(obj.instanceId));
       if (isProtected) addItem('Set to Default Position', () => resetToDefault(obj.instanceId));
       if (!isProtected) {
@@ -648,22 +703,24 @@
     }
     function closeContextMenu() { if (contextMenuEl) { contextMenuEl.remove(); contextMenuEl = null; } }
 
-    function toggleLock(instanceId) {
+    function toggleLockAxis(instanceId, axisField) {
       const o = findObj(instanceId);
       if (!o) return;
       pushHistory();
-      o.locked = !o.locked;
+      o[axisField] = !o[axisField];
       markDirtyUI(); renderProps(); renderSelectionStatus(); draw();
     }
     function resetToDefault(instanceId) {
       const o = findObj(instanceId);
-      if (!o || isLocked(o)) return;
+      if (!o || isLocked(o)) return; // both axes locked — nothing this could change anyway
       pushHistory();
       if (o.assetType === 'dog_spawn') {
-        o.x = DEFAULT_DOG_POSITION.x; o.y = DEFAULT_DOG_POSITION.y;
+        if (!isLockedX(o)) o.x = DEFAULT_DOG_POSITION.x;
+        if (!isLockedY(o)) o.y = DEFAULT_DOG_POSITION.y;
         o.properties = { vx: DEFAULT_DOG_POSITION.vx, vy: DEFAULT_DOG_POSITION.vy };
       } else if (o.assetType === 'basket_spawn') {
-        o.x = DEFAULT_BASKET_POSITION.x; o.y = BASKET_BASELINE_Y;
+        if (!isLockedX(o)) o.x = DEFAULT_BASKET_POSITION.x;
+        if (!isLockedY(o)) o.y = DEFAULT_BASKET_POSITION.y;
       }
       markDirtyUI(); renderProps(); renderSelectionStatus(); draw();
     }
@@ -673,7 +730,7 @@
       pushHistory();
       const copy = clone(o);
       copy.instanceId = newInstanceId(o.assetType);
-      copy.locked = false;
+      copy.lockX = false; copy.lockY = false;
       copy.x = Math.min(DESIGN_W, o.x + 40);
       copy.y = Math.min(DESIGN_H, o.y + 40);
       objects.push(copy);
@@ -699,7 +756,9 @@
         const armedDef = placingType ? placeableDef(placingType) : null;
         el.selectionStatusBody.textContent = armedDef ? armedDef.label.toUpperCase() + ' READY TO PLACE' : 'NO ASSET SELECTED';
       } else {
-        const lockSpan = '<span class="' + (o.locked ? 'pna-editor-status-locked">Locked' : 'pna-editor-status-unlocked">Unlocked') + '</span>';
+        const lx = isLockedX(o), ly = isLockedY(o);
+        const lockText = lx && ly ? 'Locked (X, Y)' : lx ? 'Locked (X)' : ly ? 'Locked (Y)' : 'Unlocked';
+        const lockSpan = '<span class="' + ((lx || ly) ? 'pna-editor-status-locked">' : 'pna-editor-status-unlocked">') + lockText + '</span>';
         el.selectionStatusBody.innerHTML =
           labelFor(o.assetType) + ' SELECTED<br>' + lockSpan +
           '<br><span class="pna-editor-status-coords">x: ' + Math.round(o.x) + '  y: ' + Math.round(o.y) + '</span>';
@@ -741,7 +800,7 @@
         row.appendChild(label);
         const lock = document.createElement('span');
         lock.className = 'pna-editor-spawn-row-lock';
-        lock.textContent = o.locked ? '🔒' : '';
+        lock.textContent = (isLockedX(o) || isLockedY(o)) ? '🔒' : '';
         row.appendChild(lock);
         row.addEventListener('click', () => {
           selectedId = o.instanceId; placingType = null; closeArmedVisual();
@@ -766,22 +825,24 @@
     function renderProps() {
       const o = findObj(selectedId);
       if (!o) { el.propsBody.innerHTML = '<div class="pna-editor-props-empty">Select an object to edit its properties, or click a toolbar asset to place a new one.</div>'; return; }
-      const locked = isLocked(o);
+      const lockedX = isLockedX(o), lockedY = isLockedY(o);
+      const bothLocked = lockedX && lockedY;
       const isBasket = o.assetType === 'basket_spawn';
       const isDog = o.assetType === 'dog_spawn';
       const isProtected = isDog || isBasket;
       let html = '<div class="pna-editor-props-id">' + labelFor(o.assetType) + '<br>' + o.instanceId + '</div>';
-      html += field('X', 'x', Math.round(o.x), locked || isDog, isDog ? 'Permanently centred — never editable.' : '');
-      html += field('Y', 'y', Math.round(o.y), locked || isBasket, isBasket ? 'Fixed to the gameplay baseline — never editable.' : '');
+      html += field('X', 'x', Math.round(o.x), lockedX, '');
+      html += field('Y', 'y', Math.round(o.y), lockedY, '');
       if (o.assetType === 'dog_spawn') {
-        html += field('Launch VX', 'vx', (o.properties && o.properties.vx) || 0, locked);
-        html += field('Launch VY', 'vy', (o.properties && o.properties.vy) || 0, locked);
+        html += field('Launch VX', 'vx', (o.properties && o.properties.vx) || 0, bothLocked);
+        html += field('Launch VY', 'vy', (o.properties && o.properties.vy) || 0, bothLocked);
       }
-      html += '<div class="pna-editor-field pna-editor-field-row"><input type="checkbox" id="pna-editor-prop-locked" ' + (locked ? 'checked' : '') + '><label for="pna-editor-prop-locked">Locked</label></div>';
+      html += '<div class="pna-editor-field pna-editor-field-row"><input type="checkbox" id="pna-editor-prop-lock-x" ' + (lockedX ? 'checked' : '') + '><label for="pna-editor-prop-lock-x">Lock X</label></div>';
+      html += '<div class="pna-editor-field pna-editor-field-row"><input type="checkbox" id="pna-editor-prop-lock-y" ' + (lockedY ? 'checked' : '') + '><label for="pna-editor-prop-lock-y">Lock Y</label></div>';
       html += '<div class="pna-editor-props-actions">';
-      if (isProtected) html += '<button type="button" class="pna-editor-btn" id="pna-editor-prop-default">Set to Default</button>';
+      if (isProtected) html += '<button type="button" class="pna-editor-btn" id="pna-editor-prop-default" ' + (bothLocked ? 'disabled' : '') + '>Set to Default</button>';
       if (!isProtected) {
-        html += '<button type="button" class="pna-editor-btn" id="pna-editor-prop-duplicate" ' + (locked ? 'disabled' : '') + '>Duplicate</button>';
+        html += '<button type="button" class="pna-editor-btn" id="pna-editor-prop-duplicate">Duplicate</button>';
         html += '<button type="button" class="pna-editor-btn pna-editor-btn-danger" id="pna-editor-prop-remove">Remove</button>';
       }
       html += '</div>';
@@ -796,8 +857,10 @@
         input.addEventListener('input', () => applyPropInput(o, input.dataset.prop, input.value, false));
         input.addEventListener('change', () => applyPropInput(o, input.dataset.prop, input.value, true));
       });
-      const lockedBox = document.getElementById('pna-editor-prop-locked');
-      if (lockedBox) lockedBox.addEventListener('change', () => { pushHistory(); o.locked = lockedBox.checked; markDirtyUI(); renderProps(); renderSelectionStatus(); draw(); });
+      const lockXBox = document.getElementById('pna-editor-prop-lock-x');
+      if (lockXBox) lockXBox.addEventListener('change', () => { pushHistory(); o.lockX = lockXBox.checked; markDirtyUI(); renderProps(); renderSelectionStatus(); draw(); });
+      const lockYBox = document.getElementById('pna-editor-prop-lock-y');
+      if (lockYBox) lockYBox.addEventListener('change', () => { pushHistory(); o.lockY = lockYBox.checked; markDirtyUI(); renderProps(); renderSelectionStatus(); draw(); });
       const dupBtn = document.getElementById('pna-editor-prop-duplicate');
       if (dupBtn) dupBtn.addEventListener('click', () => duplicateObject(o.instanceId));
       const remBtn = document.getElementById('pna-editor-prop-remove');
@@ -806,12 +869,13 @@
       if (defBtn) defBtn.addEventListener('click', () => resetToDefault(o.instanceId));
     }
     function applyPropInput(o, key, rawValue, commit) {
-      if (isLocked(o)) return;
+      if (key === 'x' && isLockedX(o)) return;
+      if (key === 'y' && isLockedY(o)) return;
       const value = parseFloat(rawValue);
       if (!isFinite(value)) return;
       if (commit) pushHistory();
-      if (key === 'x') o.x = o.assetType === 'dog_spawn' ? DOG_FIXED_X : clampX(value);
-      else if (key === 'y') o.y = o.assetType === 'basket_spawn' ? BASKET_BASELINE_Y : o.assetType === 'dog_spawn' ? clampDogY(value) : clampY(value);
+      if (key === 'x') o.x = clampX(value);
+      else if (key === 'y') o.y = clampYForType(o.assetType, value);
       else if (key === 'vx' || key === 'vy') { o.properties = o.properties || {}; o.properties[key] = value; }
       draw();
       if (commit) { markDirtyUI(); updateToolbarState(); renderSelectionStatus(); }
@@ -980,18 +1044,12 @@
       if (sel && !isLocked(sel) && e.key.indexOf('Arrow') === 0) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
-        // Basket: horizontal-only (Up/Down ignored). Dog: vertical-only
-        // (Left/Right ignored, permanently pinned to DOG_FIXED_X).
-        // Dream Bones: free movement on both axes.
-        const isDog = sel.assetType === 'dog_spawn';
-        const isBasket = sel.assetType === 'basket_spawn';
+        const lockedX = isLockedX(sel), lockedY = isLockedY(sel);
         let moved = true;
-        if (isDog && e.key === 'ArrowUp') { pushHistory(); sel.y = clampDogY(sel.y - step); sel.x = DOG_FIXED_X; }
-        else if (isDog && e.key === 'ArrowDown') { pushHistory(); sel.y = clampDogY(sel.y + step); sel.x = DOG_FIXED_X; }
-        else if (!isDog && e.key === 'ArrowLeft') { pushHistory(); sel.x = clampX(sel.x - step); }
-        else if (!isDog && e.key === 'ArrowRight') { pushHistory(); sel.x = clampX(sel.x + step); }
-        else if (!isDog && !isBasket && e.key === 'ArrowUp') { pushHistory(); sel.y = clampY(sel.y - step); }
-        else if (!isDog && !isBasket && e.key === 'ArrowDown') { pushHistory(); sel.y = clampY(sel.y + step); }
+        if (!lockedX && e.key === 'ArrowLeft') { pushHistory(); sel.x = clampX(sel.x - step); }
+        else if (!lockedX && e.key === 'ArrowRight') { pushHistory(); sel.x = clampX(sel.x + step); }
+        else if (!lockedY && e.key === 'ArrowUp') { pushHistory(); sel.y = clampYForType(sel.assetType, sel.y - step); }
+        else if (!lockedY && e.key === 'ArrowDown') { pushHistory(); sel.y = clampYForType(sel.assetType, sel.y + step); }
         else moved = false;
         if (!moved) return;
         markDirtyUI(); renderProps(); renderSelectionStatus(); draw(); updateToolbarState();

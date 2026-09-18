@@ -191,7 +191,8 @@
   // ---------------------------------------------------------------
   function setupLevel(level) {
     currentLevel = level;
-    basket = window.PNA_Basket.createBasket(images);
+    const basketStartY = (level.basketStart && typeof level.basketStart.y === 'number') ? level.basketStart.y : CFG.PHYSICS.basketDefaultSurfaceY;
+    basket = window.PNA_Basket.createBasket(images, basketStartY);
     basket.state.x = (level.basketStart && typeof level.basketStart.x === 'number') ? level.basketStart.x : CFG.DESIGN_W / 2;
     dog = window.PNA_Dog.createDog(images, level);
     dog.state.y = basket.state.y - 14;
@@ -379,6 +380,8 @@
   function launchDogFromBasket() {
     basket.state.x = (currentLevel.basketStart && typeof currentLevel.basketStart.x === 'number')
       ? currentLevel.basketStart.x : CFG.DESIGN_W / 2;
+    basket.state.y = (currentLevel.basketStart && typeof currentLevel.basketStart.y === 'number')
+      ? currentLevel.basketStart.y : CFG.PHYSICS.basketDefaultSurfaceY;
     basket.state.vx = 0;
     basket.state.squashTimer = 0;
 
