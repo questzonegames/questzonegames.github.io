@@ -647,7 +647,11 @@
     // falls back to an icon chip — still real, immediate feedback wired
     // to the same equippedItems state, just not pretending to be pixel-
     // attached to a character with no art for that slot.
-    const SLOT_ORDER = ['back', 'body', 'legs', 'boots', 'necklace', 'head', 'gloves', 'mainHand', 'offHand', 'accessory'];
+    // 'legs' sits BEFORE 'body' here on purpose — a top (e.g. White
+    // T-shirt) needs to render OVER a bottom's waistband (e.g. Grey
+    // Tracksuit Bottoms), the way a real shirt is tucked in/worn outside
+    // trousers, not the other way around.
+    const SLOT_ORDER = ['back', 'legs', 'body', 'boots', 'necklace', 'head', 'gloves', 'mainHand', 'offHand', 'accessory'];
     function clearEquipLayer(layerKey) {
       const limgs = equipLayers[layerKey];
       if (!limgs) return;
