@@ -70,6 +70,9 @@
     collectibles: {
       dreamBone: IMG + 'collectibles/dream-bone.png',
       goldenDreamBone: IMG + 'collectibles/golden-dream-bone.png',
+      goldenHeartBiscuit: IMG + 'collectibles/golden-heart-biscuit.png',
+      nightmareBone: IMG + 'collectibles/nightmare-bone.png',
+      freezeTimeBiscuit: IMG + 'collectibles/freeze-time-biscuit.png',
       dreamTennisBall: IMG + 'collectibles/dream-tennis-ball.png',
       squeakyMoonToy: IMG + 'collectibles/squeaky-moon-toy.png',
       starDogBiscuit: IMG + 'collectibles/star-dog-biscuit.png'
@@ -328,13 +331,26 @@
     dogSit: { w: 1254, h: 1254, centerX: 614.5, centerY: 576.5 }
   };
 
+  // A single, clearly named place to change the Golden Dream Bone's
+  // bonus score — already defined at 250 from an earlier round, kept
+  // (not reset to the brief's "500 if undefined" fallback) since the
+  // project already had an intended value.
+  const GOLDEN_DREAM_BONE_BONUS = 250;
+
   // ---------------------------------------------------------------
   // Collectible type registry — data-driven so a new collectible only
-  // ever needs a new entry here, never a physics/engine change.
-  // ---------------------------------------------------------------
+  // ever needs a new entry here, never a physics/engine change. `kind`
+  // is what pup-n-away.js's onBoneCollected() branches on for a type's
+  // actual gameplay side effect ('required' = counts toward level
+  // completion, same as always; 'bonusScore'/'extraLife'/'loseLife'/
+  // 'freezeTimer' are the 4 new pickups this round, none of which
+  // count toward that total).
   const COLLECTIBLE_TYPES = {
-    dreamBone: { asset: 'dreamBone', points: 100, radius: 46, active: true },
-    goldenDreamBone: { asset: 'goldenDreamBone', points: 250, radius: 46, active: false },
+    dreamBone: { asset: 'dreamBone', points: 100, radius: 46, active: true, kind: 'required' },
+    goldenDreamBone: { asset: 'goldenDreamBone', points: GOLDEN_DREAM_BONE_BONUS, radius: 46, active: true, kind: 'bonusScore' },
+    goldenHeartBiscuit: { asset: 'goldenHeartBiscuit', points: 0, radius: 46, active: true, kind: 'extraLife' },
+    nightmareBone: { asset: 'nightmareBone', points: 0, radius: 46, active: true, kind: 'loseLife' },
+    freezeTimeBiscuit: { asset: 'freezeTimeBiscuit', points: 0, radius: 46, active: true, kind: 'freezeTimer', freezeSeconds: 5 },
     dreamTennisBall: { asset: 'dreamTennisBall', points: 50, radius: 42, active: false },
     squeakyMoonToy: { asset: 'squeakyMoonToy', points: 75, radius: 44, active: false },
     starDogBiscuit: { asset: 'starDogBiscuit', points: 60, radius: 42, active: false }

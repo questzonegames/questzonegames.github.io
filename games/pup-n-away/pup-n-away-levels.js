@@ -38,6 +38,20 @@
   // as collectibles) — those object types are deliberately not
   // included here; adding them for real is a physics-engine change,
   // not an editor-data-model change.
+  // Editor asset types (snake_case, matching dog_spawn/basket_spawn/
+  // dream_bone's own convention) <-> the real gameplay collectible
+  // `type` keys in PNA_CONFIG.COLLECTIBLE_TYPES (camelCase) — these 4
+  // are non-required pickups (see level.pickups below), each with its
+  // own stable identity through save/load/publish, never collapsed
+  // into a generic Dream Bone.
+  const PICKUP_ASSET_TYPES = {
+    golden_dream_bone: 'goldenDreamBone',
+    golden_heart_biscuit: 'goldenHeartBiscuit',
+    nightmare_bone: 'nightmareBone',
+    freeze_time_biscuit: 'freezeTimeBiscuit'
+  };
+  const PICKUP_TYPES_BY_COLLECTIBLE = {};
+  Object.keys(PICKUP_ASSET_TYPES).forEach((k) => { PICKUP_TYPES_BY_COLLECTIBLE[PICKUP_ASSET_TYPES[k]] = k; });
   // ---------------------------------------------------------------
   function levelToEditorObjects(level) {
     const CFG = window.PNA_CONFIG;
@@ -66,6 +80,17 @@
         properties: {}
       });
     });
+    (level.pickups || []).forEach((p, i) => {
+      const assetType = PICKUP_TYPES_BY_COLLECTIBLE[p.type];
+      if (!assetType) return; // unknown/future pickup type — never crash the editor over it
+      objects.push({
+        instanceId: 'pickup-' + i + '-' + Math.random().toString(36).slice(2, 8),
+        assetType,
+        x: p.x, y: p.y,
+        rotation: 0, scale: 1, layer: 4, enabled: true,
+        properties: {}
+      });
+    });
     return objects;
   }
 
@@ -76,7 +101,10 @@
     const bones = list
       .filter((o) => o.assetType === 'dream_bone' && o.enabled !== false)
       .map((o) => ({ x: o.x, y: o.y }));
-    const fields = { bones };
+    const pickups = list
+      .filter((o) => PICKUP_ASSET_TYPES[o.assetType] && o.enabled !== false)
+      .map((o) => ({ x: o.x, y: o.y, type: PICKUP_ASSET_TYPES[o.assetType] }));
+    const fields = { bones, pickups };
     if (dogObj) {
       const p = dogObj.properties || {};
       fields.dogStart = { x: dogObj.x, y: dogObj.y, vx: p.vx || 0, vy: typeof p.vy === 'number' ? p.vy : -900 };

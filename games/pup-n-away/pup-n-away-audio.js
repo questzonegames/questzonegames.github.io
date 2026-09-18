@@ -24,7 +24,10 @@
     buttonClick: '../../assets/audio/pup-n-away/button-click.mp3',
     buttonUnavailable: '../../assets/audio/pup-n-away/button-unavailable.mp3',
     snoring: '../../assets/audio/pup-n-away/snoring.mp3',
-    dreamTransition: '../../assets/audio/pup-n-away/dream-transition.mp3'
+    dreamTransition: '../../assets/audio/pup-n-away/dream-transition.mp3',
+    extraLife: '../../assets/audio/pup-n-away/extra-life.mp3',
+    nightmareBone: '../../assets/audio/pup-n-away/nightmare-bone.mp3',
+    freezeTime: '../../assets/audio/pup-n-away/freeze-time.mp3'
   };
   const MUSIC_PATHS = {
     background: '../../assets/audio/pup-n-away/music-background.mp3',

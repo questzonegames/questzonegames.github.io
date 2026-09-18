@@ -110,6 +110,7 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     column-gap: 14px;
+    position: relative; /* anchors #pna-freeze-indicator just above the bar */
   }
   /* The supplied PNG's own canvas has huge transparent margins above
      and below the actual drawn bar (measured directly from the pixels:
@@ -340,6 +341,24 @@
   }
   #pna-miss-banner.hidden { display: none; }
   #pna-miss-banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  /* Nightmare Bone reuses the same banner element/animation with its
+     own text and a red-tinted variant — never a second banner. */
+  #pna-miss-banner.pna-banner-nightmare { color: #ff4d4d; text-shadow: 0 0 26px rgba(255,30,30,0.85), 0 2px 4px rgba(0,0,0,0.8); }
+  /* Golden Dream Bone's "+N" score popup reuses the same banner too. */
+  #pna-miss-banner.pna-banner-bonus { color: #ffd66b; text-shadow: 0 0 26px rgba(255,214,107,0.85), 0 2px 4px rgba(0,0,0,0.8); }
+
+  /* ---- Freeze-Time Biscuit status pill — sits just ABOVE the HUD
+     toolbar bar, never overlapping its Score/Bones/Time/Lives columns
+     (which live inside #pna-toolbar-crop below it). ---- */
+  #pna-freeze-indicator {
+    position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%);
+    margin-bottom: 6px; z-index: 6; white-space: nowrap;
+    font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: clamp(11px, 2.4cqw, 15px);
+    color: #eaf6ff; background: linear-gradient(180deg, #2a5fb8 0%, #123a7a 100%);
+    border: 1.5px solid #7fd4ff; border-radius: 999px; padding: 4px 14px;
+    box-shadow: 0 0 14px rgba(120,200,255,0.55), 0 2px 6px rgba(0,0,0,0.5);
+  }
+  #pna-freeze-indicator.hidden { display: none; }
 
   /* ---- overlay screens ---- */
   .pna-overlay {
@@ -1184,6 +1203,7 @@
        percentages were measured). Entirely outside the playable 16:9
        stage above, so nothing in a level is ever covered up. -->
   <div id="pna-hud-wrapper">
+    <div id="pna-freeze-indicator" class="hidden">TIME FROZEN: 5</div>
     <div id="pna-toolbar-crop">
       <div id="pna-toolbar-frame">
         <img id="pna-toolbar-art" src="../../assets/img/pup-n-away/hud/toolbar.png" alt="">
@@ -1335,20 +1355,20 @@
      of these files from a previous session, which is indistinguishable
      from a real regression when testing — several past "still broken"
      reports turned out to be this. -->
-<script src="pup-n-away-config.js?v=32"></script>
-<script src="pup-n-away-assets.js?v=32"></script>
-<script src="pup-n-away-input.js?v=32"></script>
-<script src="pup-n-away-audio.js?v=32"></script>
-<script src="pup-n-away-physics.js?v=32"></script>
-<script src="pup-n-away-basket.js?v=32"></script>
-<script src="pup-n-away-dog.js?v=32"></script>
-<script src="pup-n-away-collectibles.js?v=32"></script>
-<script src="pup-n-away-levels.js?v=32"></script>
-<script src="pup-n-away-ui.js?v=32"></script>
-<script src="pup-n-away-integration.js?v=32"></script>
-<script src="pup-n-away-menus.js?v=32"></script>
-<script src="pup-n-away-editor.js?v=32"></script>
-<script src="pup-n-away.js?v=32"></script>
+<script src="pup-n-away-config.js?v=35"></script>
+<script src="pup-n-away-assets.js?v=35"></script>
+<script src="pup-n-away-input.js?v=35"></script>
+<script src="pup-n-away-audio.js?v=35"></script>
+<script src="pup-n-away-physics.js?v=35"></script>
+<script src="pup-n-away-basket.js?v=35"></script>
+<script src="pup-n-away-dog.js?v=35"></script>
+<script src="pup-n-away-collectibles.js?v=35"></script>
+<script src="pup-n-away-levels.js?v=35"></script>
+<script src="pup-n-away-ui.js?v=35"></script>
+<script src="pup-n-away-integration.js?v=35"></script>
+<script src="pup-n-away-menus.js?v=35"></script>
+<script src="pup-n-away-editor.js?v=35"></script>
+<script src="pup-n-away.js?v=35"></script>
 <script>
   // Development-only hotspot alignment aid (see the .pna-ui-debug CSS
   // rule above) — never enabled unless explicitly requested via

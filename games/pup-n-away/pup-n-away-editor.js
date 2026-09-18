@@ -5,12 +5,13 @@
 // the object types this engine actually has real behavior for today —
 // the level's one Dog Start Position, its one Basket Start Position
 // (always present, never toolbar assets, never removable/duplicable),
-// and any number of Dream Bones (the only real spawnable asset today).
-// Hazards, boosters, wind, movement paths and per-type width/height/
-// rotation editing are NOT implemented because the physics/collision
-// engine has no corresponding behavior for them yet — adding fake
-// controls for systems that don't exist would be a mock, not a real
-// editor.
+// and any number of the 5 real spawnable collectibles (Dream Bone,
+// Golden Dream Bone, Golden Heart Biscuit, Nightmare Bone, Freeze-Time
+// Biscuit — see PLACEABLE_ASSET_DEFS). Hazards/boosters/wind/movement
+// paths and per-type width/height/rotation editing are NOT implemented
+// because the physics/collision engine has no corresponding behavior
+// for them yet — adding fake controls for systems that don't exist
+// would be a mock, not a real editor.
 //
 // Every load/save/publish/restore call goes through
 // PNA_Integration.getLevelEditorData()/saveLevelDraft()/publishLevel()/
@@ -23,7 +24,6 @@
   function createEditor(deps) {
     const { canvas, images, CFG, levels, integration, audio, ui, startPlaytest, onExitToLobby, resizeCanvasForDPR } = deps;
     const DESIGN_W = CFG.DESIGN_W, DESIGN_H = CFG.DESIGN_H;
-    const BONE_RADIUS = CFG.COLLECTIBLE_TYPES.dreamBone.radius;
     const HISTORY_LIMIT = 60;
 
     // Matches pup-n-away-basket.js's fixed bounce-plane Y (state.y =
@@ -73,13 +73,37 @@
 
     // Measured directly off assets/img/pup-n-away/ui/editor/admin-tool.png
     // (a percentage-gridline overlay read at 1% steps, same method as
-    // every other PNA_CONFIG.UI_HOTSPOTS entry) — the top-left slot of
-    // its 3-column x 7-row grid. Every other slot is left genuinely
-    // empty (per the brief); this is the only one wired up, since
-    // Dream Bone is the only real spawnable asset today.
-    const TOOLBAR_SLOT_1 = { left: 26.0, width: 13.5, top: 21.0, height: 11.5 };
+    // every other PNA_CONFIG.UI_HOTSPOTS entry) — slot 1 of its 3-
+    // column x 7-row grid. COL_PITCH/ROW_PITCH are the measured centre-
+    // to-centre spacing to the next column/row; every slot beyond the
+    // 5 wired up here is left genuinely empty, per the brief.
+    // Re-measured with a dedicated tall single-column grid crop after
+    // the original height (11.5%) turned out to be taller than the
+    // slot's actual visible blue interior (~8%) — that overshoot was
+    // what let previews bleed into the gold border/neighbouring row.
+    const SLOT_SIZE = { width: 12.0, height: 7.0 };
+    const SLOT_1 = { left: 26.7, top: 17.2 };
+    const COL_PITCH = 19.7;
+    const ROW_PITCH = 10.83;
+    function slotAt(col, row) {
+      return { left: SLOT_1.left + col * COL_PITCH, top: SLOT_1.top + row * ROW_PITCH, width: SLOT_SIZE.width, height: SLOT_SIZE.height };
+    }
 
-    const DREAM_BONE_DEF = { assetType: 'dream_bone', label: 'Dream Bone', imgKey: 'collectibles.dreamBone' };
+    // Every real spawnable asset — the white Dream Bone plus this
+    // round's 4 new pickups. `collectibleType` is the matching key in
+    // PNA_CONFIG.COLLECTIBLE_TYPES (used for its real radius/points and
+    // to look up its image); `assetType` is the editor's own snake_case
+    // instance-type string (see PICKUP_ASSET_TYPES in
+    // pup-n-away-levels.js for the save/load mapping).
+    const PLACEABLE_ASSET_DEFS = [
+      { assetType: 'dream_bone', collectibleType: 'dreamBone', label: 'Dream Bone', slot: slotAt(0, 0) },
+      { assetType: 'golden_dream_bone', collectibleType: 'goldenDreamBone', label: 'Golden Dream Bone', slot: slotAt(1, 0) },
+      { assetType: 'golden_heart_biscuit', collectibleType: 'goldenHeartBiscuit', label: 'Golden Heart Biscuit', slot: slotAt(2, 0) },
+      { assetType: 'nightmare_bone', collectibleType: 'nightmareBone', label: 'Nightmare Bone', slot: slotAt(0, 1) },
+      { assetType: 'freeze_time_biscuit', collectibleType: 'freezeTimeBiscuit', label: 'Freeze-Time Biscuit', slot: slotAt(1, 1) }
+    ];
+    function placeableDef(assetType) { return PLACEABLE_ASSET_DEFS.find((d) => d.assetType === assetType); }
+    function imgKeyFor(collectibleType) { return 'collectibles.' + CFG.COLLECTIBLE_TYPES[collectibleType].asset; }
 
     let isOpen = false;
     let currentLevelId = null;
@@ -206,6 +230,7 @@
         selectedId = null;
         history = []; future = [];
         bgImage = images[levels.backgroundKey(staticLevel)] || null;
+        setZoom(1);
         syncLevelPickers();
         renderProps();
         renderSelectionStatus();
@@ -241,9 +266,17 @@
       el.levelSelect.innerHTML = inAct.map((l) =>
         '<option value="' + l.id + '">Level ' + l.positionInAct + ' — ' + l.name + '</option>').join('');
     }
-    function switchToPickedLevel() {
+    // If loadLevel() is declined (an unsaved-changes confirm the admin
+    // said no to) or otherwise fails, the native <select> has already
+    // visually jumped to the newly-picked option — without this, the
+    // dropdown would show the new level while the map/canvas silently
+    // kept showing the old one. Reverting both pickers back to the
+    // real current level keeps them truthful.
+    async function switchToPickedLevel() {
       const id = el.levelSelect.value;
-      if (id && id !== currentLevelId) loadLevel(id, {});
+      if (!id || id === currentLevelId) return;
+      const ok = await loadLevel(id, {});
+      if (!ok) syncLevelPickers();
     }
     function syncLevelPickers() {
       const level = levels.all().find((l) => l.id === currentLevelId);
@@ -256,50 +289,58 @@
 
     // ---------------------------------------------------------------
     // Left ADMIN toolbar — the real supplied 3-column graphic, shown
-    // whole and uncropped; only its first slot gets a real interactive
-    // hotspot (Dream Bone, the only actual spawnable asset). Every
-    // other slot is genuinely left empty, per the brief.
+    // whole and uncropped; 5 of its slots get a real interactive
+    // hotspot, one per real spawnable asset (PLACEABLE_ASSET_DEFS).
+    // Every other slot is genuinely left empty, per the brief.
     // ---------------------------------------------------------------
     function buildToolbarSlots() {
       el.toolbarSlots.innerHTML = '';
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'pna-editor-asset-slot';
-      btn.id = 'pna-editor-asset-dream-bone';
-      btn.style.left = TOOLBAR_SLOT_1.left + '%';
-      btn.style.top = TOOLBAR_SLOT_1.top + '%';
-      btn.style.width = TOOLBAR_SLOT_1.width + '%';
-      btn.style.height = TOOLBAR_SLOT_1.height + '%';
-      btn.setAttribute('aria-label', 'Dream Bone — click to arm placement, or drag onto the level');
-      btn.title = 'Dream Bone';
-      const img = document.createElement('img');
-      img.alt = ''; img.draggable = false;
-      if (images[DREAM_BONE_DEF.imgKey]) img.src = images[DREAM_BONE_DEF.imgKey].src;
-      btn.appendChild(img);
-      btn.addEventListener('click', () => armPlacement());
-      btn.addEventListener('pointerdown', onToolbarPointerDown);
-      el.toolbarSlots.appendChild(btn);
+      PLACEABLE_ASSET_DEFS.forEach((def) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pna-editor-asset-slot';
+        btn.id = 'pna-editor-asset-' + def.assetType.replace(/_/g, '-');
+        btn.style.left = def.slot.left + '%';
+        btn.style.top = def.slot.top + '%';
+        btn.style.width = def.slot.width + '%';
+        btn.style.height = def.slot.height + '%';
+        btn.setAttribute('aria-label', def.label + ' — click to arm placement, or drag onto the level');
+        btn.title = def.label;
+        const img = document.createElement('img');
+        img.alt = ''; img.draggable = false;
+        const imgObj = images[imgKeyFor(def.collectibleType)];
+        if (imgObj) img.src = imgObj.src;
+        btn.appendChild(img);
+        btn.addEventListener('click', () => armPlacement(def.assetType));
+        btn.addEventListener('pointerdown', (e) => onToolbarPointerDown(e, def));
+        el.toolbarSlots.appendChild(btn);
+      });
     }
-    function armPlacement() {
+    function toolbarSlotEl(assetType) { return document.getElementById('pna-editor-asset-' + assetType.replace(/_/g, '-')); }
+    function armPlacement(assetType) {
       audio.play('buttonClick');
-      placingType = placingType === 'dream_bone' ? null : 'dream_bone';
+      placingType = placingType === assetType ? null : assetType;
       if (placingType) selectedId = null; // "READY TO PLACE" must win over any prior selection
-      const slot = document.getElementById('pna-editor-asset-dream-bone');
-      if (slot) slot.classList.toggle('pna-editor-asset-armed', !!placingType);
+      PLACEABLE_ASSET_DEFS.forEach((def) => {
+        const slot = toolbarSlotEl(def.assetType);
+        if (slot) slot.classList.toggle('pna-editor-asset-armed', placingType === def.assetType);
+      });
       renderProps(); renderSelectionStatus(); draw();
     }
 
-    // Drag-out-of-toolbar placement: pointerdown on the slot starts a
+    // Drag-out-of-toolbar placement: pointerdown on a slot starts a
     // ghost image following the pointer; releasing over the stage
-    // creates a new Dream Bone there, releasing elsewhere cancels.
-    function onToolbarPointerDown(e) {
+    // creates a new instance of that asset there, releasing elsewhere
+    // cancels.
+    function onToolbarPointerDown(e, def) {
       e.preventDefault();
       const startX = e.clientX, startY = e.clientY;
       let dragging = false;
       function ensureGhost() {
         if (toolbarDragGhost) return;
+        const imgObj = images[imgKeyFor(def.collectibleType)];
         toolbarDragGhost = document.createElement('img');
-        toolbarDragGhost.src = images[DREAM_BONE_DEF.imgKey] ? images[DREAM_BONE_DEF.imgKey].src : '';
+        toolbarDragGhost.src = imgObj ? imgObj.src : '';
         toolbarDragGhost.style.cssText = 'position:fixed;z-index:80;width:44px;height:44px;object-fit:contain;' +
           'pointer-events:none;opacity:0.85;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 8px rgba(0,0,0,0.6));';
         document.body.appendChild(toolbarDragGhost);
@@ -318,20 +359,19 @@
         const inside = ev.clientX >= rect.left && ev.clientX <= rect.right && ev.clientY >= rect.top && ev.clientY <= rect.bottom;
         if (!inside) return; // released outside the stage — cancelled
         const p = toDesignSpace(ev.clientX, ev.clientY);
-        createBoneAt(p.x, p.y);
+        createPickupAt(p.x, p.y, def.assetType);
       }
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
     }
     function closeArmedVisual() {
-      const slot = document.getElementById('pna-editor-asset-dream-bone');
-      if (slot) slot.classList.remove('pna-editor-asset-armed');
+      PLACEABLE_ASSET_DEFS.forEach((def) => { const slot = toolbarSlotEl(def.assetType); if (slot) slot.classList.remove('pna-editor-asset-armed'); });
     }
-    function createBoneAt(x, y) {
+    function createPickupAt(x, y, assetType) {
       pushHistory();
       const obj = {
-        instanceId: newInstanceId('dream_bone'),
-        assetType: 'dream_bone',
+        instanceId: newInstanceId(assetType),
+        assetType,
         x: Math.round(clampX(snap(x))), y: Math.round(clampY(snap(y))),
         rotation: 0, scale: 1, layer: 4, enabled: true, locked: false, properties: {}
       };
@@ -359,7 +399,10 @@
       return { x: (x / DESIGN_W) * rect.width, y: (y / DESIGN_H) * rect.height };
     }
     function snap(v) { return snapToGrid ? Math.round(v / 20) * 20 : v; }
-    function iconRadiusFor(assetType) { return assetType === 'dream_bone' ? BONE_RADIUS : 56; }
+    function iconRadiusFor(assetType) {
+      const def = placeableDef(assetType);
+      return def ? CFG.COLLECTIBLE_TYPES[def.collectibleType].radius : 56;
+    }
     function clampX(x) { return Math.max(0, Math.min(DESIGN_W, x)); }
     function clampY(y) { return Math.max(0, Math.min(DESIGN_H, y)); }
     function clampDogY(y) { return Math.max(DOG_MIN_Y, Math.min(DOG_MAX_Y, y)); }
@@ -439,10 +482,10 @@
         else { ctx.fillStyle = '#ffd66b'; ctx.beginPath(); ctx.arc(o.x, o.y, r * 0.5, 0, Math.PI * 2); ctx.fill(); }
         ctx.restore();
 
-        if (showHitboxes && o.assetType === 'dream_bone') {
+        if (showHitboxes && placeableDef(o.assetType)) {
           ctx.save();
           ctx.strokeStyle = '#2dff8f'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(o.x, o.y, BONE_RADIUS, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(o.x, o.y, r, 0, Math.PI * 2); ctx.stroke();
           ctx.restore();
         }
 
@@ -467,13 +510,15 @@
     function imgFor(o) {
       if (o.assetType === 'dog_spawn') return images.dogSit;
       if (o.assetType === 'basket_spawn') return images['baskets.default'];
-      if (o.assetType === 'dream_bone') return images[DREAM_BONE_DEF.imgKey];
+      const def = placeableDef(o.assetType);
+      if (def) return images[imgKeyFor(def.collectibleType)];
       return null;
     }
     function labelFor(assetType) {
       if (assetType === 'dog_spawn') return 'DOG START POSITION';
       if (assetType === 'basket_spawn') return 'BASKET START POSITION';
-      if (assetType === 'dream_bone') return 'DREAM BONE';
+      const def = placeableDef(assetType);
+      if (def) return def.label.toUpperCase();
       return assetType;
     }
 
@@ -505,7 +550,7 @@
       closeContextMenu();
 
       if (placingType) {
-        createBoneAt(p.x, p.y);
+        createPickupAt(p.x, p.y, placingType);
         placingType = null;
         closeArmedVisual();
         return;
@@ -624,10 +669,10 @@
     }
     function duplicateObject(instanceId) {
       const o = findObj(instanceId);
-      if (!o || o.assetType !== 'dream_bone') return; // only Dream Bones may be duplicated
+      if (!o || !placeableDef(o.assetType)) return; // dog/basket can never be duplicated
       pushHistory();
       const copy = clone(o);
-      copy.instanceId = newInstanceId('dream_bone');
+      copy.instanceId = newInstanceId(o.assetType);
       copy.locked = false;
       copy.x = Math.min(DESIGN_W, o.x + 40);
       copy.y = Math.min(DESIGN_H, o.y + 40);
@@ -637,7 +682,7 @@
     }
     function removeObject(instanceId) {
       const o = findObj(instanceId);
-      if (!o || o.assetType !== 'dream_bone') return; // dog/basket can never be removed
+      if (!o || !placeableDef(o.assetType)) return; // dog/basket can never be removed
       pushHistory();
       objects = objects.filter((x) => x.instanceId !== instanceId);
       if (selectedId === instanceId) selectedId = null;
@@ -651,7 +696,8 @@
     function renderSelectionStatus() {
       const o = findObj(selectedId);
       if (!o) {
-        el.selectionStatusBody.textContent = placingType === 'dream_bone' ? 'DREAM BONE READY TO PLACE' : 'NO ASSET SELECTED';
+        const armedDef = placingType ? placeableDef(placingType) : null;
+        el.selectionStatusBody.textContent = armedDef ? armedDef.label.toUpperCase() + ' READY TO PLACE' : 'NO ASSET SELECTED';
       } else {
         const lockSpan = '<span class="' + (o.locked ? 'pna-editor-status-locked">Locked' : 'pna-editor-status-unlocked">Unlocked') + '</span>';
         el.selectionStatusBody.innerHTML =
@@ -669,14 +715,13 @@
     // ---------------------------------------------------------------
     function renderSpawnedAssets() {
       el.spawnedAssetsList.innerHTML = '';
-      let boneN = 0;
+      const countByType = {};
       const ordered = objects.slice().sort((a, b) => {
         const rank = (o) => o.assetType === 'dog_spawn' ? 0 : o.assetType === 'basket_spawn' ? 1 : 2;
         return rank(a) - rank(b);
       });
       ordered.forEach((o) => {
-        const isBone = o.assetType === 'dream_bone';
-        if (isBone) boneN++;
+        const def = placeableDef(o.assetType);
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'pna-editor-spawn-row' + (o.instanceId === selectedId ? ' pna-editor-spawn-row-selected' : '');
@@ -687,7 +732,12 @@
         row.appendChild(img);
         const label = document.createElement('span');
         label.className = 'pna-editor-spawn-row-label';
-        label.textContent = isBone ? 'Dream Bone ' + boneN : toTitleCase(labelFor(o.assetType));
+        if (def) {
+          countByType[o.assetType] = (countByType[o.assetType] || 0) + 1;
+          label.textContent = def.label + ' ' + countByType[o.assetType];
+        } else {
+          label.textContent = toTitleCase(labelFor(o.assetType));
+        }
         row.appendChild(label);
         const lock = document.createElement('span');
         lock.className = 'pna-editor-spawn-row-lock';
@@ -926,7 +976,7 @@
       if (ctrl && e.key.toLowerCase() === 's') { e.preventDefault(); saveDraft(); return; }
       if (e.key === 'Escape') { e.preventDefault(); placingType = null; closeArmedVisual(); closeContextMenu(); selectedId = null; renderProps(); renderSelectionStatus(); draw(); return; }
       const sel = findObj(selectedId);
-      if ((e.key === 'Delete' || e.key === 'Backspace') && sel && sel.assetType === 'dream_bone') { e.preventDefault(); removeObject(selectedId); return; }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && sel && placeableDef(sel.assetType)) { e.preventDefault(); removeObject(selectedId); return; }
       if (sel && !isLocked(sel) && e.key.indexOf('Arrow') === 0) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;

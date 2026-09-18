@@ -149,6 +149,7 @@
   let countdownValue = 3;
   let countdownTimerMs = 0;
   let missTimerMs = 0;
+  let freezeRemainingMs = 0; // Freeze-Time Biscuit — remaining pause on the level clock, 0 = not active
   let returningToBasket = false;
   let levelOutcomeHandledPending = false;
   let levelElapsedMs = 0;   // resets each level; how long THIS attempt has taken so far
@@ -203,6 +204,8 @@
     // zero, regardless of how the previous level or run went.
     run.lives = CFG.PHYSICS.startingLives;
     levelElapsedMs = 0;
+    freezeRemainingMs = 0;
+    ui.setFreezeIndicator(null);
     ui.updateHud({
       score: run.score, bonesCollected: 0, bonesTotal: collectibles.total,
       lives: run.lives, levelName: level.name
@@ -210,17 +213,50 @@
     ui.setTimerText(0);
   }
 
+  // Branches on the collected item's `kind` (see PNA_CONFIG.COLLECTIBLE_
+  // TYPES) — 'required' (a real Dream Bone) is the exact original
+  // behavior, unchanged; the other four are this round's new pickups.
+  // None of the four ever touch dog/basket position or velocity, the
+  // bounce in progress, collected-bones count, or the level's required
+  // total — only their own specific side effect.
   function onBoneCollected(item, collectedCount, total) {
-    run.score += collectibles.scoreForType(item.type);
-    run.bonesThisRun++;
-    audio.play(collectedCount >= total ? 'finalBoneCollected' : 'boneCollected');
+    const typeDef = CFG.COLLECTIBLE_TYPES[item.type];
+    let triggerGameOver = false;
+    switch (typeDef.kind) {
+      case 'bonusScore': // Golden Dream Bone
+        run.score += typeDef.points;
+        audio.play('powerup');
+        ui.flashMissBanner('+' + typeDef.points, 'bonus');
+        break;
+      case 'extraLife': // Golden Heart Biscuit
+        run.lives++;
+        audio.play('extraLife');
+        break;
+      case 'loseLife': // Nightmare Bone — dog keeps flying; only lives change
+        run.lives--;
+        audio.play('nightmareBone');
+        ui.flashMissBanner('NIGHTMARE!', 'nightmare');
+        if (run.lives <= 0) triggerGameOver = true;
+        break;
+      case 'freezeTimer': // Freeze-Time Biscuit — stacks onto any active freeze
+        freezeRemainingMs += (typeDef.freezeSeconds || 5) * 1000;
+        ui.setFreezeIndicator(Math.ceil(freezeRemainingMs / 1000));
+        audio.play('freezeTime');
+        break;
+      default: // 'required' — a real Dream Bone
+        run.score += typeDef.points;
+        run.bonesThisRun++;
+        audio.play(collectedCount >= total ? 'finalBoneCollected' : 'boneCollected');
+        if (collectedCount >= total) returningToBasket = true;
+    }
     ui.updateHud({
       score: run.score, bonesCollected: collectedCount, bonesTotal: total,
       lives: run.lives, levelName: currentLevel.name
     });
-    if (collectedCount >= total) {
-      returningToBasket = true;
-    }
+    // Uses the existing Game Over path exactly as a normal miss would —
+    // but never goes through handleMiss()/LIFE_LOST, so the dog is
+    // never repositioned or interrupted first.
+    if (triggerGameOver) finishRunToGameOver();
   }
 
   // ---------------------------------------------------------------
@@ -479,7 +515,17 @@
 
     if (state !== STATES.PLAYING) return;
 
-    levelElapsedMs += dt * 1000;
+    // Freeze-Time Biscuit — ONLY the level clock pauses; everything
+    // below this (basket, dog physics, collectibles, HUD lives/score)
+    // keeps running completely normally.
+    if (freezeRemainingMs > 0) {
+      freezeRemainingMs = Math.max(0, freezeRemainingMs - dt * 1000);
+      const secondsLeft = Math.ceil(freezeRemainingMs / 1000);
+      if (freezeRemainingMs <= 0) ui.setFreezeIndicator(null);
+      else ui.setFreezeIndicator(secondsLeft);
+    } else {
+      levelElapsedMs += dt * 1000;
+    }
     ui.setTimerText(levelElapsedMs);
 
     basket.update(dt, input.state);

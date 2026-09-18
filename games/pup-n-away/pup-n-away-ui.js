@@ -109,11 +109,26 @@
       updateLivesDisplay($('pna-hud-lives'), lives);
     }
 
-    function flashMissBanner() {
+    // text/variant defaults to the original "Missed!" banner exactly as
+    // before; the Nightmare Bone reuses this same element/animation
+    // with its own text and a red-tinted variant class rather than a
+    // second banner implementation.
+    function flashMissBanner(text, variant) {
       if (!missBanner) return;
+      missBanner.textContent = text || 'Missed!';
+      missBanner.classList.toggle('pna-banner-nightmare', variant === 'nightmare');
+      missBanner.classList.toggle('pna-banner-bonus', variant === 'bonus');
       missBanner.classList.remove('hidden');
       missBanner.classList.add('show');
       setTimeout(() => { missBanner.classList.remove('show'); missBanner.classList.add('hidden'); }, 900);
+    }
+
+    function setFreezeIndicator(secondsLeft) {
+      const el = $('pna-freeze-indicator');
+      if (!el) return;
+      if (secondsLeft == null) { el.classList.add('hidden'); return; }
+      el.textContent = 'TIME FROZEN: ' + secondsLeft;
+      el.classList.remove('hidden');
     }
 
     function setLoadingProgress(done, total) {
@@ -181,7 +196,7 @@
     }
 
     return {
-      showScreen, setHudVisible, updateHud, flashMissBanner, setLoadingProgress,
+      showScreen, setHudVisible, updateHud, flashMissBanner, setFreezeIndicator, setLoadingProgress,
       setCountdownText, setTimerText, setLevelCompletePanel, setGameOverPanel, bindButton, bindButtonOnce
     };
   }
