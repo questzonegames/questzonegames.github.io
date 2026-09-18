@@ -79,8 +79,7 @@
     if (cat && cat.views && cat.views.front) return '<img src="' + cat.views.front + '" alt="">';
     if (cat && cat.icon) return cat.icon;
     // clean, honest placeholder — never fabricated art for an item that
-    // doesn't have real art yet (see White T-shirt: no `views` on
-    // purpose in inventory-data.js until real art exists)
+    // doesn't have real art yet in inventory-data.js
     return '📦';
   }
 

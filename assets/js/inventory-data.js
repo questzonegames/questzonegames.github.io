@@ -132,27 +132,31 @@
         left:  '../assets/img/equipment/head/admin-crown-left.png'
       }
     },
-    // White T-shirt — Shop's one new item this update (see
-    // supabase/migrations/20260914030000_white_tshirt_item.sql for the
-    // real, server-authoritative economy row: item_id 'white-tshirt',
-    // free, one per player, untradeable). Deliberately NO `views`/`frames`
-    // here — there's no on-body art yet, so it shows as a plain icon chip
-    // everywhere (Inventory, Worn Equipment, Shop) and is never
-    // visually equipped on the avatar until real art is supplied; add
-    // `views` the same way admin-crown/doggy-slippers do above once it
-    // exists, nothing else about this entry needs to change.
+    // White T-shirt — see supabase/migrations/20260914030000_white_tshirt_item.sql
+    // for the real, server-authoritative economy row: item_id 'white-tshirt',
+    // free, one per player, untradeable. `views.front` is the real on-body
+    // art (Quest Zone is front-view-only live, see avatar-mode.js) —
+    // positioned live via the Admin Avatar Rig tool (Admin Zone -> Avatar
+    // Rig), same anchor+offset+scale path as admin-crown/doggy-slippers
+    // above; no anchorType override needed since 'body' has its own default
+    // anchor row. No `frames` fallback yet — add one the same way
+    // admin-crown does if an offline/outage safety net is ever needed.
     {
       id: 'white-tshirt',
       name: 'White T-shirt',
       slot: 'body',
       icon: '👕',
       tradeable: false,
-      source: 'shop'
+      source: 'shop',
+      views: {
+        front: '../assets/img/equipment/body/white-tshirt-front.png'
+      }
     },
     // Test Sword — a genuine limited-edition (only 2 ever made) test item
     // for the shop's globally-limited-stock mechanic (see
     // supabase/migrations/20260914060000_test_sword_item.sql for the real
-    // economy row). No `views` yet, same reasoning as White T-shirt above.
+    // economy row). No `views` yet — no on-body art supplied for it,
+    // so it shows as a plain icon chip until it gets some.
     {
       id: 'test-sword',
       name: 'Test Sword',
