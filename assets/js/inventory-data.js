@@ -152,6 +152,24 @@
         front: '../assets/img/equipment/body/white-tshirt-front.png'
       }
     },
+    // Grey Tracksuit Bottoms — see
+    // supabase/migrations/20260919030000_grey_tracksuit_bottoms_item.sql
+    // for the real, server-authoritative economy row: item_id
+    // 'grey-tracksuit-bottoms', free, one per player, untradeable — same
+    // shape as White T-shirt above. `views.front` is the real on-body art,
+    // positioned live via the Admin Avatar Rig tool (Admin Zone -> Avatar
+    // Rig), same anchor+offset+scale path as every other live item.
+    {
+      id: 'grey-tracksuit-bottoms',
+      name: 'Grey Tracksuit Bottoms',
+      slot: 'legs',
+      icon: '👖',
+      tradeable: false,
+      source: 'shop',
+      views: {
+        front: '../assets/img/equipment/legs/grey-tracksuit-bottoms-front.png'
+      }
+    },
     // Test Sword — a genuine limited-edition (only 2 ever made) test item
     // for the shop's globally-limited-stock mechanic (see
     // supabase/migrations/20260914060000_test_sword_item.sql for the real
