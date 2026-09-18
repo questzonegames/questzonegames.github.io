@@ -176,6 +176,28 @@
         front: '../assets/img/equipment/body/green-ornate-suit-top-front.png'
       }
     },
+    // Ornate Green Suit Bottoms — see
+    // supabase/migrations/20260919080000_ornate_green_suit_bottoms_item.sql
+    // for the real, server-authoritative economy row: item_id
+    // 'ornate-green-suit-bottoms'. Same rules and security shape as Green
+    // Ornate Suit Top above (admin-gift-only, purchase_type stays null,
+    // untradeable, one per player) but a wholly separate legs-slot item —
+    // own item_id, own asset path, own avatar_rig_items row keyed by
+    // slot='legs', own inventory_items/equipped_items rows. Nothing about
+    // the suit top's record, art, rigging, or ownership is shared or
+    // reused; only the RULES (admin_grant_item(), is_admin(), tradeable
+    // check) are the same shared infrastructure every item already uses.
+    {
+      id: 'ornate-green-suit-bottoms',
+      name: 'Ornate Green Suit Bottoms',
+      slot: 'legs',
+      icon: '👖',
+      tradeable: false,
+      source: 'admin',
+      views: {
+        front: '../assets/img/equipment/legs/ornate-green-suit-bottoms-front.png'
+      }
+    },
     // Grey Tracksuit Bottoms — see
     // supabase/migrations/20260919030000_grey_tracksuit_bottoms_item.sql
     // for the real, server-authoritative economy row: item_id
