@@ -311,7 +311,7 @@
   const PAGE_SIZE = 18;
   const PIN_MAX = 7;
 
-  const CATEGORY_LABELS = { all: 'All', owned: 'Owned', games: 'Games', levels: 'Levels', ranks: 'Ranks', misc: 'Miscellaneous', pinned: 'Pinned' };
+  const CATEGORY_LABELS = { all: 'All', owned: 'Owned', games: 'Games', levels: 'Levels', ranks: 'Ranks', misc: 'Miscellaneous', pinned: 'Pinned', rewards: 'Rewards' };
   // Default-sort grouping — Games, then Levels, then Ranks, then
   // Miscellaneous, so "All" reads as tidy same-category blocks instead
   // of interleaving by the catalog's raw sort_order (which only
@@ -333,6 +333,22 @@
   // underlying tier" (matches the panel-art rule: a locked achievement
   // always shows the Locked panel no matter what tier it actually is).
   const TIER_FILTERS = ['locked', 'bronze', 'silver', 'gold', 'platinum', 'diamond', 'mythic'];
+
+  // Single shared source of truth for "does this achievement give a
+  // real reward" — the Rewards filter, its count badge, and the mapped
+  // achievement objects' own `hasReward` field all call this same
+  // function, never a second/duplicated reward list. Reads directly off
+  // public.achievements' own reward_item_ids/reward_quest_points columns
+  // (the same columns achievement-inspection.js's reward display line
+  // already reads) — accepts either the raw Supabase row (snake_case,
+  // used once at load time) or an already-mapped achievement object
+  // (camelCase, used everywhere else) so callers never need to care
+  // which shape they're holding.
+  function hasReward(a) {
+    const items = a.rewardItemIds || a.reward_item_ids;
+    const points = (a.rewardQuestPoints != null ? a.rewardQuestPoints : a.reward_quest_points) || 0;
+    return !!((items && items.length) || points > 0);
+  }
 
   let client = null;
   let uid = null;
@@ -439,7 +455,7 @@
 
     const { data: catalog, error } = await client
       .from('achievements')
-      .select('achievement_id,name,description,icon,icon_locked,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value,reward_item_ids')
+      .select('achievement_id,name,description,icon,icon_locked,tier,sort_order,category,game_key,hidden,requirement_type,requirement_game_key,requirement_value,reward_item_ids,reward_quest_points')
       .order('sort_order', { ascending: true });
     if (error || !catalog) { renderError('Could not load achievements right now.'); return; }
 
@@ -466,6 +482,8 @@
         icon: a.icon || '🏆',
         iconLocked: a.icon_locked || null,
         rewardItemIds: a.reward_item_ids || null,
+        rewardQuestPoints: a.reward_quest_points || 0,
+        hasReward: hasReward(a),
         tier: a.tier || '',
         category: a.category || 'misc',
         game_key: a.game_key || null,
@@ -494,7 +512,7 @@
   function renderFilters() {
     const root = $('ach-filters');
     root.innerHTML = '';
-    const categories = ['all', 'owned', 'games', 'levels', 'ranks', 'misc', 'pinned'];
+    const categories = ['all', 'owned', 'games', 'levels', 'ranks', 'misc', 'pinned', 'rewards'];
     categories.forEach((cat) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -502,6 +520,7 @@
       const count = cat === 'all' ? allAchievements.length
         : cat === 'owned' ? allAchievements.filter((a) => a.unlocked).length
         : cat === 'pinned' ? allAchievements.filter((a) => a.pinned).length
+        : cat === 'rewards' ? allAchievements.filter((a) => a.hasReward).length
         : allAchievements.filter((a) => a.category === cat).length;
       btn.innerHTML = escapeHtml(CATEGORY_LABELS[cat] || cat) + '<span class="count">' + count + '</span>';
       btn.addEventListener('click', () => {
@@ -581,6 +600,12 @@
       list = list.filter((a) => a.pinned);
     } else if (activeCategory === 'owned') {
       list = list.filter((a) => a.unlocked);
+    } else if (activeCategory === 'rewards') {
+      // Both locked and unlocked reward achievements show — this is
+      // deliberately NOT the same as 'owned' (which only shows unlocked
+      // ones): the whole point is letting a player see what they can
+      // still work towards, not just what they already have.
+      list = list.filter((a) => a.hasReward);
     } else if (activeCategory !== 'all') {
       list = list.filter((a) => a.category === activeCategory);
       if (activeCategory === 'games' && activeGame) list = list.filter((a) => a.game_key === activeGame);
