@@ -152,6 +152,30 @@
         front: '../assets/img/equipment/body/white-tshirt-front.png'
       }
     },
+    // Green Ornate Suit Top — see
+    // supabase/migrations/20260919070000_green_ornate_suit_top_item.sql for
+    // the real, server-authoritative economy row: item_id
+    // 'green-ornate-suit-top', not purchasable (purchase_type stays null,
+    // exactly like admin-crown), untradeable, one per player. Admin-only:
+    // the ONLY way any account ever gets this is an admin using the grant
+    // flow in profile/admin-inventory.html (admin_grant_item(), which
+    // already re-checks is_admin() server-side — see that migration's own
+    // comment for why nothing else needed to change there). `views.front`
+    // is the real on-body art, positioned live via the Admin Avatar Rig
+    // tool, same anchor+offset+scale path as every other live body item —
+    // second body-slot item after White T-shirt, no special-casing needed
+    // anywhere for a slot to have more than one item.
+    {
+      id: 'green-ornate-suit-top',
+      name: 'Green Ornate Suit Top',
+      slot: 'body',
+      icon: '🥋',
+      tradeable: false,
+      source: 'admin',
+      views: {
+        front: '../assets/img/equipment/body/green-ornate-suit-top-front.png'
+      }
+    },
     // Grey Tracksuit Bottoms — see
     // supabase/migrations/20260919030000_grey_tracksuit_bottoms_item.sql
     // for the real, server-authoritative economy row: item_id
@@ -169,20 +193,16 @@
       views: {
         front: '../assets/img/equipment/legs/grey-tracksuit-bottoms-front.png'
       }
-    },
-    // Test Sword — a genuine limited-edition (only 2 ever made) test item
-    // for the shop's globally-limited-stock mechanic (see
-    // supabase/migrations/20260914060000_test_sword_item.sql for the real
-    // economy row). No `views` yet — no on-body art supplied for it,
-    // so it shows as a plain icon chip until it gets some.
-    {
-      id: 'test-sword',
-      name: 'Test Sword',
-      slot: 'mainHand',
-      icon: '⚔️',
-      tradeable: false,
-      source: 'shop'
     }
+    // Test Sword existed here as a genuine limited-edition test item but
+    // was fully removed from the game (see
+    // supabase/migrations/20260919060000_archive_removed_items.sql) —
+    // its item_definitions row, ownership, and audit history are gone
+    // entirely (archived, not just discontinued). This catalog entry was
+    // deleted to match: admin_grant_item() never validates against
+    // item_definitions, so leaving a client-side entry for a deleted
+    // item_id would let an admin "grant" a nonexistent item and create
+    // an orphaned inventory_items row.
   ];
 
   window.QZ_EQUIPMENT_SLOTS = SLOTS;
