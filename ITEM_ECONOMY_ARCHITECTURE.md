@@ -288,6 +288,26 @@ to move a specific serial without recreating it. Nothing about `purchase_item`,
 that already exists (add art in `inventory-data.js` when ready; the
 economy side needs nothing further).
 
+**`numeric_id`** — a secondary, purely cosmetic sequential identifier
+(never a foreign key anywhere, never read by client code — see
+`git log --grep numeric_id` for the full investigation). For a REAL item,
+never set it explicitly — leave it to the column's own default
+(`nextval(item_definitions_numeric_id_seq)`), which continues the clean,
+gap-free run of real items (1, 2, 3, 4, ...).
+
+For a **temporary test/QA fixture item** (`is_test = true`, created and
+deleted within a single migration to exercise a code path — see §12),
+always assign `numeric_id` explicitly, from a separate negative range
+that starts at -100 and counts down (-100, -101, -102, ...), instead of
+letting it consume a real positive number from the shared sequence. A
+temporary item that's since been deleted burns whatever number it took
+forever (Postgres sequences never reuse a value, even across a delete) —
+that's exactly what caused the real sequence to jump from 3 straight to
+9 once, before a cleanup migration renumbered it back to a gap-free run.
+Keeping test items in their own negative range means this can never
+happen again, no matter how many temporary QA fixtures get created and
+cleaned up in the future.
+
 ## 12. Testing performed (temporary fixtures, all removed afterward)
 
 Four temporary `item_definitions` rows (`qa-test-a`..`d`, `is_test=true`)
