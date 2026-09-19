@@ -81,6 +81,34 @@
       source: 'achievement',
       sourceAchievementId: 'welcome_to_your_profile'
     },
+    // Green Ornate Shoes — see
+    // supabase/migrations/20260919090000_green_ornate_shoes_item.sql for
+    // the real, server-authoritative economy row: item_id
+    // 'green-ornate-shoes'. Same admin-gift-only shape as Green Ornate
+    // Suit Top/Bottoms, but a split-parts boots item — exact same shape
+    // as Doggy Slippers above (one item_id, one inventory_items row, two
+    // independently-rigged view layers). `parts`/`views.left`/
+    // `views.right` are what make setAvatarEquipment (avatar-viewer.js)
+    // mount TWO equip layers — 'boots#left' and 'boots#right' — for this
+    // single item, each defaulting to the 'left_foot'/'right_foot' anchor
+    // via defaultAnchorForPart('boots', part); no partAnchor override
+    // needed, identical to Doggy Slippers. iconImage is the pre-composed
+    // combined thumbnail — takes priority over auto-compositing the two
+    // views, same as Doggy Slippers' own iconImage does.
+    {
+      id: 'green-ornate-shoes',
+      name: 'Green Ornate Shoes',
+      slot: 'boots',
+      icon: '👞',
+      iconImage: '../assets/img/equipment/boots/green-ornate-shoes-icon.png',
+      parts: ['left', 'right'],
+      views: {
+        left:  { front: '../assets/img/equipment/boots/green-ornate-shoes-left-front.png' },
+        right: { front: '../assets/img/equipment/boots/green-ornate-shoes-right-front.png' }
+      },
+      tradeable: false,
+      source: 'admin'
+    },
     {
       id: 'admin-crown',
       name: 'Admin Crown',
