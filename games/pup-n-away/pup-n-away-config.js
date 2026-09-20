@@ -78,6 +78,21 @@
       starDogBiscuit: IMG + 'collectibles/star-dog-biscuit.png'
     },
 
+    // Permanent obstacles — real gameplay hazards/bumpers, not
+    // collectibles (nothing here is ever picked up or removed). The
+    // Star Core Orb is the first of these; `reference` is ONLY the
+    // Map Editor toolbar preview/placed-icon — it is never drawn during
+    // real gameplay, which assembles the object live from the other
+    // three layers (see pup-n-away-obstacles.js).
+    obstacles: {
+      starCoreOrb: {
+        reference: IMG + 'obstacles/star-core-orb/reference.png',
+        shell: IMG + 'obstacles/star-core-orb/orb-shell.png',
+        star: IMG + 'obstacles/star-core-orb/star.png',
+        ring: IMG + 'obstacles/star-core-orb/ring.png'
+      }
+    },
+
     backgrounds: {
       dreamBedroom: IMG + 'backgrounds/act1/dream-bedroom.png',
       backGarden: IMG + 'backgrounds/act1/back-garden.png',
@@ -460,7 +475,28 @@
     // ---- collectibles ----
     collectibleIdlePeriodMs: 2200,
     collectibleFloatPx: 10,
-    collectibleSpinDeg: 6
+    collectibleSpinDeg: 6,
+
+    // ---- Star Core Orb (permanent radial-bumper obstacle) ----
+    // displaySize is the design-px width/height of the FULL assembled
+    // canvas (all 3 layers share one 1254x1254 source canvas) at
+    // scale:1; collisionRadius was measured directly off the supplied
+    // ring artwork's own visible (non-transparent) pixel bounds — the
+    // ring's outer edge sits at ~43.06% of the shared canvas's half-
+    // width, so the collider always matches what the player actually
+    // sees, at any scale.
+    starCoreOrbDisplaySize: 110,
+    starCoreOrbCollisionRadius: 47.5,
+    // Named, independently-tunable rotation speeds — full turns per
+    // second, matching how everything else in this block is a plain,
+    // easily-adjusted number rather than a derived one.
+    starCoreOrbStarRotationsPerSec: 1 / 4,   // one counterclockwise turn every 4s
+    starCoreOrbRingRotationsPerSec: 1 / 6,   // one clockwise turn every 6s
+    // Stronger than a normal wall bounce (which only reflects the dog's
+    // existing speed at 0.96x), fast enough to redirect noticeably, but
+    // safely under bounceSpeedMax so a full-charge basket bounce is
+    // still the single fastest thing in the level.
+    starCoreOrbLaunchSpeed: 1700
   };
 
   // ---------------------------------------------------------------

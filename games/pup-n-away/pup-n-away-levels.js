@@ -52,6 +52,16 @@
   };
   const PICKUP_TYPES_BY_COLLECTIBLE = {};
   Object.keys(PICKUP_ASSET_TYPES).forEach((k) => { PICKUP_TYPES_BY_COLLECTIBLE[PICKUP_ASSET_TYPES[k]] = k; });
+
+  // Permanent obstacles (never collected/removed) — same snake_case
+  // editor assetType <-> camelCase gameplay `type` mapping convention
+  // as PICKUP_ASSET_TYPES above, just a separate map since these save
+  // into level.obstacles, not level.pickups.
+  const OBSTACLE_ASSET_TYPES = {
+    star_core_orb: 'starCoreOrb'
+  };
+  const OBSTACLE_TYPES_BY_ASSET = {};
+  Object.keys(OBSTACLE_ASSET_TYPES).forEach((k) => { OBSTACLE_TYPES_BY_ASSET[OBSTACLE_ASSET_TYPES[k]] = k; });
   // ---------------------------------------------------------------
   function levelToEditorObjects(level) {
     const CFG = window.PNA_CONFIG;
@@ -91,6 +101,17 @@
         properties: {}
       });
     });
+    (level.obstacles || []).forEach((ob, i) => {
+      const assetType = OBSTACLE_TYPES_BY_ASSET[ob.type];
+      if (!assetType) return; // unknown/future obstacle type — never crash the editor over it
+      objects.push({
+        instanceId: ob.id || ('obstacle-' + i + '-' + Math.random().toString(36).slice(2, 8)),
+        assetType,
+        x: ob.x, y: ob.y,
+        rotation: 0, scale: typeof ob.scale === 'number' ? ob.scale : 1, layer: 4, enabled: true,
+        properties: { launchSpeed: typeof ob.launchSpeed === 'number' ? ob.launchSpeed : CFG.PHYSICS.starCoreOrbLaunchSpeed }
+      });
+    });
     return objects;
   }
 
@@ -104,7 +125,17 @@
     const pickups = list
       .filter((o) => PICKUP_ASSET_TYPES[o.assetType] && o.enabled !== false)
       .map((o) => ({ x: o.x, y: o.y, type: PICKUP_ASSET_TYPES[o.assetType] }));
-    const fields = { bones, pickups };
+    const obstacles = list
+      .filter((o) => OBSTACLE_ASSET_TYPES[o.assetType] && o.enabled !== false)
+      .map((o) => ({
+        id: o.instanceId,
+        type: OBSTACLE_ASSET_TYPES[o.assetType],
+        x: o.x, y: o.y,
+        scale: typeof o.scale === 'number' ? o.scale : 1,
+        launchSpeed: (o.properties && typeof o.properties.launchSpeed === 'number')
+          ? o.properties.launchSpeed : window.PNA_CONFIG.PHYSICS.starCoreOrbLaunchSpeed
+      }));
+    const fields = { bones, pickups, obstacles };
     if (dogObj) {
       const p = dogObj.properties || {};
       fields.dogStart = { x: dogObj.x, y: dogObj.y, vx: p.vx || 0, vy: typeof p.vy === 'number' ? p.vy : -900 };

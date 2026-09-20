@@ -95,6 +95,7 @@
 
     function onBasketImpact() { state.impactFlashMs = 160; }
     function onWallImpact() { state.impactFlashMs = 110; }
+    function onObstacleImpact() { state.impactFlashMs = 160; }
 
     // Draws any frame anchored consistently regardless of the source
     // PNG's own transparent padding — 'center' mode aligns the sprite's
@@ -164,7 +165,7 @@
       }
     }
 
-    return { state, setGroundPosition, launch, update, updateRunAnimation, onBasketImpact, onWallImpact, draw, spriteDrawRect };
+    return { state, setGroundPosition, launch, update, updateRunAnimation, onBasketImpact, onWallImpact, onObstacleImpact, draw, spriteDrawRect };
   }
 
   window.PNA_Dog = { createDog, BOUNCE_POSE };

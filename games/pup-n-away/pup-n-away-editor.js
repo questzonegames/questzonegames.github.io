@@ -102,15 +102,30 @@
     // to look up its image); `assetType` is the editor's own snake_case
     // instance-type string (see PICKUP_ASSET_TYPES in
     // pup-n-away-levels.js for the save/load mapping).
+    // star_core_orb is the first PLACEABLE entry that isn't a
+    // collectible — it carries `isObstacle: true` plus its own
+    // `toolbarImgKey`/`radius` directly instead of routing through
+    // COLLECTIBLE_TYPES like the 5 pickups above. See
+    // toolbarImgKeyFor()/iconRadiusFor() below for the branch.
     const PLACEABLE_ASSET_DEFS = [
       { assetType: 'dream_bone', collectibleType: 'dreamBone', label: 'Dream Bone', slot: slotAt(0, 0) },
       { assetType: 'golden_dream_bone', collectibleType: 'goldenDreamBone', label: 'Golden Dream Bone', slot: slotAt(1, 0) },
       { assetType: 'golden_heart_biscuit', collectibleType: 'goldenHeartBiscuit', label: 'Golden Heart Biscuit', slot: slotAt(2, 0) },
       { assetType: 'nightmare_bone', collectibleType: 'nightmareBone', label: 'Nightmare Bone', slot: slotAt(0, 1) },
-      { assetType: 'freeze_time_biscuit', collectibleType: 'freezeTimeBiscuit', label: 'Freeze-Time Biscuit', slot: slotAt(1, 1) }
+      { assetType: 'freeze_time_biscuit', collectibleType: 'freezeTimeBiscuit', label: 'Freeze-Time Biscuit', slot: slotAt(1, 1) },
+      {
+        assetType: 'star_core_orb', label: 'Star Core Orb', slot: slotAt(2, 1), isObstacle: true,
+        toolbarImgKey: 'obstacles.starCoreOrb.reference',
+        radius: CFG.PHYSICS.starCoreOrbCollisionRadius
+      }
     ];
     function placeableDef(assetType) { return PLACEABLE_ASSET_DEFS.find((d) => d.assetType === assetType); }
     function imgKeyFor(collectibleType) { return 'collectibles.' + CFG.COLLECTIBLE_TYPES[collectibleType].asset; }
+    // The Map Editor only ever shows ONE static icon per placed object
+    // (the dog/basket icons aren't animated either) — for the orb
+    // that's the supplied reference image, never the live rotating
+    // 3-layer assembly real gameplay draws (see pup-n-away-obstacles.js).
+    function toolbarImgKeyFor(def) { return def.isObstacle ? def.toolbarImgKey : imgKeyFor(def.collectibleType); }
 
     let isOpen = false;
     let currentLevelId = null;
@@ -356,7 +371,7 @@
         btn.title = def.label;
         const img = document.createElement('img');
         img.alt = ''; img.draggable = false;
-        const imgObj = images[imgKeyFor(def.collectibleType)];
+        const imgObj = images[toolbarImgKeyFor(def)];
         if (imgObj) img.src = imgObj.src;
         btn.appendChild(img);
         btn.addEventListener('click', () => armPlacement(def.assetType));
@@ -386,7 +401,7 @@
       let dragging = false;
       function ensureGhost() {
         if (toolbarDragGhost) return;
-        const imgObj = images[imgKeyFor(def.collectibleType)];
+        const imgObj = images[toolbarImgKeyFor(def)];
         toolbarDragGhost = document.createElement('img');
         toolbarDragGhost.src = imgObj ? imgObj.src : '';
         toolbarDragGhost.style.cssText = 'position:fixed;z-index:80;width:44px;height:44px;object-fit:contain;' +
@@ -423,6 +438,7 @@
         x: Math.round(clampX(snap(x))), y: Math.round(clampY(snap(y))),
         rotation: 0, scale: 1, layer: 4, enabled: true, lockX: false, lockY: false, properties: {}
       };
+      if (assetType === 'star_core_orb') obj.properties.launchSpeed = CFG.PHYSICS.starCoreOrbLaunchSpeed;
       objects.push(obj);
       selectedId = obj.instanceId;
       markDirtyUI(); renderProps(); renderSelectionStatus(); draw(); updateToolbarState();
@@ -447,9 +463,17 @@
       return { x: (x / DESIGN_W) * rect.width, y: (y / DESIGN_H) * rect.height };
     }
     function snap(v) { return snapToGrid ? Math.round(v / 20) * 20 : v; }
-    function iconRadiusFor(assetType) {
+    // Accepts either an assetType string (radius alone) or a full
+    // placed-object (radius scaled by that object's own `scale` field —
+    // only the orb actually varies scale per-instance today; every
+    // other type's `scale` stays 1 and this is a no-op for them).
+    function iconRadiusFor(o) {
+      const assetType = typeof o === 'string' ? o : o.assetType;
       const def = placeableDef(assetType);
-      return def ? CFG.COLLECTIBLE_TYPES[def.collectibleType].radius : 56;
+      if (!def) return 56;
+      const base = def.isObstacle ? def.radius : CFG.COLLECTIBLE_TYPES[def.collectibleType].radius;
+      const scale = (typeof o === 'object' && typeof o.scale === 'number') ? o.scale : 1;
+      return base * scale;
     }
     function clampX(x) { return Math.max(0, Math.min(DESIGN_W, x)); }
     function clampY(y) { return Math.max(0, Math.min(DESIGN_H, y)); }
@@ -528,7 +552,7 @@
       const drawOrder = objects.slice().sort((a, b) => (a.layer || 0) - (b.layer || 0));
       drawOrder.forEach((o) => {
         const img = imgFor(o);
-        const r = iconRadiusFor(o.assetType);
+        const r = iconRadiusFor(o);
         ctx.save();
         ctx.globalAlpha = o.enabled === false ? 0.35 : 1;
         if (img) ctx.drawImage(img, o.x - r, o.y - r, r * 2, r * 2);
@@ -564,7 +588,7 @@
       if (o.assetType === 'dog_spawn') return images.dogSit;
       if (o.assetType === 'basket_spawn') return images['baskets.default'];
       const def = placeableDef(o.assetType);
-      if (def) return images[imgKeyFor(def.collectibleType)];
+      if (def) return images[toolbarImgKeyFor(def)];
       return null;
     }
     function labelFor(assetType) {
@@ -591,7 +615,7 @@
       const drawOrder = objects.slice().sort((a, b) => (a.layer || 0) - (b.layer || 0));
       for (let i = drawOrder.length - 1; i >= 0; i--) {
         const o = drawOrder[i];
-        const r = iconRadiusFor(o.assetType);
+        const r = iconRadiusFor(o);
         if (Math.hypot(o.x - x, o.y - y) <= r) return o;
       }
       return null;
@@ -837,6 +861,12 @@
         html += field('Launch VX', 'vx', (o.properties && o.properties.vx) || 0, bothLocked);
         html += field('Launch VY', 'vy', (o.properties && o.properties.vy) || 0, bothLocked);
       }
+      if (o.assetType === 'star_core_orb') {
+        html += field('Scale', 'scale', typeof o.scale === 'number' ? o.scale : 1, false);
+        const launchSpeed = (o.properties && typeof o.properties.launchSpeed === 'number')
+          ? o.properties.launchSpeed : CFG.PHYSICS.starCoreOrbLaunchSpeed;
+        html += field('Launch Speed', 'launchSpeed', Math.round(launchSpeed), false, 'px/s');
+      }
       html += '<div class="pna-editor-field pna-editor-field-row"><input type="checkbox" id="pna-editor-prop-lock-x" ' + (lockedX ? 'checked' : '') + '><label for="pna-editor-prop-lock-x">Lock X</label></div>';
       html += '<div class="pna-editor-field pna-editor-field-row"><input type="checkbox" id="pna-editor-prop-lock-y" ' + (lockedY ? 'checked' : '') + '><label for="pna-editor-prop-lock-y">Lock Y</label></div>';
       html += '<div class="pna-editor-props-actions">';
@@ -877,6 +907,8 @@
       if (key === 'x') o.x = clampX(value);
       else if (key === 'y') o.y = clampYForType(o.assetType, value);
       else if (key === 'vx' || key === 'vy') { o.properties = o.properties || {}; o.properties[key] = value; }
+      else if (key === 'scale') o.scale = Math.max(0.25, Math.min(3, value));
+      else if (key === 'launchSpeed') { o.properties = o.properties || {}; o.properties.launchSpeed = Math.max(200, value); }
       draw();
       if (commit) { markDirtyUI(); updateToolbarState(); renderSelectionStatus(); }
     }

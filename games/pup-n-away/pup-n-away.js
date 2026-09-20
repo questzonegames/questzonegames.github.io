@@ -128,6 +128,7 @@
   let basket = null;
   let dog = null;
   let collectibles = null;
+  let obstacles = null;
   let currentLevel = null;
   let editor = null;
   // Playtest (Level Editor only) — a real run through the real physics/
@@ -199,6 +200,7 @@
     dog.state.x = basket.state.x;
     dog.setGroundPosition(basket.state.x, basket.state.y - 6, 'right');
     collectibles = window.PNA_Collectibles.createCollectibleField(level, onBoneCollected);
+    obstacles = window.PNA_Obstacles.createObstacleField(level);
     returningToBasket = false;
     run.bonesThisRun = 0;
     // Every level is a fresh attempt: three lives and the clock back to
@@ -319,6 +321,12 @@
     if (playtestBar) playtestBar.classList.toggle('pna-editor-active', playtestMode);
     if (reopenEditorAfterThisGoTo && editor) {
       const reopenLevelId = currentLevel && currentLevel.id;
+      // The LOBBY transition just above (this same goTo() call) turned
+      // the menu slideshow back on — the editor is about to take over
+      // the canvas immediately after, so it must go straight back off,
+      // or its last frame sits on top of the editor exactly like it did
+      // over real gameplay before that was fixed (see PNA_LobbyBackground).
+      if (window.PNA_LobbyBackground) window.PNA_LobbyBackground.stop();
       editor.open({ reopenLevelId });
     }
   }
@@ -580,6 +588,24 @@
     dog.update(dt);
     collectibles.update(dt, dog.state);
 
+    // Permanent radial-bumper obstacles (Star Core Orb) — checked after
+    // the basket/wall step and collectibles, same discrete-per-frame
+    // style as collectibles, but with its own swept check inside
+    // (pup-n-away-obstacles.js) so a fast-moving dog can't tunnel
+    // through between frames. A hit directly overwrites dog position/
+    // velocity, so this must run before dog.updateRunAnimation()/the
+    // next render() — both already happen after this point in the loop.
+    if (obstacles) {
+      const hitObstacle = obstacles.update(dt, dog.state);
+      if (hitObstacle) {
+        dog.onObstacleImpact();
+        // Reuses the existing basket-bounce "boing" per the brief's own
+        // first option — a dedicated Star Core sound can replace this
+        // one line later with zero other changes needed.
+        audio.play('basketBounce', { restart: true });
+      }
+    }
+
     if (result.missed) {
       handleMiss();
     }
@@ -609,6 +635,7 @@
 
     drawBackground();
     if (basket) basket.draw(ctx);
+    if (obstacles) obstacles.draw(ctx, images);
     if (collectibles) collectibles.draw(ctx, images);
     if (dog) dog.draw(ctx, images);
   }
@@ -922,7 +949,16 @@
     editor = window.PNA_Editor.createEditor({
       canvas, images, CFG, levels, integration, audio, ui, startPlaytest,
       resizeCanvasForDPR,
-      onExitToLobby: () => goTo(STATES.LOBBY)
+      // `state` never actually left STATES.LOBBY while the editor was
+      // open (see wireLevelEditorButton()), so this goTo() is a same-
+      // state no-op as far as its own menu-state diff is concerned and
+      // will NOT turn the slideshow back on by itself — start() is
+      // called explicitly right after for exactly that reason. start()
+      // always clears any existing timer first, so calling it when the
+      // slideshow happens to already be running (e.g. exiting Playtest,
+      // where the LOBBY transition just above already re-started it)
+      // is always safe, never stacks a second interval.
+      onExitToLobby: () => { goTo(STATES.LOBBY); if (window.PNA_LobbyBackground) window.PNA_LobbyBackground.start(); }
     });
     wireLevelEditorButton();
     await loadPublishedLevelOverrides();
@@ -948,6 +984,14 @@
     btn.hidden = false;
     btn.addEventListener('click', async () => {
       audio.play('buttonClick');
+      // The Level Editor is opened directly from the Lobby without ever
+      // going through goTo() (it owns the canvas itself — see
+      // editor.isOpen() in loop()), so `state` never actually leaves
+      // STATES.LOBBY and the menu slideshow's own start()/stop() calls
+      // (driven purely by goTo()'s state diff) never fire for this
+      // transition. Without this, the slideshow's last frame sits
+      // permanently on top of the editor's canvas.
+      if (window.PNA_LobbyBackground) window.PNA_LobbyBackground.stop();
       await editor.open({});
     });
   }
@@ -1019,6 +1063,7 @@
     pump(dtSeconds) { resizeCanvasForDPR(); update(dtSeconds); render(); },
     goTo, ui, audio, menus, levels, integration, startGame, transitionToLevel, wireAdminDebugToggle,
     get dog() { return dog; }, get basket() { return basket; }, get collectibles() { return collectibles; },
+    get obstacles() { return obstacles; },
     get editor() { return editor; }
   };
 })();

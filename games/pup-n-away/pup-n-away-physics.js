@@ -141,5 +141,22 @@
     return dx * dx + dy * dy <= r * r;
   }
 
-  window.PNA_Physics = { computeBounceVelocity, stepDog, circleOverlap };
+  // Swept circle-vs-circle: true if a point travelling in a straight
+  // line from (x1,y1) to (x2,y2) ever comes within `r` of (cx,cy).
+  // Used for fast-moving-obstacle collision (e.g. the Star Core Orb)
+  // where a single per-frame circleOverlap() at the END position alone
+  // could let a high-speed dog tunnel straight through between frames —
+  // pass r = obstacleRadius + dogRadius (the dog is the moving point,
+  // already collapsed into the combined radius).
+  function circleSweepHit(x1, y1, x2, y2, cx, cy, r) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq > 0 ? ((cx - x1) * dx + (cy - y1) * dy) / lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const px = x1 + t * dx, py = y1 + t * dy;
+    const ddx = px - cx, ddy = py - cy;
+    return ddx * ddx + ddy * ddy <= r * r;
+  }
+
+  window.PNA_Physics = { computeBounceVelocity, stepDog, circleOverlap, circleSweepHit };
 })();
