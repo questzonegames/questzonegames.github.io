@@ -81,7 +81,13 @@
     backgrounds: {
       dreamBedroom: IMG + 'backgrounds/act1/dream-bedroom.png',
       backGarden: IMG + 'backgrounds/act1/back-garden.png',
-      houseRooftop: IMG + 'backgrounds/act1/house-rooftop.png'
+      houseRooftop: IMG + 'backgrounds/act1/house-rooftop.png',
+      aboveTheCity: IMG + 'backgrounds/act2/above-the-city.png',
+      cloudAscent: IMG + 'backgrounds/act2/cloud-ascent.png',
+      dreamSpace: IMG + 'backgrounds/act2/dream-space.png',
+      mountainCrossing: IMG + 'backgrounds/act3/mountain-crossing.png',
+      oreLitRavine: IMG + 'backgrounds/act3/ore-lit-ravine.png',
+      heartOfTheDeep: IMG + 'backgrounds/act3/heart-of-the-deep.png'
     },
 
     // Lobby-only rotating background slideshow (see pup-n-away-lobby-bg.js)
@@ -518,6 +524,109 @@
       ]),
       gravity: PHYSICS.gravity * 1.04,
       bounceSpeed: PHYSICS.bounceSpeedMax * 1.06
+    },
+
+    // ---- Act 2: "Journey to the Stars" ----
+    // Bone layouts below are deliberately simple, evenly-spaced grids
+    // using only the standard Dream Bone (per the brief: don't place
+    // special collectibles into new levels just because the toolbar has
+    // them) — a clean, fully data-driven placeholder that the Level
+    // Editor can freely rearrange later once real layouts are designed.
+    {
+      id: 'above-the-city',
+      name: 'Above the City',
+      act: 2,
+      positionInAct: 1,
+      background: 'aboveTheCity',
+      basket: 'default',
+      dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 },
+      bones: bonesGrid([
+        [300, 260], [660, 190], [1020, 220], [1380, 190], [1650, 300],
+        [200, 500], [960, 420], [1720, 500], [560, 660], [1360, 660], [960, 840]
+      ]),
+      gravity: PHYSICS.gravity * 1.08,
+      bounceSpeed: PHYSICS.bounceSpeedMax * 1.09
+    },
+    {
+      id: 'cloud-ascent',
+      name: 'Cloud Ascent',
+      act: 2,
+      positionInAct: 2,
+      background: 'cloudAscent',
+      basket: 'default',
+      dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 },
+      bones: bonesGrid([
+        [260, 240], [640, 170], [960, 140], [1280, 170], [1660, 240],
+        [180, 470], [1740, 470], [700, 360], [1220, 360], [960, 580],
+        [480, 720], [1440, 720]
+      ]),
+      gravity: PHYSICS.gravity * 1.12,
+      bounceSpeed: PHYSICS.bounceSpeedMax * 1.12
+    },
+    {
+      id: 'dream-space',
+      name: 'Dream Space',
+      act: 2,
+      positionInAct: 3,
+      background: 'dreamSpace',
+      basket: 'default',
+      dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -950 },
+      bones: bonesGrid([
+        [240, 220], [600, 150], [960, 120], [1320, 150], [1680, 220],
+        [160, 440], [1760, 440], [680, 320], [1240, 320], [960, 540],
+        [420, 680], [1500, 680], [960, 860]
+      ]),
+      gravity: PHYSICS.gravity * 1.16,
+      bounceSpeed: PHYSICS.bounceSpeedMax * 1.15
+    },
+
+    // ---- Act 3: "From Frost to Flame" ----
+    {
+      id: 'mountain-crossing',
+      name: 'Mountain Crossing',
+      act: 3,
+      positionInAct: 1,
+      background: 'mountainCrossing',
+      basket: 'default',
+      dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 },
+      bones: bonesGrid([
+        [320, 260], [680, 190], [1040, 220], [1400, 190], [1660, 300],
+        [220, 500], [960, 420], [1700, 500], [580, 660], [1340, 660], [960, 840]
+      ]),
+      gravity: PHYSICS.gravity * 1.20,
+      bounceSpeed: PHYSICS.bounceSpeedMax * 1.18
+    },
+    {
+      id: 'ore-lit-ravine',
+      name: 'Ore-Lit Ravine',
+      act: 3,
+      positionInAct: 2,
+      background: 'oreLitRavine',
+      basket: 'default',
+      dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -900 },
+      bones: bonesGrid([
+        [260, 240], [640, 170], [960, 140], [1280, 170], [1660, 240],
+        [180, 470], [1740, 470], [700, 360], [1220, 360], [960, 580],
+        [480, 720], [1440, 720]
+      ]),
+      gravity: PHYSICS.gravity * 1.24,
+      bounceSpeed: PHYSICS.bounceSpeedMax * 1.21
+    },
+    {
+      id: 'heart-of-the-deep',
+      name: 'Heart of the Deep',
+      act: 3,
+      positionInAct: 3,
+      background: 'heartOfTheDeep',
+      basket: 'default',
+      dogStart: { x: DESIGN_W / 2, y: DESIGN_H - 260, vx: 0, vy: -950 },
+      bones: bonesGrid([
+        [240, 220], [600, 150], [960, 120], [1320, 150], [1680, 220],
+        [160, 440], [1760, 440], [680, 320], [1240, 320], [960, 540],
+        [420, 680], [1500, 680], [960, 860]
+      ]),
+      gravity: PHYSICS.gravity * 1.28,
+      bounceSpeed: PHYSICS.bounceSpeedMax * 1.24
     }
   ];
 

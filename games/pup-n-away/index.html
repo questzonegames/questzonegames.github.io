@@ -510,6 +510,13 @@
     -webkit-user-drag: none;
   }
   .pna-lobby-bg-layer.pna-lobby-bg-visible { opacity: 1; }
+  /* Gameplay/editor/result-screen states hide this element outright
+     (display:none, not just opacity) — it sits AFTER #pna-canvas in
+     document order, so with every .pna-overlay hidden during PLAYING
+     (no menu screen left to paint over it), leaving it visible would
+     otherwise cover the entire game canvas with a frozen background
+     image. See stop()/start() in pup-n-away-lobby-bg.js. */
+  .pna-lobby-bg.pna-lobby-bg-inactive { display: none; }
   #pna-screen-level-select .pna-ui-frame,
   #pna-screen-challenges .pna-ui-frame,
   #pna-screen-equipment .pna-ui-frame { width: min(96%, 980px); aspect-ratio: 1672 / 941; }
@@ -1439,21 +1446,21 @@
      of these files from a previous session, which is indistinguishable
      from a real regression when testing — several past "still broken"
      reports turned out to be this. -->
-<script src="pup-n-away-config.js?v=38"></script>
-<script src="pup-n-away-assets.js?v=38"></script>
-<script src="pup-n-away-input.js?v=38"></script>
-<script src="pup-n-away-audio.js?v=38"></script>
-<script src="pup-n-away-physics.js?v=38"></script>
-<script src="pup-n-away-basket.js?v=38"></script>
-<script src="pup-n-away-dog.js?v=38"></script>
-<script src="pup-n-away-collectibles.js?v=38"></script>
-<script src="pup-n-away-levels.js?v=38"></script>
-<script src="pup-n-away-ui.js?v=38"></script>
-<script src="pup-n-away-integration.js?v=38"></script>
-<script src="pup-n-away-menus.js?v=38"></script>
-<script src="pup-n-away-editor.js?v=38"></script>
-<script src="pup-n-away-lobby-bg.js?v=38"></script>
-<script src="pup-n-away.js?v=38"></script>
+<script src="pup-n-away-config.js?v=40"></script>
+<script src="pup-n-away-assets.js?v=40"></script>
+<script src="pup-n-away-input.js?v=40"></script>
+<script src="pup-n-away-audio.js?v=40"></script>
+<script src="pup-n-away-physics.js?v=40"></script>
+<script src="pup-n-away-basket.js?v=40"></script>
+<script src="pup-n-away-dog.js?v=40"></script>
+<script src="pup-n-away-collectibles.js?v=40"></script>
+<script src="pup-n-away-levels.js?v=40"></script>
+<script src="pup-n-away-ui.js?v=40"></script>
+<script src="pup-n-away-integration.js?v=40"></script>
+<script src="pup-n-away-menus.js?v=40"></script>
+<script src="pup-n-away-editor.js?v=40"></script>
+<script src="pup-n-away-lobby-bg.js?v=40"></script>
+<script src="pup-n-away.js?v=40"></script>
 <script>
   // Development-only hotspot alignment aid (see the .pna-ui-debug CSS
   // rule above) — never enabled unless explicitly requested via

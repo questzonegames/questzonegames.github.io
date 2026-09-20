@@ -326,6 +326,48 @@
       hint._pnaTimer = setTimeout(() => hint.classList.add('hidden'), 1600);
     }
 
+    // Highest act the server currently allows this player to open
+    // (1 = only Act 1). Set by refreshLevelSelect() from
+    // integration.getProgression() and re-read live by every act
+    // button's click handler below, so a stale bake-time value can
+    // never let a click through — the source of truth is always
+    // whatever the server last reported.
+    let highestUnlockedAct = 1;
+    // Which act's 3 level cards are currently drawn in the fixed
+    // 3-slot card row — starts on Act 1 and only ever changes via
+    // clicking an unlocked act button.
+    let viewedAct = 1;
+    let lsActEntries = []; // { act, btn, img, lockImg, label }
+
+    function updateActButtonVisual(entry) {
+      const art = CFG.ASSETS.ui.levelSelect;
+      const unlocked = entry.act <= highestUnlockedAct;
+      entry.img.src = entry.act === viewedAct ? art.actButtonSelected : art.actButtonNormal;
+      entry.lockImg.classList.toggle('hidden', unlocked);
+      entry.btn.setAttribute('aria-disabled', String(!unlocked));
+      entry.btn.setAttribute('aria-label', unlocked
+        ? ('Act ' + entry.act + (entry.act === viewedAct ? ' (viewing)' : ''))
+        : ('Act ' + entry.act + ' — locked'));
+    }
+
+    function refreshActButtonVisuals() {
+      lsActEntries.forEach(updateActButtonVisual);
+      const plateLabel = $('pna-ls-act-name-label');
+      if (plateLabel) plateLabel.textContent = 'ACT ' + viewedAct;
+    }
+
+    function renderLevelCards() {
+      const levelsForAct = levels.all().filter((l) => l.act === viewedAct);
+      lsCards.forEach((card, i) => {
+        const level = levelsForAct[i] || null;
+        card.level = level;
+        card.wrap.classList.toggle('hidden', !level);
+        if (!level) return;
+        card.thumb.src = CFG.ASSETS.backgrounds[level.background];
+        card.nameLabel.textContent = level.name;
+      });
+    }
+
     function buildLevelSelectStatic() {
       if (levelSelectBuilt) return;
       levelSelectBuilt = true;
@@ -335,13 +377,16 @@
 
       // ---- Act 1-10 buttons — a real <button> whose own art IS the
       // act-button PNG (blue normal / gold selected), never a duplicate
-      // box drawn behind or over it. Act 1 is the only real, unlocked
-      // act today; 2-10 stay real, ENABLED buttons (normal cursor, no
-      // native :disabled, no red prohibited symbol) that simply decline
-      // the action with a themed hint — there is no code path anywhere
-      // that flips them open.
+      // box drawn behind or over it. Every act button is a real,
+      // ENABLED control (normal cursor, no native :disabled, no red
+      // prohibited symbol) — a locked one simply declines the click
+      // with a themed hint (see updateActButtonVisual(), which is the
+      // only place that ever decides lock state, driven by the
+      // server-reported highestUnlockedAct). Acts beyond the 3 that
+      // exist today (4-10) can never become clickable since
+      // highestUnlockedAct can never exceed the real act count.
+      lsActEntries = [];
       for (let act = 1; act <= 10; act++) {
-        const isAct1 = act === 1;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'pna-ls-act-btn';
@@ -354,30 +399,33 @@
         const img = document.createElement('img');
         img.className = 'pna-ls-act-btn-art';
         img.alt = ''; img.draggable = false;
-        img.src = isAct1 ? art.actButtonSelected : art.actButtonNormal;
         btn.appendChild(img);
         const label = document.createElement('span');
         label.className = 'pna-ls-act-btn-label';
         label.textContent = 'ACT ' + act;
         btn.appendChild(label);
+        const lockImg = document.createElement('img');
+        lockImg.className = 'pna-ls-act-lock hidden';
+        lockImg.alt = ''; lockImg.draggable = false;
+        lockImg.src = art.lockedPadlock;
+        btn.appendChild(lockImg);
 
-        if (isAct1) {
-          btn.setAttribute('aria-label', 'Act 1');
-          wireHoverSound(btn);
-          btn.addEventListener('click', () => audio.play('buttonClick'));
-        } else {
-          btn.setAttribute('aria-label', 'Act ' + act + ' — locked');
-          btn.setAttribute('aria-disabled', 'true');
-          const lockImg = document.createElement('img');
-          lockImg.className = 'pna-ls-act-lock';
-          lockImg.alt = ''; lockImg.draggable = false;
-          lockImg.src = art.lockedPadlock;
-          btn.appendChild(lockImg);
-          btn.addEventListener('click', () => {
+        wireHoverSound(btn);
+        const entry = { act, btn, img, lockImg, label };
+        btn.addEventListener('click', () => {
+          if (act > highestUnlockedAct) {
             audio.play('buttonUnavailable');
             showLockedActHint(btn, 'Complete the previous Act to unlock');
-          });
-        }
+            return;
+          }
+          audio.play('buttonClick');
+          if (viewedAct === act) return;
+          viewedAct = act;
+          refreshActButtonVisuals();
+          renderLevelCards();
+          refreshCardLockState();
+        });
+        lsActEntries.push(entry);
         root.appendChild(btn);
       }
 
@@ -397,11 +445,13 @@
       namePlate.appendChild(plateLabel);
       root.appendChild(namePlate);
 
-      // ---- Three Act 1 level cards — level-card.png + real thumbnail/
-      // lock/badge/name, filled in with live data by refreshLevelSelect().
+      // ---- Three fixed level-card slots — every act has exactly 3
+      // levels, so the same 3 DOM slots are reused for whichever act is
+      // currently viewed (see renderLevelCards()); nothing here is
+      // rebuilt when the viewed act changes, only re-pointed.
       lsCards = [];
-      levels.all().forEach((level, i) => {
-        const c = L.cards;
+      const c = L.cards;
+      for (let i = 0; i < c.left.length; i++) {
         const wrap = document.createElement('div');
         wrap.className = 'pna-ls-card';
         styleAspectBox(wrap, { left: c.left[i], width: c.width, top: c.top, aspect: c.aspect });
@@ -422,7 +472,6 @@
         const thumb = document.createElement('img');
         thumb.className = 'pna-ls-thumb';
         thumb.alt = ''; thumb.draggable = false;
-        thumb.src = CFG.ASSETS.backgrounds[level.background];
         thumbBox.appendChild(thumb);
 
         const lock = document.createElement('img');
@@ -439,27 +488,28 @@
         const nameLabel = document.createElement('div');
         nameLabel.className = 'pna-ls-card-name';
         styleHotspot(nameLabel, c.nameplate);
-        nameLabel.textContent = level.name;
         wrap.appendChild(nameLabel);
 
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'pna-ls-card-btn';
         btn.addEventListener('click', () => {
+          const card = lsCards[i];
+          if (!card.level) return;
           if (btn.getAttribute('aria-disabled') === 'true') {
             audio.play('buttonUnavailable');
             showLockedActHint(btn, 'Complete the previous level to unlock');
             return;
           }
           audio.play('buttonClick');
-          onSelectLevel(level.id);
+          onSelectLevel(card.level.id);
         });
         wireHoverSound(btn);
         wrap.appendChild(btn);
 
         root.appendChild(wrap);
-        lsCards.push({ level, wrap, lock, badge, btn });
-      });
+        lsCards.push({ level: null, wrap, thumb, lock, badge, nameLabel, btn });
+      }
 
       const returnBtn = $('pna-ls-return');
       styleHotspot(returnBtn, L.returnToLobby);
@@ -467,15 +517,16 @@
       returnBtn.addEventListener('click', () => { audio.play('buttonClick'); onReturnToLobby(); });
     }
 
-    async function refreshLevelSelect() {
-      buildLevelSelectStatic();
-      const completedIds = await integration.getLevelCompletions();
-      const completedSet = new Set(completedIds);
+    // Latest completion set, cached so switching the viewed act (a pure
+    // client-side redraw) never needs to re-fetch from the server.
+    let lsCompletedSet = new Set();
+    function refreshCardLockState() {
       const allLevels = levels.all();
       lsCards.forEach(({ level, lock, badge, btn }) => {
+        if (!level) return;
         const prevLevel = allLevels.find((l) => l.act === level.act && l.positionInAct === level.positionInAct - 1);
-        const unlocked = level.positionInAct === 1 || (prevLevel && completedSet.has(prevLevel.id));
-        const completed = completedSet.has(level.id);
+        const unlocked = level.positionInAct === 1 || (prevLevel && lsCompletedSet.has(prevLevel.id));
+        const completed = lsCompletedSet.has(level.id);
         lock.classList.toggle('hidden', !!unlocked);
         badge.classList.toggle('hidden', !completed);
         btn.setAttribute('aria-disabled', String(!unlocked));
@@ -483,6 +534,23 @@
           ? (level.name + (completed ? ' (completed, replay)' : ''))
           : (level.name + ' — locked'));
       });
+    }
+
+    async function refreshLevelSelect() {
+      buildLevelSelectStatic();
+      const [completedIds, progression] = await Promise.all([
+        integration.getLevelCompletions(),
+        integration.getProgression()
+      ]);
+      lsCompletedSet = new Set(completedIds);
+      highestUnlockedAct = Math.max(1, (progression && progression.highestUnlockedAct) || 1);
+      // Level Select always opens on Act 1's cards, exactly like before
+      // Acts 2/3 existed — switching acts is a deliberate click on an
+      // unlocked Act button, never an automatic jump.
+      viewedAct = 1;
+      refreshActButtonVisuals();
+      renderLevelCards();
+      refreshCardLockState();
     }
 
     // =================================================================

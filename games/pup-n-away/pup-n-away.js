@@ -700,13 +700,18 @@
       audio.play('buttonClick');
       // The act-complete save already happened in completeLevel() the
       // instant the level ended — this button only ever decides where
-      // to go next. "Pup N Away lobby" is the title screen: with only
-      // one act's worth of content today there's nothing yet to choose
-      // between, so returning there (never the Quest Zone homepage) is
-      // what "return to lobby" means until a real act-select screen has
-      // something to select.
+      // to go next. Mid-act, just advance to the next level. On an
+      // act's final level, jump into the next act's first level when
+      // one exists (server-side unlock already recorded); only once
+      // there's truly nothing left (finishing Act 3's last level today)
+      // does "Pup N Away lobby" — the title screen — become the answer.
       if (levels.isFinalLevelOfAct()) {
-        goTo(STATES.LOBBY);
+        if (levels.nextActExists()) {
+          setupLevel(levels.goToActStart(currentLevel.act + 1));
+          startCountdown();
+        } else {
+          goTo(STATES.LOBBY);
+        }
       } else {
         setupLevel(levels.advance());
         startCountdown();

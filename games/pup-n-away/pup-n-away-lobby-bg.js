@@ -36,9 +36,11 @@
   let currentIndex = 0;    // index into srcList currently shown
   let timer = null;        // setInterval handle — never more than one live at once
   let ready = false;
+  let rootEl = null;
 
   function init(images) {
     const root = document.getElementById('pna-lobby-bg');
+    rootEl = root;
     if (!root) return; // markup missing — degrade to no slideshow rather than throw
     const imgEls = root.querySelectorAll('.pna-lobby-bg-layer');
     if (imgEls.length !== 2) return;
@@ -89,6 +91,11 @@
 
   function start() {
     stop(); // belt-and-suspenders — guarantees exactly one interval ever runs
+    // Un-hides the element itself, not just the auto-advance timer — see
+    // the .pna-lobby-bg-inactive CSS rule in index.html for why this
+    // element must be fully removed from the render tree (display:none)
+    // rather than merely idle whenever a menu screen isn't showing.
+    if (rootEl) rootEl.classList.remove('pna-lobby-bg-inactive');
     if (!ready) return;
     if (reduceMotion()) return; // static first frame only, no auto-advance
     timer = setInterval(advance, DISPLAY_MS);
@@ -96,6 +103,12 @@
 
   function stop() {
     if (timer !== null) { clearInterval(timer); timer = null; }
+    // Sits as a sibling right after #pna-canvas in document order (see
+    // index.html), so gameplay/editor/result screens — which hide every
+    // .pna-overlay and leave nothing else to paint over it — must hide
+    // THIS element outright, or its last-shown frame permanently covers
+    // the entire game canvas (no dog/basket/bones visible at all).
+    if (rootEl) rootEl.classList.add('pna-lobby-bg-inactive');
   }
 
   window.PNA_LobbyBackground = { init, start, stop };
