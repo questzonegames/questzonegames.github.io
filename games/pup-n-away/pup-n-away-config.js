@@ -84,6 +84,23 @@
       houseRooftop: IMG + 'backgrounds/act1/house-rooftop.png'
     },
 
+    // Lobby-only rotating background slideshow (see pup-n-away-lobby-bg.js)
+    // — 9 supplied dreamy-night-sky pieces, played in this exact order,
+    // looping. Purely decorative behind the lobby menu; unrelated to the
+    // Act 1 gameplay backgrounds above. Flattened by PNA_Assets.loadAll()
+    // into images['lobbyBackgroundSlideshow.0'] .. .8, in array order.
+    lobbyBackgroundSlideshow: [
+      IMG + 'backgrounds/lobby-slideshow/01-dream-bedroom.png',
+      IMG + 'backgrounds/lobby-slideshow/02-cloud-kingdom.png',
+      IMG + 'backgrounds/lobby-slideshow/03-moonlit-garden.png',
+      IMG + 'backgrounds/lobby-slideshow/04-dream-constellations.png',
+      IMG + 'backgrounds/lobby-slideshow/05-dream-journey.png',
+      IMG + 'backgrounds/lobby-slideshow/06-starry-attic-observatory.png',
+      IMG + 'backgrounds/lobby-slideshow/07-enchanted-dream-forest.png',
+      IMG + 'backgrounds/lobby-slideshow/08-floating-toy-dreamland.png',
+      IMG + 'backgrounds/lobby-slideshow/09-aurora-mountain-dream.png'
+    ],
+
     // Lobby (still one flattened PNG — untouched by the modular-asset
     // rebuild) + the three wide menu screens, each now assembled from a
     // blank frame TEMPLATE plus separate modular widget PNGs (buttons,

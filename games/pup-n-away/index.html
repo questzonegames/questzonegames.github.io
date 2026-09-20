@@ -482,6 +482,33 @@
     border-radius: 14px;
   }
   #pna-screen-lobby .pna-ui-frame { width: min(60%, 360px); aspect-ratio: 1024 / 1536; }
+  /* Rotating decorative lobby background (see pup-n-away-lobby-bg.js) —
+     sits behind .pna-ui-frame/the Map Editor button purely through
+     document order (it's the first child of #pna-screen-lobby, which is
+     itself already position:absolute via .pna-overlay, so inset:0 here
+     sizes to fill that same box). Two stacked <img> layers crossfade by
+     opacity; #pna-stage-wrap's own overflow:hidden + border-radius
+     already clip/round everything inside it, so nothing extra is needed
+     here for rounded corners. pointer-events:none on both the container
+     and each layer guarantees this can never intercept a click meant
+     for a lobby button floating above it. */
+  .pna-lobby-bg {
+    position: absolute; inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .pna-lobby-bg-layer {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center;
+    opacity: 0;
+    transition: opacity 1.5s ease;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  .pna-lobby-bg-layer.pna-lobby-bg-visible { opacity: 1; }
   #pna-screen-level-select .pna-ui-frame,
   #pna-screen-challenges .pna-ui-frame,
   #pna-screen-equipment .pna-ui-frame { width: min(96%, 980px); aspect-ratio: 1672 / 941; }
@@ -1037,6 +1064,7 @@
   @media (prefers-reduced-motion: reduce) {
     #pna-miss-banner { transition: none; }
     .pna-overlay { transition: none; }
+    .pna-lobby-bg-layer { transition: none; }
   }
 </style>
 </head>
@@ -1082,6 +1110,18 @@
          fades straight into gameplay (see transitionToLevel() in
          pup-n-away.js). -->
     <div id="pna-screen-lobby" class="pna-overlay pna-ui-screen hidden">
+      <!-- Rotating decorative background slideshow — purely cosmetic,
+           always first-in-DOM so it paints behind .pna-ui-frame and the
+           Map Editor button via plain document order (see
+           pup-n-away-lobby-bg.js). pointer-events:none (see CSS) so it
+           can never intercept clicks meant for the lobby buttons above
+           it. Two alternating <img> layers for crossfading — never more,
+           never fewer, so there's always exactly one "current" and one
+           "next" to fade between. -->
+      <div id="pna-lobby-bg" class="pna-lobby-bg" aria-hidden="true">
+        <img class="pna-lobby-bg-layer" alt="">
+        <img class="pna-lobby-bg-layer" alt="">
+      </div>
       <div class="pna-ui-frame">
         <img class="pna-ui-art" src="../../assets/img/pup-n-away/ui/lobby.png" alt="Pup N Away" draggable="false">
         <div class="pna-ui-interactions">
@@ -1355,20 +1395,21 @@
      of these files from a previous session, which is indistinguishable
      from a real regression when testing — several past "still broken"
      reports turned out to be this. -->
-<script src="pup-n-away-config.js?v=36"></script>
-<script src="pup-n-away-assets.js?v=36"></script>
-<script src="pup-n-away-input.js?v=36"></script>
-<script src="pup-n-away-audio.js?v=36"></script>
-<script src="pup-n-away-physics.js?v=36"></script>
-<script src="pup-n-away-basket.js?v=36"></script>
-<script src="pup-n-away-dog.js?v=36"></script>
-<script src="pup-n-away-collectibles.js?v=36"></script>
-<script src="pup-n-away-levels.js?v=36"></script>
-<script src="pup-n-away-ui.js?v=36"></script>
-<script src="pup-n-away-integration.js?v=36"></script>
-<script src="pup-n-away-menus.js?v=36"></script>
-<script src="pup-n-away-editor.js?v=36"></script>
-<script src="pup-n-away.js?v=36"></script>
+<script src="pup-n-away-config.js?v=37"></script>
+<script src="pup-n-away-assets.js?v=37"></script>
+<script src="pup-n-away-input.js?v=37"></script>
+<script src="pup-n-away-audio.js?v=37"></script>
+<script src="pup-n-away-physics.js?v=37"></script>
+<script src="pup-n-away-basket.js?v=37"></script>
+<script src="pup-n-away-dog.js?v=37"></script>
+<script src="pup-n-away-collectibles.js?v=37"></script>
+<script src="pup-n-away-levels.js?v=37"></script>
+<script src="pup-n-away-ui.js?v=37"></script>
+<script src="pup-n-away-integration.js?v=37"></script>
+<script src="pup-n-away-menus.js?v=37"></script>
+<script src="pup-n-away-editor.js?v=37"></script>
+<script src="pup-n-away-lobby-bg.js?v=37"></script>
+<script src="pup-n-away.js?v=37"></script>
 <script>
   // Development-only hotspot alignment aid (see the .pna-ui-debug CSS
   // rule above) — never enabled unless explicitly requested via

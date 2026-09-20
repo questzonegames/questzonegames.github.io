@@ -295,6 +295,16 @@
     if (isMenu && !wasMenu) audio.startLobbyMusic();
     else if (wasMenu && !isMenu) audio.stopLobbyMusic();
 
+    // Decorative Lobby-only background slideshow — starts exactly on
+    // entering the Lobby (never Level Select/Challenges/Equipment, unlike
+    // the music above), stops on any exit. start() itself always clears
+    // any existing timer first, so this can never stack up a second
+    // interval even if goTo(LOBBY) were ever called from LOBBY again.
+    if (window.PNA_LobbyBackground) {
+      if (next === STATES.LOBBY && prev !== STATES.LOBBY) window.PNA_LobbyBackground.start();
+      else if (prev === STATES.LOBBY && next !== STATES.LOBBY) window.PNA_LobbyBackground.stop();
+    }
+
     // pna-btn-start uses bindButtonOnce() (see wireButtons()) so a rapid
     // double-tap can never fire startGame() twice — re-enable it every
     // time the player is actually back on the Lobby screen to see it.
@@ -897,6 +907,7 @@
     if (window.PNA_DEV_MODE && result.missing.length) {
       console.warn('[Pup N Away] ' + result.missing.length + ' asset(s) missing:', result.missing);
     }
+    if (window.PNA_LobbyBackground) window.PNA_LobbyBackground.init(images);
 
     await integration.init();
     PNAAudioPrefs.loadFromAccount(); // not awaited — applies live volume as soon as it resolves, doesn't block anything else here
