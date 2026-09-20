@@ -8,6 +8,16 @@
 // window.PNA_DEV_MODE is true, per the brief's "report the exact
 // missing path in development mode" rule.
 (function () {
+  // Bump alongside the `?v=N` cache-busting query on this game's own
+  // <script> tags in index.html whenever an image at an EXISTING path
+  // is replaced (a new path never needs it — it was never cached under
+  // the old one). Without this, a browser that already has an old/
+  // interrupted response cached for a given image path — e.g. from a
+  // request that got cut off mid-transfer during dev-server restarts —
+  // keeps serving that broken cached copy forever, no matter how many
+  // times the underlying file on disk changes, since a plain path with
+  // no query string looks identical to the cache every time.
+  const ASSET_CACHE_VERSION = 'v45';
   function loadImage(path) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -18,7 +28,7 @@
         }
         resolve({ path, img: null, ok: false });
       };
-      img.src = path;
+      img.src = path + (path.indexOf('?') === -1 ? '?' : '&') + ASSET_CACHE_VERSION;
     });
   }
 

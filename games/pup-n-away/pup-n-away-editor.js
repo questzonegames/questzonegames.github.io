@@ -259,6 +259,26 @@
       return true;
     }
 
+    // layoutStage() (see draw()) sets #pna-canvas's CSS width/height as
+    // an INLINE style, in exact px, computed from the editor's own
+    // cramped 3-panel layout — that inline style has higher specificity
+    // than the stylesheet's real `canvas#pna-canvas { width:100%;
+    // height:100% }` rule (the one that keeps a strict, correct 16:9 fit
+    // during real gameplay/Playtest), so it silently overrides and
+    // PERSISTS even after leaving editor mode unless explicitly cleared
+    // here. Left in place, the canvas stays pinned to whatever size the
+    // editor last computed — smaller or LARGER than the real stage
+    // depending on the two layouts' relative shapes — which either
+    // shrinks the game into a corner or, with #pna-stage-wrap's own
+    // overflow:hidden, silently crops off content (including anything
+    // placed near an edge) that would otherwise be fully visible. Must
+    // run on every path that hands the canvas back to real gameplay:
+    // both Exit to Lobby (close()) and Playtest (playtest()).
+    function releaseCanvasSize() {
+      canvas.style.width = '';
+      canvas.style.height = '';
+    }
+
     function close(opts) {
       opts = opts || {};
       if (!opts.skipConfirm && isDirty()) {
@@ -267,6 +287,7 @@
       }
       isOpen = false;
       document.body.classList.remove('pna-editor-mode');
+      releaseCanvasSize();
       closeContextMenu();
       if (onExitToLobby) onExitToLobby();
       return true;
@@ -1006,6 +1027,7 @@
       const fields = levels.editorObjectsToLevelFields(objects);
       isOpen = false; // hand the canvas back to the real game loop
       document.body.classList.remove('pna-editor-mode');
+      releaseCanvasSize();
       startPlaytest(currentLevelId, fields);
     }
 
