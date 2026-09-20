@@ -482,16 +482,17 @@
     border-radius: 14px;
   }
   #pna-screen-lobby .pna-ui-frame { width: min(60%, 360px); aspect-ratio: 1024 / 1536; }
-  /* Rotating decorative lobby background (see pup-n-away-lobby-bg.js) —
-     sits behind .pna-ui-frame/the Map Editor button purely through
-     document order (it's the first child of #pna-screen-lobby, which is
-     itself already position:absolute via .pna-overlay, so inset:0 here
-     sizes to fill that same box). Two stacked <img> layers crossfade by
-     opacity; #pna-stage-wrap's own overflow:hidden + border-radius
-     already clip/round everything inside it, so nothing extra is needed
-     here for rounded corners. pointer-events:none on both the container
-     and each layer guarantees this can never intercept a click meant
-     for a lobby button floating above it. */
+  /* Rotating decorative MENU background (see pup-n-away-lobby-bg.js) —
+     one shared instance, a direct child of #pna-stage-wrap (a sibling of
+     every .pna-overlay screen, not nested inside any one of them), so it
+     paints behind whichever menu screen is currently shown purely
+     through document order/the overlays' own z-index:5. inset:0 sizes
+     it to fill #pna-stage-wrap itself. Two stacked <img> layers
+     crossfade by opacity; #pna-stage-wrap's own overflow:hidden +
+     border-radius already clip/round everything inside it, so nothing
+     extra is needed here for rounded corners. pointer-events:none on
+     both the container and each layer guarantees this can never
+     intercept a click meant for a button floating above it. */
   .pna-lobby-bg {
     position: absolute; inset: 0;
     overflow: hidden;
@@ -513,6 +514,20 @@
   #pna-screen-challenges .pna-ui-frame,
   #pna-screen-equipment .pna-ui-frame { width: min(96%, 980px); aspect-ratio: 1672 / 941; }
   .pna-ui-art { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+  /* Challenges/Equipment only — the SAME template image as .pna-ui-art,
+     clipped down to just the bottom clouds/stars/border/Return-to-Lobby
+     band. Stacked above the scrollable card list (z-index:auto, so
+     effectively 0) but below the Return button's own transparent hitbox
+     (.pna-ui-hotspot, z-index:5) — see the HTML comment where this is
+     used for the full reasoning. pointer-events:none so it can never
+     swallow a click meant for the button beneath it; z-index alone
+     already keeps the real button on top regardless. */
+  .pna-ui-footer-mask {
+    position: absolute; inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    clip-path: inset(84% 0 0 0);
+  }
   .pna-ui-interactions { position: absolute; inset: 0; font-family: 'Poppins', 'Baloo 2', sans-serif; }
   .pna-ui-hotspot {
     position: absolute; appearance: none; -webkit-appearance: none; border: 0; padding: 0; margin: 0;
@@ -750,7 +765,7 @@
   .pna-equipment-grid {
     display: grid; grid-auto-rows: min-content;
     grid-template-columns: repeat(var(--pna-eq-cols, 5), 1fr);
-    gap: 2%; padding: 1%; align-content: start;
+    gap: 2%; padding: 1% 1% 4%; align-content: start;
   }
   @media (max-width: 900px) { .pna-equipment-grid { grid-template-columns: repeat(3, 1fr); } }
   @media (max-width: 560px) { .pna-equipment-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -1095,6 +1110,32 @@
 
     <div id="pna-miss-banner" class="hidden">Missed!</div>
 
+    <!-- Rotating decorative menu background slideshow — ONE shared
+         instance behind all 4 menu screens (Lobby/Level Select/
+         Challenges/Equipment), not per-screen. Sits here, as a direct
+         child of #pna-stage-wrap right after the canvas, so it paints
+         behind EVERY .pna-overlay below via plain document order (every
+         overlay's own z-index:5 versus this element's default
+         z-index:auto/0 makes this redundant-but-explicit anyway — see
+         pup-n-away-lobby-bg.js). Because it's a single element outside
+         any one screen's own hidden/shown toggle, switching between the
+         4 menu screens (showScreen() only ever toggles the .pna-overlay
+         divs below, never touches this) never restarts, re-mounts, or
+         reloads it — the slideshow just keeps cycling underneath
+         whichever menu screen happens to be visible. start()/stop() are
+         called from goTo() in pup-n-away.js, gated on the existing
+         MENU_STATES set (Lobby/Level Select/Challenges/Equipment) so it
+         runs across all four and stops for gameplay/Map Editor/Level
+         Complete/Game Over. pointer-events:none (see CSS) so it can
+         never intercept a click meant for any menu button above it. Two
+         alternating <img> layers for crossfading — never more, never
+         fewer, so there's always exactly one "current" and one "next"
+         to fade between. -->
+    <div id="pna-lobby-bg" class="pna-lobby-bg" aria-hidden="true">
+      <img class="pna-lobby-bg-layer" alt="">
+      <img class="pna-lobby-bg-layer" alt="">
+    </div>
+
     <!-- ============== LOADING ============== -->
     <div id="pna-screen-loading" class="pna-overlay hidden">
       <img class="pna-logo" src="../../assets/img/pup-n-away/logo/logo.png" alt="Pup N Away">
@@ -1110,18 +1151,6 @@
          fades straight into gameplay (see transitionToLevel() in
          pup-n-away.js). -->
     <div id="pna-screen-lobby" class="pna-overlay pna-ui-screen hidden">
-      <!-- Rotating decorative background slideshow — purely cosmetic,
-           always first-in-DOM so it paints behind .pna-ui-frame and the
-           Map Editor button via plain document order (see
-           pup-n-away-lobby-bg.js). pointer-events:none (see CSS) so it
-           can never intercept clicks meant for the lobby buttons above
-           it. Two alternating <img> layers for crossfading — never more,
-           never fewer, so there's always exactly one "current" and one
-           "next" to fade between. -->
-      <div id="pna-lobby-bg" class="pna-lobby-bg" aria-hidden="true">
-        <img class="pna-lobby-bg-layer" alt="">
-        <img class="pna-lobby-bg-layer" alt="">
-      </div>
       <div class="pna-ui-frame">
         <img class="pna-ui-art" src="../../assets/img/pup-n-away/ui/lobby.png" alt="Pup N Away" draggable="false">
         <div class="pna-ui-interactions">
@@ -1171,6 +1200,18 @@
         <div class="pna-ui-interactions" id="pna-ch-interactions">
           <button type="button" class="pna-ui-hotspot" id="pna-ch-return" aria-label="Return to Lobby"></button>
         </div>
+        <!-- Same template image again, clipped to just the bottom
+             clouds/stars/border/Return-to-Lobby band (see
+             .pna-ui-footer-mask CSS) and stacked ABOVE the scrollable
+             card list (#pna-ch-card-list, z-index:auto) but below the
+             Return button's own transparent hitbox (.pna-ui-hotspot,
+             z-index:5) and pointer-events:none, so it visually conceals
+             a scrolled card's bottom edge with real matching artwork —
+             never a hard rectangular cut — without ever intercepting a
+             click. See UI_HOTSPOTS.challenges.cardList's comment in
+             pup-n-away-config.js for why the list itself was also
+             shortened to end right where this mask begins. -->
+        <img class="pna-ui-art pna-ui-footer-mask" src="../../assets/img/pup-n-away/ui/challenges/blank-template.png" alt="" aria-hidden="true" draggable="false">
       </div>
     </div>
 
@@ -1187,6 +1228,9 @@
         <div class="pna-ui-interactions" id="pna-eq-interactions">
           <button type="button" class="pna-ui-hotspot" id="pna-eq-return" aria-label="Return to Lobby"></button>
         </div>
+        <!-- See the identical .pna-ui-footer-mask on the Challenges
+             screen above for the full explanation. -->
+        <img class="pna-ui-art pna-ui-footer-mask" src="../../assets/img/pup-n-away/ui/equipment/blank-template.png" alt="" aria-hidden="true" draggable="false">
       </div>
     </div>
 
@@ -1395,21 +1439,21 @@
      of these files from a previous session, which is indistinguishable
      from a real regression when testing — several past "still broken"
      reports turned out to be this. -->
-<script src="pup-n-away-config.js?v=37"></script>
-<script src="pup-n-away-assets.js?v=37"></script>
-<script src="pup-n-away-input.js?v=37"></script>
-<script src="pup-n-away-audio.js?v=37"></script>
-<script src="pup-n-away-physics.js?v=37"></script>
-<script src="pup-n-away-basket.js?v=37"></script>
-<script src="pup-n-away-dog.js?v=37"></script>
-<script src="pup-n-away-collectibles.js?v=37"></script>
-<script src="pup-n-away-levels.js?v=37"></script>
-<script src="pup-n-away-ui.js?v=37"></script>
-<script src="pup-n-away-integration.js?v=37"></script>
-<script src="pup-n-away-menus.js?v=37"></script>
-<script src="pup-n-away-editor.js?v=37"></script>
-<script src="pup-n-away-lobby-bg.js?v=37"></script>
-<script src="pup-n-away.js?v=37"></script>
+<script src="pup-n-away-config.js?v=38"></script>
+<script src="pup-n-away-assets.js?v=38"></script>
+<script src="pup-n-away-input.js?v=38"></script>
+<script src="pup-n-away-audio.js?v=38"></script>
+<script src="pup-n-away-physics.js?v=38"></script>
+<script src="pup-n-away-basket.js?v=38"></script>
+<script src="pup-n-away-dog.js?v=38"></script>
+<script src="pup-n-away-collectibles.js?v=38"></script>
+<script src="pup-n-away-levels.js?v=38"></script>
+<script src="pup-n-away-ui.js?v=38"></script>
+<script src="pup-n-away-integration.js?v=38"></script>
+<script src="pup-n-away-menus.js?v=38"></script>
+<script src="pup-n-away-editor.js?v=38"></script>
+<script src="pup-n-away-lobby-bg.js?v=38"></script>
+<script src="pup-n-away.js?v=38"></script>
 <script>
   // Development-only hotspot alignment aid (see the .pna-ui-debug CSS
   // rule above) — never enabled unless explicitly requested via

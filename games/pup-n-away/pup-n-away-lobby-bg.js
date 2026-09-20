@@ -1,8 +1,16 @@
-// ===== Pup N Away — lobby background slideshow =====
+// ===== Pup N Away — shared menu background slideshow =====
 //
-// Purely decorative, lobby-only rotation through the 9 supplied
-// lobby-background images (see PNA_CONFIG.ASSETS.lobbyBackgroundSlideshow
-// and #pna-lobby-bg in index.html). Every image is already fully
+// Purely decorative rotation through the 9 supplied lobby-background
+// images (see PNA_CONFIG.ASSETS.lobbyBackgroundSlideshow and
+// #pna-lobby-bg in index.html), shown behind ALL FOUR menu screens
+// (Lobby, Level Select, Challenges, Equipment) as ONE shared instance —
+// #pna-lobby-bg is a direct child of #pna-stage-wrap, a sibling of every
+// .pna-overlay screen div, not nested inside any one of them, so
+// switching between menu screens (which only ever toggles those
+// .pna-overlay divs' .hidden class — see showScreen() in
+// pup-n-away-ui.js) never touches this element at all: the slideshow
+// just keeps cycling underneath whichever menu screen happens to be
+// visible, with no restart and no flash. Every image is already fully
 // preloaded by the main boot sequence's PNA_Assets.loadAll() before this
 // module's init() ever runs, so there is never a network fetch here —
 // only two persistent <img> layers whose `src` gets pointed at
@@ -11,9 +19,10 @@
 // Lifecycle: init(images) runs once at boot (after loadAll() resolves),
 // wiring up the two layer elements and the ordered, load-failure-filtered
 // image list, and shows the first frame immediately. start()/stop() are
-// called from goTo() in pup-n-away.js exactly on Lobby-enter/Lobby-exit
-// — start() always clears any existing timer first, so re-entering the
-// Lobby repeatedly can never stack up a second interval.
+// called from goTo() in pup-n-away.js, gated on the same MENU_STATES set
+// used for lobby music (Lobby/Level Select/Challenges/Equipment) — start()
+// always clears any existing timer first, so no sequence of menu<->menu
+// or menu<->gameplay transitions can ever stack up a second interval.
 (function () {
   const CROSSFADE_MS = 1500;
   const DISPLAY_MS = 8000;

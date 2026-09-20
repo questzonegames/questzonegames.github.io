@@ -257,9 +257,20 @@
       filterByAct: { left: 3.6, width: 30.0, top: 34.5, height: 6.5, aspect: 718 / 147 },
       secondaryFilter: { left: 36.5, width: 28.0, top: 34.5, height: 6.5, aspect: 718 / 147 },
       search: { left: 67.5, width: 29.0, top: 34.5, height: 6.5, aspect: 719 / 147 },
-      cardList: { left: 3.6, width: 88.0, top: 46.9, height: 41.6 },
+      // height trimmed from 41.6 to 37.1 (bottom moved from 88.5% to
+      // 84.0%) — a pixel scan straight down the template's own vertical
+      // centre found the flat blue content area's real bottom edge at
+      // y=798/941 = 84.8%; the gold border begins immediately after.
+      // The old 88.5% bottom ran the scrollable list ~4.5% INTO the
+      // border/clouds/Return-to-Lobby artwork, which is what let
+      // scrolled cards paint over that decoration and the button. See
+      // .pna-ui-footer-mask in index.html for the second layer (same
+      // template image, clipped to just this bottom band, stacked above
+      // the card list) that then conceals the list's own clipped edge
+      // with real matching artwork instead of a hard cut.
+      cardList: { left: 3.6, width: 88.0, top: 46.9, height: 37.1 },
       scrollbar: {
-        left: 93.5, width: 2.8, top: 46.9, height: 41.6,
+        left: 93.5, width: 2.8, top: 46.9, height: 37.1,
         trackAspect: 84 / 411, thumbAspect: 71 / 165
       },
       // challenge-card.png sub-regions, as a percentage of the CARD's
@@ -292,9 +303,13 @@
       // grid below, same reasoning as Challenges above.
       filters: { left: 3.6, width: 74.0, top: 33.5, height: 6.0, count: 4, aspect: 795 / 152 },
       search: { left: 79.0, width: 17.5, top: 33.5, height: 6.0, aspect: 798 / 149 },
-      grid: { left: 3.6, width: 92.8, top: 41.0, height: 47.5, columns: 5 },
+      // height trimmed from 47.5 to 43.0 (bottom moved from 88.5% to
+      // 84.0%) — same reasoning as Challenges' cardList above; a pixel
+      // scan of this template found its own blue area ends at
+      // y=790/941 = 84.0%. See .pna-ui-footer-mask in index.html.
+      grid: { left: 3.6, width: 92.8, top: 41.0, height: 43.0, columns: 5 },
       scrollbar: {
-        left: 97.0, width: 2.0, top: 41.0, height: 47.5,
+        left: 97.0, width: 2.0, top: 41.0, height: 43.0,
         trackAspect: 84 / 451, thumbAspect: 83 / 224
       },
       // equipment-item-card.png sub-regions, as a percentage of the

@@ -295,14 +295,16 @@
     if (isMenu && !wasMenu) audio.startLobbyMusic();
     else if (wasMenu && !isMenu) audio.stopLobbyMusic();
 
-    // Decorative Lobby-only background slideshow — starts exactly on
-    // entering the Lobby (never Level Select/Challenges/Equipment, unlike
-    // the music above), stops on any exit. start() itself always clears
-    // any existing timer first, so this can never stack up a second
-    // interval even if goTo(LOBBY) were ever called from LOBBY again.
+    // Decorative menu background slideshow — runs across every menu
+    // screen (Lobby/Level Select/Challenges/Equipment), same MENU_STATES
+    // set as the lobby music above, so moving between any of the 4 never
+    // stops/restarts it (only a genuine menu-to-non-menu transition
+    // does). start() itself always clears any existing timer first, so
+    // this can never stack up a second interval even across repeated
+    // menu<->menu or menu<->gameplay transitions.
     if (window.PNA_LobbyBackground) {
-      if (next === STATES.LOBBY && prev !== STATES.LOBBY) window.PNA_LobbyBackground.start();
-      else if (prev === STATES.LOBBY && next !== STATES.LOBBY) window.PNA_LobbyBackground.stop();
+      if (isMenu && !wasMenu) window.PNA_LobbyBackground.start();
+      else if (wasMenu && !isMenu) window.PNA_LobbyBackground.stop();
     }
 
     // pna-btn-start uses bindButtonOnce() (see wireButtons()) so a rapid
